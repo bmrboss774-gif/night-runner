@@ -87,6 +87,34 @@ body.is-touch .prompts{display:none}
 .t-stats .val{font-family:var(--f-display);font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .t-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .t-strip{grid-column:1/3;grid-row:3;display:flex;gap:10px;overflow-x:auto;padding:4px 2px 6px;scrollbar-width:none}
+/* the car card, v84 (the owner: "improve this menu"): the game's slanted panel in the car's own colour, the class and
+   power to weight across the top, the layout as tags, four meters each in its own colour, and Drive as the one big
+   button with the other two under it */
+.t-spec{position:relative;gap:13px;width:min(400px,42vw);padding:16px 18px 16px 21px;border:0;border-radius:0;background:linear-gradient(180deg,color-mix(in srgb,var(--car,#5ad7ff) 17%,transparent),transparent 150px),repeating-linear-gradient(115deg,rgba(255,255,255,.018) 0 2px,transparent 2px 15px),rgba(8,10,14,.86);clip-path:polygon(0 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%)}
+.t-spec::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--car,var(--needle)),color-mix(in srgb,var(--car,#5ad7ff) 45%,#7b6cff))}
+.t-spec::after{content:"";position:absolute;right:0;top:0;width:60%;height:2px;background:linear-gradient(90deg,transparent,var(--car,var(--needle)))}
+.t-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.t-class{align-items:center;gap:10px}
+.t-class b{min-width:72px;padding:0 18px 0 13px;border-radius:0;font-size:36px;line-height:1.15;background:linear-gradient(100deg,var(--car,var(--needle)),color-mix(in srgb,var(--car,#5ad7ff) 55%,#7b6cff));clip-path:polygon(0 0,100% 0,calc(100% - 10px) 100%,0 100%)}
+.t-ptw{display:flex;flex-direction:column;align-items:flex-end;line-height:1}
+.t-ptw b{font-family:var(--f-display);font-weight:800;font-style:italic;font-size:32px;font-variant-numeric:tabular-nums}
+.t-ptw small{margin-top:2px;font-family:var(--f-display);font-weight:600;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.t-chips{display:flex;flex-wrap:wrap;gap:6px}
+.t-chips span{padding:2px 9px 1px;font-family:var(--f-display);font-weight:700;font-style:italic;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--car,var(--needle));background:color-mix(in srgb,var(--car,#5ad7ff) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--car,#5ad7ff) 45%,transparent);white-space:nowrap}
+.t-spec .t-stats{gap:8px 12px;font-size:13px}
+.t-spec .t-stats .bar{height:8px;border-radius:0;background:rgba(255,255,255,.1);-webkit-mask:repeating-linear-gradient(90deg,#000 0 9px,transparent 9px 11px);mask:repeating-linear-gradient(90deg,#000 0 9px,transparent 9px 11px)}
+.t-spec .t-stats .bar i{background:linear-gradient(90deg,var(--s1,var(--needle)),var(--s2,#fff));transition:width .35s}
+.t-spec .t-stats .val{font-size:16px;font-style:italic;font-weight:800}
+.t-spec .t-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.t-spec .drive{grid-column:1/3;display:flex;justify-content:space-between;align-items:center;font-size:30px;padding:10px 32px 10px 22px;border-radius:0;background:linear-gradient(100deg,var(--car,var(--needle)),color-mix(in srgb,var(--car,#5ad7ff) 55%,#7b6cff));color:#06070a;box-shadow:none;clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);transition:filter .12s,transform .12s}
+.t-spec .drive:hover,.t-spec .drive:focus-visible{background:linear-gradient(100deg,var(--car,var(--needle)),color-mix(in srgb,var(--car,#5ad7ff) 55%,#7b6cff));filter:brightness(1.14);transform:translateX(3px);outline:none}
+.t-spec .ghost{display:flex;align-items:center;gap:9px;padding:10px 12px 10px 14px;border:0;border-radius:0;font-size:17px;letter-spacing:.07em;text-align:left;background:rgba(255,255,255,.07);box-shadow:inset 3px 0 0 var(--car,var(--needle));clip-path:polygon(0 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%);transition:background .12s}
+.t-spec .ghost:hover,.t-spec .ghost:focus-visible{background:rgba(255,255,255,.16);outline:none}
+.t-spec .ghost svg{flex:none;width:19px;height:19px;fill:var(--car,var(--needle))}
+.t-spec .t-actions kbd{margin-left:auto;font-style:normal;font-size:11px;letter-spacing:0;opacity:.75}
+.t-spec .drive kbd{color:#06070a;border-color:rgba(0,0,0,.45);background:rgba(0,0,0,.08)}
+body.is-touch .t-spec .t-actions kbd{display:none}
+@media (max-width:760px){ .t-spec{padding:12px 14px 13px 17px;gap:10px} .t-class b{font-size:28px;min-width:58px} .t-ptw b{font-size:26px} .t-spec .drive{font-size:25px} .t-spec .ghost{font-size:15px} }
 .t-strip::-webkit-scrollbar{display:none}
 .t-strip button{flex:none;display:flex;flex-direction:column;justify-content:flex-end;gap:1px;width:176px;height:74px;padding:10px 12px;border:2px solid transparent;border-left:5px solid var(--car,#555);border-radius:3px;background:linear-gradient(160deg,#20262f,#121519);text-align:left;color:var(--ink-dim);transition:transform .12s,border-color .12s}
 .t-strip small{font-size:11px;letter-spacing:.1em;text-transform:uppercase}
@@ -260,7 +288,7 @@ body.is-touch .g-rev kbd{display:none}
 .attribution:hover{color:var(--ink)}
 /* the music player (v67): cover, title and artist of the song playing, a progress line, and the back / skip keys */
 .np{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px) + var(--np-up,0px));z-index:21;display:flex;align-items:center;gap:11px;width:306px;padding:9px 11px 9px 9px;background:linear-gradient(180deg,rgba(20,24,32,.9),rgba(9,11,16,.94));border:1px solid rgba(255,255,255,.1);border-left:3px solid var(--needle);clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%);color:var(--ink);box-shadow:0 10px 30px rgba(0,0,0,.5);transition:bottom .25s ease}
-.np[hidden]{display:none}
+.np[hidden],.np.np-away{display:none}
 .np.np-top{bottom:auto;top:var(--np-top,130px)}
 .np.np-title{left:auto;bottom:auto;right:calc(18px + env(safe-area-inset-right,0px));top:calc(16px + env(safe-area-inset-top,0px))}
 .np-art{flex:none;width:58px;height:58px;border-radius:3px;background:#1a212d center/cover no-repeat;box-shadow:0 2px 10px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.1)}
@@ -331,7 +359,8 @@ body.is-touch .g-rev kbd{display:none}
 .g-sw-main:hover,.g-sw-main:focus-visible,.g-sw-main[aria-expanded=true]{outline:none;background:linear-gradient(100deg,color-mix(in srgb,var(--hue) 36%,rgba(9,11,16,.94)) 0%,color-mix(in srgb,var(--hue) 10%,rgba(12,15,22,.9)) 60%,rgba(12,15,22,.82) 100%)}
 .g-sw-main i{padding:1px 10px 1px 8px;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#07060c;background:linear-gradient(90deg,var(--hue),color-mix(in srgb,var(--hue) 50%,#7b6cff));clip-path:polygon(0 0,100% 0,calc(100% - 6px) 100%,0 100%)}
 .g-sw-main i span{letter-spacing:.08em}
-.g-sw-main h2{margin:0;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:32px;line-height:.95;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.g-sw-main h2{margin:0;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:32px;line-height:.95;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding-right:.16em;box-sizing:border-box}
+/* (the padding: an italic last letter leans past the box and was clipped) */
 .g-sw-main small{display:flex;gap:10px;align-items:baseline;width:100%;font-size:12.5px;color:var(--ink-dim)}
 .g-sw-main small em{margin-left:auto;font-style:normal;font-family:var(--f-display);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--hue);border:1px solid color-mix(in srgb,var(--hue) 60%,transparent);padding:1px 8px 0}
 .g-sw-main:hover small em,.g-sw-main[aria-expanded=true] small em{background:var(--hue);color:#07060c}
@@ -693,11 +722,15 @@ body.is-touch .cc{font-size:22px}
       <p class="t-lede" id="tLede">Big single turbo, six-speed manual, 8,800 rpm limiter. Lag, then a wall of boost.</p>
     </div>
     <aside class="t-spec">
-      <div class="t-class" id="tClass"><b>S2</b><small>class</small></div>
+      <div class="t-head">
+        <div class="t-class" id="tClass"><b>S2</b><small>class</small></div>
+        <div class="t-ptw"><b id="tPtw">0</b><small>hp per tonne</small></div>
+      </div>
+      <div class="t-chips" id="tChips"></div>
       <dl class="t-stats" id="tStats"></dl>
       <div class="load" id="load"><div class="bar"><i id="loadBar"></i></div><span id="loadText">Loading the car… 0%</span></div>
       <p class="err" id="loadErr" hidden></p>
-      <div class="t-actions" id="titleActions" hidden><button type="button" class="drive" id="driveBtn">Drive</button><button type="button" class="ghost" id="keysBtn">Change car</button><button type="button" class="ghost" id="garageBtn">Garage</button></div>
+      <div class="t-actions" id="titleActions" hidden><button type="button" class="drive" id="driveBtn"><span>Drive</span><kbd>Enter</kbd></button><button type="button" class="ghost" id="keysBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7.5 6.5a5.5 5.5 0 0 1 5.3 4H22v3.2h-2.3v2.6h-3.2v-2.6h-3.7a5.5 5.5 0 1 1-5.3-7.2zm0 3.6a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg><span>Change car</span></button><button type="button" class="ghost" id="garageBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.2 6.6a5.2 5.2 0 0 1-6.9 4.9l-7.7 7.7a2.1 2.1 0 0 1-3-3l7.7-7.7A5.2 5.2 0 0 1 17.6 1.9l-3.2 3.2.9 2.7 2.7.9z"/></svg><span>Garage</span><kbd>B</kbd></button></div>
     </aside>
     <div class="t-strip" id="carPick" role="radiogroup" aria-label="Car" hidden>
       <button type="button" data-car="supra" role="radio" aria-checked="true"><small>Toyota</small><b>Supra</b></button>
@@ -5420,11 +5453,13 @@ function npProgress() { const r = audio.radio, el = r.el, bar = $('npBar'), sg =
 function npPlace() {
   const box = $('np'); if (!box || box.hidden) return; const road = state.driving && !state.garage, keys = $('keys'), timing = $('timing');
   box.classList.toggle('np-title', !state.driving && !state.garage);   // the title screen: top right, clear of the big tiles
-  const top = road && isTouch && timing && timing.offsetHeight > 0; box.classList.toggle('np-top', !!top || !!state.garage);
+  const atKeys = !!state.garage && gcam.focus === 'keys';   // (v84: at the key wall it sat over the board's first key: it goes above the rev button, and on a phone, where there is no room beside the board, it is put away until you leave the wall)
+  box.classList.toggle('np-away', atKeys && innerWidth <= 760);
+  const top = road && isTouch && timing && timing.offsetHeight > 0; box.classList.toggle('np-top', !!top || (!!state.garage && !atKeys));
   if (state.garage) box.style.setProperty('--np-top', 'calc(14px + env(safe-area-inset-top,0px))');   // (v78: in the garage it sits top left, clear of the rev button and, on a phone, of the menu sheet it used to cover)
   else if (top) box.style.setProperty('--np-top', timing.getBoundingClientRect().bottom + 10 + 'px');
   const beside = road && !top && keys && !keys.hidden && keys.offsetHeight > 0;
-  box.style.left = beside ? Math.round(keys.getBoundingClientRect().right + 12) + 'px' : ''; box.style.setProperty('--np-up', beside ? '20px' : '0px');   // (20 px up: over the model credit line)
+  box.style.left = beside ? Math.round(keys.getBoundingClientRect().right + 12) + 'px' : ''; box.style.setProperty('--np-up', beside ? '20px' : atKeys ? '58px' : '0px');   // (20 px up: over the model credit line)
 }
 setInterval(npPlace, 1000);
 const audio = {
@@ -6857,6 +6892,7 @@ function renderGarage() {
   if (!rig) return;
   const def = rig.def, m = mods, body = $('gBody');
   $('gCar').textContent = def.name;
+  { const h = $('gCar'); h.style.fontSize = ''; let px = parseFloat(getComputedStyle(h).fontSize) || 32; while (h.scrollWidth > h.clientWidth + 1 && px > 17) { px -= 1; h.style.fontSize = px + 'px'; } }   // (v84: "Ferrari 812 Superfast" was cut off at the T)
   { const base = baseOf(def.id), i = CAR_IDS.indexOf(base), bd = CAR_DEFS[base];
     $('gSwIdx').textContent = `${i + 1} / ${CAR_IDS.length}`; $('gSwPick').textContent = def.pick;
     $('gSwitch').style.setProperty('--hue', bd.hue || '#5ad7ff'); $('gSwitchBtn').setAttribute('aria-expanded', gTab === 'car'); }
@@ -7070,7 +7106,9 @@ function garageCamera(dt, x, z, yaw) {
   const freeW = wide ? innerWidth - panel.offsetWidth : innerWidth, freeH = wide ? H : Math.max(1, H - panel.offsetHeight);
   const fov = camera.aspect < 1 ? 46 : 36, tanV = Math.tan(fov * Math.PI / 360), tanRef = Math.tan(Math.PI / 10);
   const fit = clamp(Math.max(tanRef / (tanV * freeW / H), tanRef / (tanV * freeH / H)), 0.85, 3);
-  const room = roomUp(), want = f.dist * fit, maxDist = room ? 7.4 : 1e9, zoom = Math.max(1, want / maxDist);
+  // (v84, the owner at the key wall: "I cant see the whole board". A fourth row of keys came with the Ferrari and the
+  // view was still set for three: the camera now stands as far back as the board's own size asks)
+  const room = roomUp(), base = gcam.focus === 'keys' && KW.span ? Math.max(f.dist, KW.span / (2 * tanRef)) : f.dist, want = base * fit, maxDist = room ? 7.4 : 1e9, zoom = Math.max(1, want / maxDist);
   gcam.phi = dampAngle(gcam.phi, f.phi + gcam.user, k, dt);
   gcam.pitch = damp(gcam.pitch, clamp(f.pitch + gcam.userPitch, 0.02, room ? 0.5 : 1.1), k, dt);
   gcam.dist = damp(gcam.dist, Math.min(want, maxDist), k, dt);
@@ -7737,6 +7775,7 @@ function buildKeyWall() {
   // stripes); the chosen key gets a soft pool of light (it was a coloured rectangle); the keys glow far less.
   const brands = keyBrands(), cols = Math.min(4, brands.length), rows = Math.ceil(brands.length / cols);
   const [cx, cy, cz] = KW.center, W = cols * 0.25 + 0.14, H = rows * 0.44 + 0.1, group = new THREE.Group(); group.name = 'key wall';
+  KW.span = Math.max(H + 0.36, W + 0.2);   // (v84: the board, its light and a margin: what the camera has to take in)
   const lit = (o) => { const m = new THREE.MeshStandardMaterial({ envMapIntensity: 1.1, ...o }); KW.mats.push(m); return m; };
   const tex = (c, srgb = true) => { const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
   const cv = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; };
@@ -9291,9 +9330,14 @@ function syncCarText(id = activeId || titleCar) {
     ['Grip', (sp.muF + sp.muR) / 2 - 0.9 + sp.downforce * 0.2, `${((sp.muF + sp.muR) / 2).toFixed(2)} g`, 0.6],
     ['Launch', (sp.awd && sp.awd < 1 ? 0.5 : 0) + sp.launchGrip + (sp.weightFront < 0.5 ? 0.1 : 0), sp.awd === 1 ? 'FWD' : sp.awd ? 'AWD' : 'RWD', 1.0],
   ];
+  // v84: power to weight beside the class, the layout as tags, and each meter in its own colour
+  $('tPtw').textContent = Math.round(hp / (sp.mass / 1000)).toLocaleString();
+  $('tChips').replaceChildren(...[sp.awd === 1 ? 'Front drive' : sp.awd ? 'All-wheel drive' : 'Rear drive', `${sp.gears.length}-speed`, `${sp.redline.toLocaleString()} rpm`].map((t) => Object.assign(document.createElement('span'), { textContent: t })));
+  const HUES = { Power: ['#ff5a4f', '#ffb23f'], Weight: ['#a78bff', '#ff4fd8'], Grip: ['#5fe08a', '#2fc7c0'], Launch: ['#38c8ff', '#5a7bff'] };
   const st = $('tStats'); st.replaceChildren();
   for (const [k, v, label, max] of rows) {
     const bar = document.createElement('div'); bar.className = 'bar'; const i = document.createElement('i'); i.style.width = `${clamp(v / max, 0.08, 1) * 100}%`; bar.append(i);
+    bar.style.setProperty('--s1', HUES[k][0]); bar.style.setProperty('--s2', HUES[k][1]);
     st.append(Object.assign(document.createElement('dt'), { textContent: k }), Object.assign(document.createElement('dd'), {}), Object.assign(document.createElement('dd'), { className: 'val', textContent: label }));
     st.children[st.children.length - 2].append(bar);
   }
