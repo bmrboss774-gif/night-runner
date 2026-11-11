@@ -229,12 +229,15 @@ export class Traffic {
   }
 
   // lower settings: the detailed models only very close, fewer cars, no light pools on the road
-  setQuality(q) {
+  // rich (v93, computers): Low keeps the light pools on the road under every vehicle's lamps, and shows the detailed
+  // models out to 26 m and the simple ones to 210 m (16 m and 170 m made nearby cars visibly coarse); the pools are a
+  // few dozen small quads and the models are triangles, which a computer's graphics card has to spare
+  setQuality(q, rich = false) {
     this.quality = q;
-    LOD0_DIST = q >= 2 ? 40 : q === 1 ? 30 : 16;
-    LOD1_DIST = q >= 2 ? 270 : q === 1 ? 230 : 170;
+    LOD0_DIST = q >= 2 ? 40 : q === 1 ? 30 : rich ? 26 : 16;
+    LOD1_DIST = q >= 2 ? 270 : q === 1 ? 230 : rich ? 210 : 170;
     this.applyDensity();
-    this.headPool.visible = this.tailPool.visible = q >= 1;
+    this.headPool.visible = this.tailPool.visible = q >= 1 || rich;
     // beam cones are pure fill rate: none on Low, fewer and shorter-ranged on Medium
     this.beamRange = q >= 2 ? 200 : q === 1 ? 110 : 0;
     this.beams.visible = q >= 1;

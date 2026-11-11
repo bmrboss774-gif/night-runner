@@ -1045,6 +1045,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { World, RAMP, SHARED, LANE_CENTERS } from './world.js';
 import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js';
@@ -1786,7 +1787,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.05, 14000);
 // Post-processing: the scene renders to an HDR target, then a speed pass adds radial blur toward the
 // screen edges as speed builds (the centre stays sharp) plus a light vignette, then tone mapping.
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isTouch ? 0 : 4 }));
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 0 }));   // (v93: see syncAA; was 4 samples on computers)
 composer.setPixelRatio(renderer.getPixelRatio());
 composer.setSize(innerWidth, innerHeight);
 composer.addPass(new RenderPass(scene, camera));
@@ -1856,6 +1857,23 @@ const speedPass = new ShaderPass({
 });
 composer.addPass(speedPass);
 composer.addPass(new OutputPass());
+// v93, the owner: "make the game run smoother make the quality better at the same time". Measured on the owner's Mac
+// (Apple M4; dev/perfdrive.js and the notes): the 4-sample anti-aliasing on the main picture's half-float target was
+// the biggest single cost of a frame on the road, +7 ms of a 23 ms frame at 3.2 megapixels, and the frame-rate guard
+// answered it by drawing fewer pixels (the road ran at 1 to 1.9 MP, hunting between sizes). Without it, 3.2 MP costs
+// what 1.9 MP did with it. So on the road the picture is drawn without multisampling at the higher resolution and its
+// edges are smoothed afterwards by this pass (FXAA: it finds edges by contrast in the finished picture and blends
+// along them), which costs a fraction of a millisecond. The garage keeps the 4 samples: a still scene, drawn sharp,
+// with thin bright lines that want them (syncAA switches between the two). Touch screens stay as they were.
+const fxaa = new ShaderPass(FXAAShader);
+fxaa.enabled = false;
+composer.addPass(fxaa);
+function syncAA() {
+  if (isTouch) return;
+  const msaa = roomUp();
+  if ((composer.renderTarget1.samples > 0) !== msaa) for (const rt of [composer.renderTarget1, composer.renderTarget2]) { rt.samples = msaa ? 4 : 0; rt.dispose(); }
+  fxaa.enabled = !msaa;
+}
 // The world: the endless highway at night (see world.js). It owns the sky, fog, moonlight, streetlights,
 // the wet-road and water reflections and the car's reflection probe.
 const world = new World({ renderer, scene, camera, base: './' });
@@ -6399,8 +6417,10 @@ function watchPerf(dt) {
 function renderScale() {
   const q = state.gfx, dpr = devicePixelRatio || 1, css = Math.max(1, innerWidth * innerHeight);
   if (state.garage) { const wall = gcam.focus === 'keys', budget = isTouch ? (wall ? 3.2e6 : 2.2e6) : (wall ? 7e6 : 3.2e6); return Math.min(dpr, wall ? 2.5 : 2, Math.sqrt(budget / css)); }
-  const budget = q >= 2 ? 2.2e6 : q === 1 ? 1.5e6 : 1.0e6;
-  const base = Math.min(dpr, q >= 2 ? (isTouch ? 1.25 : 1.5) : q === 1 ? 1.25 : 1, Math.sqrt(budget / css));
+  // (v93: on computers the lowest step is 1.6 MP at up to 1.25x, was 1.0 MP at 1x: without the multisampling a
+  // pixel costs much less, and FXAA needs pixels to work with)
+  const budget = q >= 2 ? 2.2e6 : q === 1 || !isTouch ? 1.6e6 : 1.0e6;
+  const base = Math.min(dpr, q >= 2 ? (isTouch ? 1.25 : 1.5) : q === 1 || !isTouch ? 1.25 : 1, Math.sqrt(budget / css));
   // v59, the user (asked whether the driving view should be sharpened too, at some cost to frame rate): "Sharpen the
   // road". The road is drawn above that old figure, up to 2x under a 3.2 MP budget (1.7 MP on touch), for as long as
   // the frame rate holds: roadQ.f slides between the old resolution (0) and the sharp one (1), see adaptRoadScale.
@@ -6410,7 +6430,15 @@ function renderScale() {
 // The frame-rate guard for the sharper road. Every 1.5 s of driving the average frame time is looked at: slower than
 // 21 ms (under about 48 frames a second) steps the resolution a quarter of the way back down, and if that happens
 // within 6 s of a step up, that step is not tried again for a while; 8 s of full-speed frames steps it back up.
-const roadQ = { f: 1, ceil: 1, sum: 0, n: 0, good: 0, cool: 0, sinceUp: 99, streak: 0 };
+// v93: every change of size re-makes the picture's targets, a stall of about a tenth of a second (measured), and the
+// guard used to hunt: up after 8 good seconds, down again, and another try every minute. Now it (1) starts each
+// session at the size the last one settled on (stored), so a machine that cannot hold the sharpest size does not
+// step down through four sizes at the start of every run; (2) drops further in one go the slower the frames are
+// (one step under 25 ms a frame, two under 33, straight to the bottom past that); (3) tries a size that failed again
+// only after four minutes of smooth driving, not one.
+const roadQ = { f: clamp(+store.get('roadF', 1) || 0, 0, 1), ceil: clamp(+store.get('roadCeil', 1) || 0, 0, 1), sum: 0, n: 0, good: 0, cool: 0, sinceUp: 99, streak: 0 };
+roadQ.ceil = Math.max(roadQ.ceil, roadQ.f);
+const roadQSave = () => { store.set('roadF', roadQ.f); store.set('roadCeil', roadQ.ceil); };
 function adaptRoadScale(dt) {
   if (state.garage || !state.driving || state.paused || document.hidden || !(dt > 0)) { roadQ.sum = roadQ.n = 0; return; }
   roadQ.sum += dt; roadQ.n++; roadQ.cool = Math.max(0, roadQ.cool - dt); roadQ.sinceUp += dt;
@@ -6418,18 +6446,18 @@ function adaptRoadScale(dt) {
   const avg = roadQ.sum / roadQ.n; roadQ.sum = roadQ.n = 0;
   if (avg > 0.021) {
     roadQ.good = roadQ.streak = 0;
-    if (roadQ.f > 0) { if (roadQ.sinceUp < 6) roadQ.ceil = Math.max(0, roadQ.f - 0.25); roadQ.f = Math.max(0, roadQ.f - 0.25); roadQ.cool = 20; roadQ.sinceUp = 99; syncRenderScale(); }
+    if (roadQ.f > 0) { const drop = avg > 0.033 ? 1 : avg > 0.025 ? 0.5 : 0.25; if (roadQ.sinceUp < 6) roadQ.ceil = Math.max(0, roadQ.f - 0.25); roadQ.f = Math.max(0, roadQ.f - drop); roadQ.cool = 20; roadQ.sinceUp = 99; syncRenderScale(); roadQSave(); }
   } else if (avg < 0.0175) {
     roadQ.good += 1.5; roadQ.streak += 1.5;
-    if (roadQ.streak >= 60 && roadQ.ceil < 1) { roadQ.ceil = Math.min(1, roadQ.ceil + 0.25); roadQ.streak = 0; }   // a minute of smooth driving: worth trying higher again
-    if (roadQ.good >= 8 && roadQ.cool === 0 && roadQ.f < roadQ.ceil) { roadQ.f = Math.min(roadQ.ceil, roadQ.f + 0.25); roadQ.good = 0; roadQ.sinceUp = 0; syncRenderScale(); }
+    if (roadQ.streak >= 240 && roadQ.ceil < 1) { roadQ.ceil = Math.min(1, roadQ.ceil + 0.25); roadQ.streak = 0; }   // four minutes of smooth driving (v93; was one): worth trying higher again
+    if (roadQ.good >= 8 && roadQ.cool === 0 && roadQ.f < roadQ.ceil) { roadQ.f = Math.min(roadQ.ceil, roadQ.f + 0.25); roadQ.good = 0; roadQ.sinceUp = 0; syncRenderScale(); roadQSave(); }
   } else roadQ.good = 0;
 }
 function syncRenderScale() { const r = renderScale(); if (Math.abs(renderer.getPixelRatio() - r) > 0.01) { renderer.setPixelRatio(r); onResize.area = 0; onResize(); } }
 function applyGfx() {
   const q = state.gfx;
   world.setQuality(q);
-  traffic.setQuality(q);
+  traffic.setQuality(q, !isTouch);   // (v93: on computers Low keeps the traffic's light pools and its nearer detail)
   rain.setDensity(q);
   bloom.enabled = q >= 1;
   headSpots[0].castShadow = false;   // the headlight shadow map cost a full extra render and shimmered on the road
@@ -9599,6 +9627,7 @@ function frameInner(now) {
   updateCarbonLod(dtReal, x, roadY + 0.6, z);
   world.renderReflections(camera);
   if (roomUp() && SHARED.uReflOn.value > 0.5) mirrorBlur.run(); else if (SHARED.uRefl.value !== world.refl.rt.texture) SHARED.uRefl.value = world.refl.rt.texture;
+  syncAA();
   composer.render(dt);
   renderMirror(dt, live, x, z, yaw);
   if (flick.on) flickCapture();
@@ -9612,6 +9641,7 @@ function onResize() {
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(innerWidth, innerHeight);
   bloom.setSize(innerWidth / 2, innerHeight / 2);
+  { const db = renderer.getDrawingBufferSize(new THREE.Vector2()); fxaa.material.uniforms.resolution.value.set(1 / db.x, 1 / db.y); }
   { const db = renderer.getDrawingBufferSize(new THREE.Vector2()); const hu = bloom.materialHighPassFilter.uniforms, bt = bloom.renderTargetBright; hu.uTexel.value.set(1 / db.x, 1 / db.y); hu.uSpan.value.set(Math.max(2, db.x / bt.width), Math.max(2, db.y / bt.height)); }
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   garageViewOffset();
@@ -9733,8 +9763,33 @@ function setProgress(p) {
 // Traffic models load alongside the first car, and the title waits for them so the road is full from the start.
 function trafficLoad() {
   traffic.loading ||= wasmReady.then((ok) => (ok ? traffic.load(MeshoptDecoder, (n, of) => { trafficProgress = n / of; if (state.ready && n < of) $('loadText').textContent = `Loading traffic… ${n} of ${of}`; }) : false))
+    .then((ok) => { if (ok) warmTraffic(); return ok; })
     .catch((e) => console.warn('traffic did not load', e));
   return traffic.loading;
+}
+// v93: every kind of traffic vehicle had its shaders built, its textures sent to the graphics card and its model
+// uploaded the first time one came close: a freeze of 0.25 to 0.55 s each, eight or nine times in the first minutes
+// of a run (measured: the slow frames of a drive, with what was new in each). All of it is done here instead, once,
+// while the title screen is up: the shaders are compiled, the textures uploaded, and one of each model is drawn into
+// a few pixels of its own, far under the road, so its buffers exist before the run starts.
+function warmTraffic() {
+  const ims = [];
+  for (const k in traffic.kinds) for (const lod of traffic.kinds[k].lods) for (const im of lod) ims.push(im);
+  for (const o of [traffic.headPool, traffic.tailPool, traffic.beams, traffic.spray]) if (o) ims.push(o);
+  const keep = ims.map((im) => [im, im.count, im.visible, im.frustumCulled]), groupVis = traffic.group.visible, far = new THREE.Matrix4().makeTranslation(0, -500, 0);
+  try {
+    for (const im of ims) {
+      for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'alphaMap']) { const t = im.material[key]; if (t && t.image) renderer.initTexture(t); }
+      im.setMatrixAt(0, far); im.instanceMatrix.needsUpdate = true; im.count = 1; im.visible = true; im.frustumCulled = false;
+    }
+    traffic.group.visible = true;
+    warmShaders(traffic.group);
+    // (a few pixels of its own to draw into: the mirror's target has no size until the mirror is first shown)
+    const prev = renderer.getRenderTarget(), rt = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType });
+    renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(prev); rt.dispose();
+  } catch (e) { console.warn('traffic warm-up', e); }
+  for (const [im, count, visible, culled] of keep) { im.count = count; im.visible = visible; im.frustumCulled = culled; }
+  traffic.group.visible = groupVis;
 }
 let trafficProgress = 0;
 function pickTitleCar(id, data = {}) {
@@ -9794,7 +9849,7 @@ window.claude?.hot?.snapshot?.(() => ({ driving: state.driving, carId: activeId 
 // Test hook: run the simulation ahead with a fixed input, drawing skid marks along the way.
 let tickNow = 0;
 window.__game = {
-  car, state, CAR, skids, smoke, camera, cam, world, sparks, carDims, physicsStep, frameInfo, applyGfx, perf, bloom, traffic,
+  car, state, CAR, skids, smoke, camera, cam, world, sparks, carDims, physicsStep, frameInfo, applyGfx, perf, bloom, traffic, renderer, composer, scene,
   setDebugCam(fn) { debugCam = fn; },
   // run frames by hand (tests: the browser stops calling the frame loop while the page is hidden)
   tick(n = 1, step = 33) { for (let i = 0; i < n; i++) frameInner(tickNow = Math.max(tickNow + step, performance.now())); },
