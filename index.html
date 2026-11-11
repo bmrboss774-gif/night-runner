@@ -2448,6 +2448,7 @@ bodyGroup.add(exhaust.group);   // exhaust.light stays out of the scene: see syn
 const rigs = {};
 let rig = null, activeId = null;
 let wheels = [], wheelSpots = [], lamps = { tail: [], head: [], brake: [], reverse: [] };
+const lightShow = { t: -1, saved: null, spots: null };   // v92: the M3's light show (lightShowStart); declared here because applyMods looks at it
 
 function floatGeometry(geo) {
   for (const name of Object.keys(geo.attributes)) {
@@ -3346,7 +3347,10 @@ CAR_DEFS.mcl = {
 const e92Exhaust = () => [-0.33, -0.244, 0.244, 0.33].map((x) => new THREE.Vector3(x, 0.373, Math.abs(x) > 0.3 ? -2.431 : -2.451));
 // (v86: the rear one hung 10 cm behind the lid and the front one sat low over the intake: both now on the measured
 // surfaces, the rear leaning with the lid's recess.)
-const e92Plates = (items, shift) => [{ end: 'rear', pos: V(0, 0.825, -2.366).add(shift), normal: V(0, 0.32, -0.95).normalize() }, { end: 'front', pos: V(0, 0.535, 2.126).add(shift), normal: V(0, 0, 1) }];
+// (v92, the owner, with a picture of the rear plate cut to a bow-tie shape: "the m3's plate overlaps at the back". The
+// recess in the lid is not flat: its middle stands 3 mm proud of its corners at the top and more at the bottom, so
+// the body showed through the middle of a plate laid flat against it. The plate now stands 7 mm off, as on a holder.)
+const e92Plates = (items, shift) => { const n = V(0, 0.32, -0.95).normalize(); return [{ end: 'rear', pos: V(0, 0.825, -2.366).add(shift).addScaledVector(n, 0.007), normal: n }, { end: 'front', pos: V(0, 0.535, 2.126).add(shift), normal: V(0, 0, 1) }]; };
 CAR_DEFS.e92 = {
   id: 'e92', name: 'BMW M3 E92', short: 'M3 E92', title: 'M3 E92', hue: '#ff6a2a',
   eyebrow: 'BMW M3 · E92 · 4.0-litre V8 · 420 PS · rear drive',
@@ -3359,10 +3363,21 @@ CAR_DEFS.e92 = {
   sound: 'c7', audio: { rpmScale: 0.78, turbo: 0, flutter: 0, crackle: 0.7, popVol: 0.6, whine: 0 },   // (no recording of its own yet: the Corvette's V8, played lower so 8,400 rpm does not sound sped up)
   stock: { paint: '#d5501e', finish: 'gloss' },
   spoilers: [['stock', 'Factory']], noParts: ['canards'],
-  carbonParts: ['hood', 'trunk', 'mirrors', 'skirts'],
+  // v92, the owner: "allow for the roof to be carbon as an option ... add a full carbon style where the entire car
+  // becomes carbon". The roof is the model's own carbon piece: it is a carbon part like the others now, on as the car
+  // comes (stockCarbon) and body colour when switched off (paintPanels); 'body' is every painted panel at once.
+  carbonParts: ['body', 'hood', 'roof', 'trunk', 'mirrors', 'skirts'], carbonLabels: { body: 'Full carbon' }, stockCarbon: ['roof'], paintPanels: ['roof'],
+  // v92: "add the no2 option to this car as well" (two nozzles on the bonnet, one on each front wing; see nitroNozzles)
+  nitrous: { jets: [[0.3, 1.45, 0.16], [0.8, 1.1, 0.42]] },
+  // v92: "add the badge options that the m4 has with the blackout but change the name of these two to be more
+  // accurate". The model's two roundels are one piece (material bmw_emblem_c). The 50-year badge did not exist in this
+  // car's day: its artwork is the 1973 BMW Motorsport roundel, so that is its name here; the carbon one is the blackout.
+  badges: { mat: 'bmw_emblem_c', names: { heritage: 'BMW Motorsport', carbon: 'Carbon blackout' } },
+  lampStyles: 'mk2',    // v92: "allow the headlights to have this look as well. call it MK2 style" (buildMk2)
+  lightShow: true,      // v92: "add bimmercoding to this car ... press n to quickly flicker the lights in a pattern" (lightShowStart)
   blackTails: true,     // v86, the owner: "for the tinted taillights also add an option on the m3 where theyre completely black"
   model: { title: 'BMW M3 e92 [stance]', url: 'https://sketchfab.com/3d-models/bmw-m3-e92-stance-c35a14d811b042d792a6da69381f7f80', author: 'Black Snow', authorUrl: 'https://sketchfab.com/BlackSnow02' },
-  maker: 'BMW and M3 are trademarks of BMW AG.',
+  maker: 'BMW and M3 are trademarks of BMW AG. G-Power is a trademark of its owner; the badge artwork is drawn for this game.',
   calipers: true,
 };
 // Toyota GR Supra, the A90 (v86): two tips, one each side of the diffuser; the model's own plate in the recess of the
@@ -5117,6 +5132,9 @@ const restore = (mat) => { const s = mat.userData.stock; if (!s) return; mat.col
 const liveryOn = (def = rig?.def, m = mods) => !!def && (!!def.liveryOf || (!!def.livery && m.livery === 'on'));
 function applyMods() {
   if (rig) rig.tailSpots = null;
+  if (lightShow.t >= 0) lightShowEnd();   // (v92) a build change in the middle of the light show: the lamps go back first
+  // (v92) parts that are carbon as the car comes (def.stockCarbon: the M3's roof) count as switched on until the player says otherwise
+  for (const k of rig.def.stockCarbon || []) if (mods.carbon && mods.carbon[k] === undefined) mods.carbon = { ...mods.carbon, [k]: true };
   const r = rig, def = r.def, m = liveryOn(def, mods) ? Object.assign(defaultMods(def), { livery: 'on' }, def.liveryColour ? { paint: mods.paint, finish: mods.finish } : {}) : mods;
   if (r.mats.paint) setPaint(r.mats.paint, m.paint, m.finish);
   // the engine bay (cars that have one): its coloured parts
@@ -5125,7 +5143,8 @@ function applyMods() {
   // belong to no panel kept the carbon after "Entire body" was switched off)
   for (const mesh of r.kinds.paint || []) mesh.material = mesh.userData.stockMat || r.mats.paint;
   // carbon panels and the factory spoiler
-  for (const panel in r.panels) for (const mesh of r.panels[panel]) mesh.material = m.carbon[panel === 'hoodFlat' ? 'hood' : panel] ? carbonMat : mesh.userData.stockMat;
+  // (v92: def.paintPanels, the M3's roof: a panel that is the car's paint when its carbon is switched off)
+  for (const panel in r.panels) for (const mesh of r.panels[panel]) mesh.material = m.carbon[panel === 'hoodFlat' ? 'hood' : panel] ? carbonMat : (def.paintPanels || []).includes(panel) && r.mats.paint ? r.mats.paint : mesh.userData.stockMat;
   // v65: the bonnet's inserts (the M4 CSL's two scallops): black as modelled, carbon, or the car's paint
   if (r.panels.hoodInlay) { const k = m.hoodInlay || 'stock'; for (const mesh of r.panels.hoodInlay) mesh.material = k === 'carbon' ? carbonMat : k === 'paint' && r.mats.paint ? r.mats.paint : mesh.userData.stockMat; }
   // v89, the owner: "add the option to make the GT wing paint matched" (def.wingFinish, the GR Supra): the factory
@@ -5156,7 +5175,7 @@ function applyMods() {
     if (st && !ownLip) for (const mesh of r.panels.lip || []) if (!m.carbon.lip) mesh.material = r.mats.paint;
   }
   // every painted panel in carbon (the Miata's "Entire body"): the whole paint layer, the flares with it
-  if (m.carbon.body) for (const mesh of r.kinds.paint || []) mesh.material = carbonMat;
+  if (m.carbon.body) { for (const mesh of r.kinds.paint || []) mesh.material = carbonMat; for (const pn of def.paintPanels || []) for (const mesh of r.panels[pn] || []) mesh.material = carbonMat; }
   // the soft top on or off (the Miata)
   for (const mesh of r.panels.top || []) mesh.visible = !(def.softTop && m.roof === 'off');
   // add-on parts: shown for the chosen option, built the first time they are needed
@@ -5225,6 +5244,23 @@ function applyMods() {
     if (r.g80) { r.g80.visible = on; r.g80.traverse((o) => { if (o.isMesh && o.userData.kind === 'g80') { const c = new THREE.Color(m.head || '#f4f8ff'); o.material.color.setRGB(c.r * 2.6, c.g * 2.6, c.b * 2.6).multiplyScalar(lights === 'off' ? 0.03 : 1); } }); }
     for (const mesh of r.g80Hide || []) mesh.visible = !on;
   }
+  // v92, the owner, with a photo of an M3's lamp (two squared-off white rings under a strip of light along the top
+  // of a dark lamp): "allow the headlights to have this look as well. call it MK2 style" (def.lampStyles 'mk2')
+  if (def.lampStyles === 'mk2') {
+    const on = m.lamps === 'mk2';
+    if (on && !r.mk2) { try { r.mk2 = buildMk2(r); } catch (e) { console.warn('mk2 lamps', e); } r.mk2 ||= new THREE.Group(); r.body.add(r.mk2); }
+    if (r.mk2) {
+      r.mk2.visible = on;
+      const c = new THREE.Color(m.head || '#f4f8ff');
+      r.mk2.traverse((o) => {
+        if (!o.isMesh) return;
+        if (o.userData.kind === 'mk2') o.material.color.setRGB(c.r * 2.6, c.g * 2.6, c.b * 2.6).multiplyScalar(lights === 'off' ? 0.03 : 1);
+        else if (o.userData.kind === 'mk2beam') { o.visible = lights === 'on'; o.material.color.setRGB(c.r * 3.4, c.g * 3.4, c.b * 3.4); }   // the projectors: lit with the headlights
+      });
+    }
+    for (const mesh of r.kinds.drl || []) mesh.visible = !on;                       // the round rings make way for the squared ones
+    if (on) for (const mat of r.lamps.head) mat.emissiveIntensity = 0;              // the housing stays dark: the rings, the strip and the projectors are the light
+  }
   for (const l of headSpots) l.intensity = state.headOn ? 820 : 0;
   // the GT-R's centre rear fog lamp
   for (const mesh of r.kinds.fog || []) mesh.visible = m.fog !== 'off';
@@ -5282,6 +5318,7 @@ addEventListener('keydown', (e) => {
     if ((e.code === 'Escape' || e.code === 'KeyB') && !e.repeat && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); closeGarage(); }
     // W (or the up arrow) revs the engine while it is held (updateGarageRev); not while typing a plate or on a slider
     else if ((e.code === 'KeyW' || e.code === 'ArrowUp') && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); keys.add(e.code); }
+    else if (e.code === 'KeyN' && !e.repeat && !e.shiftKey && !(e.target instanceof HTMLInputElement)) lightShowStart();   // (v92) the light show plays in the garage too
     return;
   }
   if (e.target instanceof HTMLElement && e.target.closest('.pick, .title-actions') && (e.code === 'Enter' || e.code === 'Space')) return;
@@ -5312,6 +5349,8 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'KeyG') toggleGearbox();
   else if (e.code === 'KeyQ' && GFX_LOCK == null) cycleGfx();
   else if (e.code === 'KeyF') { diag.on = !diag.on; $('diag').hidden = !diag.on; }
+  // N: the light show on a car that has it coded in (v92: the M3; Shift + N is the music there), the music on the rest
+  else if (e.code === 'KeyN' && rig?.def.lightShow && !e.shiftKey) lightShowStart();
   else if (e.code === 'KeyN') { audio.radioToggle(); toast(audio.radio.on ? 'Music on' : 'Music off'); }
   else if (e.code === 'KeyL' && rig?.kinds.lbL) { state.lightbar = !state.lightbar; toast(state.lightbar ? 'Lights on' : 'Lights off'); }
   else if (e.code === 'KeyV' && e.shiftKey) { flick.on = true; toast('Capturing flicker…'); }
@@ -6646,6 +6685,7 @@ function updateCarVisual(dt, x, z, yaw) {
   }
   for (const m of lamps.brake) m.emissiveIntensity = 7 * brakeGlow;
   for (const m of lamps.reverse) m.emissiveIntensity = car.gear < 0 ? 2.2 : 0;
+  if (lightShow.t >= 0) lightShowTick(dt || 0.016, tl, ts);
   // the Charger's own light bar (L): red and blue trade sides, with a double flash
   if (rig && rig.kinds.lbL) {
     const on = state.lightbar, ph = ((state.simTime * 3) % 1), left = ph < 0.5, pulse = (ph % 0.5) < 0.18 || ((ph % 0.5) > 0.24 && (ph % 0.5) < 0.38) ? 1 : 0.1;
@@ -7203,7 +7243,7 @@ function renderGarage() {
         ...(cur !== 'stock' ? [segRow(TIP_FINISHES, m.tipFinish || 'steel', (k) => setMod('tipFinish', k, 'rear'))] : [])));
     }
     if (rig.panels.hoodInlay) body.append(gGroup('Hood inserts', null, el('p', { className: 'g-note', textContent: 'The two scallops let into the hood.' }), segRow([['stock', 'Black'], ['carbon', 'Carbon'], ['paint', 'Body colour']], m.hoodInlay || 'stock', (k) => setMod('hoodInlay', k, 'front'))));
-    if (def.badges) body.append(gGroup('Badges', null, el('p', { className: 'g-note', textContent: 'The roundels on the bonnet and boot lid.' }), segRow(BADGES, m.badge || 'stock', (k) => setMod('badge', k, 'front'))));
+    if (def.badges) body.append(gGroup('Badges', null, el('p', { className: 'g-note', textContent: 'The roundels on the bonnet and boot lid.' }), segRow(BADGES.map(([k, n]) => [k, def.badges.names?.[k] ?? n]), m.badge || 'stock', (k) => setMod('badge', k, 'front'))));
     if (rig.panels.bumperAlt) body.append(gGroup('Front bumper', null, segRow([['stock', def.bumperName || 'Kit'], ['street', 'Street']], m.bumper || 'stock', (k) => setMod('bumper', k, 'front'))));
     if (rig.panels.hoodFlat) body.append(gGroup('Hood', null, segRow([['stock', def.hoodName || 'Vented'], ['flat', 'Smooth']], m.bonnet || 'stock', (k) => setMod('bonnet', k, 'hood'))));
     for (const slot of slots) { if (slot === 'lip' && def.wingFinish && rig.panels.wing && m.spoiler === 'stock') body.append(gGroup('Wing finish', null, segRow([['stock', 'Gloss black'], ['paint', 'Body colour'], ['carbon', 'Carbon']], m.wingFinish || 'stock', (k) => setMod('wingFinish', k, 'rear')))); body.append(gGroup(TITLES[slot], null, segRow(slot === 'spoiler' ? spoilerOpts : PART_LABELS[slot].filter(([k]) => !(def.noKits || []).includes(slot + ':' + k)), m[slot], (k) => setMod(slot, k, FOCUS_OF[slot])))); }
@@ -7211,7 +7251,7 @@ function renderGarage() {
   } else if (gTab === 'carbon') {
     const row = el('div', { className: 'chips' });
     for (const k of def.carbonParts) {
-      const label = k === 'trunk' ? ({ supra: 'Hatch', fl5: 'Hatch', cgt: 'Engine cover', viper: 'Rear deck', nsx: 'Engine cover' }[def.id] || CARBON_LABELS[k]) : k === 'skirts' && def.id === 'r8' ? 'Side blades' : CARBON_LABELS[k];
+      const label = k === 'trunk' ? ({ supra: 'Hatch', fl5: 'Hatch', cgt: 'Engine cover', viper: 'Rear deck', nsx: 'Engine cover' }[def.id] || CARBON_LABELS[k]) : k === 'skirts' && def.id === 'r8' ? 'Side blades' : def.carbonLabels?.[k] ?? CARBON_LABELS[k];
       const b = el('button', { type: 'button', className: 'chip', textContent: label });
       b.setAttribute('aria-pressed', !!m.carbon[k]);
       b.addEventListener('click', () => { mods.carbon = { ...mods.carbon, [k]: !mods.carbon[k] }; setMod('carbon', mods.carbon, CARBON_FOCUS[k]); });
@@ -7231,7 +7271,10 @@ function renderGarage() {
   } else if (gTab === 'lights') {
     if (rig.kinds.drl) body.append(gGroup('Lights', null, segRow([['on', 'Headlights'], ['drl', 'Running lights'], ['off', 'Off']], m.lights, (k) => setMod('lights', k, 'front'))));
     body.append(gGroup('Headlights', nameOf(HEADS, m.head), swatchRow(HEADS, m.head, (hex) => setMod('head', hex, 'front'), { stockColor: '#fff3df' })));
-    if (def.lampStyles) body.append(gGroup('Headlight style', null, el('p', { className: 'g-note', textContent: 'G80 style: blacked-out lamps with two angular running lights in each.' }), segRow([['stock', 'Factory'], ['g80', 'G80 style']], m.lamps || 'stock', (k) => setMod('lamps', k, 'front'))));
+    if (def.lampStyles === 'mk2') body.append(gGroup('Headlight style', null, el('p', { className: 'g-note', textContent: 'MK2 style: squared-off rings round the projectors and a strip of light along the top of the lamp.' }), segRow([['stock', 'Factory'], ['mk2', 'MK2 style']], m.lamps || 'stock', (k) => setMod('lamps', k, 'front'))));
+    else if (def.lampStyles) body.append(gGroup('Headlight style', null, el('p', { className: 'g-note', textContent: 'G80 style: blacked-out lamps with two angular running lights in each.' }), segRow([['stock', 'Factory'], ['g80', 'G80 style']], m.lamps || 'stock', (k) => setMod('lamps', k, 'front'))));
+    if (def.lightShow) body.append(gGroup('Light show', 'N', el('p', { className: 'g-note', textContent: 'Coded in, BimmerCode fashion: N flickers the rings, the headlights and the tail lights through a quick pattern, then leaves them as they were. Here and on the road. (On this car Shift + N is music on and off.)' }),
+      el('div', { className: 'g-row' }, el('button', { type: 'button', className: 'g-ghost', textContent: 'Play it', onclick: () => { setFocus('front'); lightShowStart(); } }))));
     body.append(gGroup('Tail lights', null, segRow([['stock', 'Factory'], ['smoked', 'Smoked'], ...(def.blackTails ? [['black', 'Black']] : []), ...(def.whiteTails ? [['white', 'White']] : [])], m.tail, (k) => setMod('tail', k, 'rear'))));
     if (rig.kinds.fog) body.append(gGroup('Rear fog light', null, el('p', { className: 'g-note', textContent: 'The small red lamp low in the middle of the bumper.' }), segRow([['on', 'On'], ['off', 'Off']], m.fog, (k) => setMod('fog', k, 'rear'))));
     body.append(gGroup('Window tint', null, segRow(TINTS, m.tint, (k) => setMod('tint', k, 'side'))));
@@ -7459,7 +7502,7 @@ $('gNext').addEventListener('click', () => stepCar(1));
 // 7.5 cm tube round each outlet), and new tips are built at the same places, sized from the ones they replace.
 const TIP_STYLES = [['stock', 'Factory'], ['round', 'Round'], ['slash', 'Slash-cut'], ['twin', 'Twin']];
 const TIP_FINISHES = [['steel', 'Polished'], ['titanium', 'Burnt titanium'], ['black', 'Black']];
-const TIP_SKIP = new Set(['paint', 'livery', 'glass', 'lampGlass', 'head', 'headLens', 'tail', 'brake', 'reverse', 'drl', 'stripe', 'glow', 'plateBlank', 'badge', 'badgeRim', 'g80', 'tyre', 'rim', 'disc', 'hub', 'caliper', 'interior']);
+const TIP_SKIP = new Set(['mk2', 'mk2beam', 'paint', 'livery', 'glass', 'lampGlass', 'head', 'headLens', 'tail', 'brake', 'reverse', 'drl', 'stripe', 'glow', 'plateBlank', 'badge', 'badgeRim', 'g80', 'tyre', 'rim', 'disc', 'hub', 'caliper', 'interior']);
 // (the police Charger is never in the garage)
 if (CAR_DEFS.chg) CAR_DEFS.chg.noTips = true;
 if (CAR_DEFS.r8) CAR_DEFS.r8.noTwinTips = true;   // (its outlets sit in pockets in the bumper with no room for a pair)
@@ -7686,6 +7729,105 @@ function applyTips(r, m) {
   M.outer.metalness = M.lip.metalness = f === 'black' ? 0.7 : 1;
   const env = r.mats.paint && r.mats.paint.envMap; for (const k of ['outer', 'lip', 'inner', 'cap']) { const mat = M[k]; if (env && mat.envMap !== env) mat.envMap = env; mat.needsUpdate = true; }
 }
+// ---------------------------------------------------------------- the light show (v92)
+// The owner: "add bimmercoding to this car as well, allowing you to press n to quickly flicker the lights in a pattern
+// like what is seen online and then go back to how they were". What BimmerCode owners film is the car's lamps run
+// through a short strobe: the rings alone, then the headlights and the rings trading places, then everything at once,
+// a beat of dark, and the lights back as they were. Here: the rings four times; headlights (with the left beam on the
+// road and the tail lights) against rings (with the right beam) eight steps; all of it six times; 0.3 s dark; then
+// every lamp is put back exactly as it was found. Cars with def.lightShow; N on the road and in the garage.
+const LIGHT_SHOW = { ringN: 4, ringT: 0.14, swapN: 8, swapT: 0.11, allN: 6, allT: 0.11, dark: 0.3 };
+function lightShowStart() {
+  if (!rig?.def.lightShow || lightShow.t >= 0) return false;
+  const r = rig, saved = [], mk2 = !!(r.mk2 && r.mk2.visible), seen = new Set();
+  const keep = (mat, role, on) => { if (seen.has(mat)) return; seen.add(mat); saved.push({ mat, role, v: mat.emissiveIntensity, on }); };
+  if (!mk2) for (const mat of r.lamps.head) keep(mat, 'beam', r.def.lampLevels.head * 2.4);
+  for (const mesh of r.kinds.drl || []) if (mesh.visible) keep(mesh.material, 'ring', r.def.lampLevels.drl ?? 5);
+  if (mk2) {
+    const c = new THREE.Color(mods.head || '#f4f8ff');
+    r.mk2.traverse((o) => { if (!o.isMesh || seen.has(o.material)) return; const k = o.userData.kind; if (k !== 'mk2' && k !== 'mk2beam') return; seen.add(o.material); saved.push({ mat: o.material, mesh: o, role: k === 'mk2' ? 'ring' : 'beam', c: o.material.color.clone(), vis: o.visible, full: c.clone().multiplyScalar(k === 'mk2' ? 2.6 : 3.4) }); });
+  }
+  lightShow.saved = saved; lightShow.spots = headSpots.map((l) => l.intensity); lightShow.t = 0;
+  return true;
+}
+function lightShowTick(dt, tl, ts) {
+  const S = lightShow, P = LIGHT_SHOW, t = (S.t += dt);
+  const t1 = P.ringN * P.ringT, t2 = t1 + P.swapN * P.swapT, t3 = t2 + P.allN * P.allT, t4 = t3 + P.dark;
+  let ring = 0, beam = 0, tail = 0, L = 0, R = 0;
+  if (t < t1) ring = (t / P.ringT) % 1 < 0.5 ? 1 : 0;
+  else if (t < t2) { if (Math.floor((t - t1) / P.swapT) % 2 === 0) { beam = 1; L = 1; tail = 1; } else { ring = 1; R = 1; } }
+  else if (t < t3) ring = beam = tail = L = R = ((t - t2) / P.allT) % 1 < 0.55 ? 1 : 0;
+  else if (t >= t4) return lightShowEnd();
+  for (const s of S.saved) {
+    const k = s.role === 'ring' ? ring : beam;
+    if (s.mesh) { s.mesh.visible = s.role === 'ring' ? true : k > 0; s.mat.color.copy(s.full).multiplyScalar(k > 0 ? 1 : 0.02); }
+    else s.mat.emissiveIntensity = s.on * k;
+  }
+  for (const m of lamps.tail) m.emissiveIntensity = (m.userData.levels || tl)[1] * ts * tail;
+  headSpots.forEach((l, i) => { l.intensity = 820 * (i === 0 ? L : R); });
+}
+function lightShowEnd() {
+  const S = lightShow;
+  for (const s of S.saved || []) { if (s.mesh) { s.mesh.visible = s.vis; s.mat.color.copy(s.c); } else s.mat.emissiveIntensity = s.v; }
+  headSpots.forEach((l, i) => { l.intensity = S.spots ? S.spots[i] : l.intensity; });
+  S.t = -1; S.saved = null; S.spots = null;
+}
+// ---------------------------------------------------------------- MK2-style headlights (v92)
+// The M3's own lamps have a round ring round each of the two projectors (the model's running-light piece: two flat
+// rings a side). The owner's photo is of the later style: each ring squared off, flat along the bottom and fat, thinner
+// across the top, and a strip of light along the top edge of the lamp, in a dark housing. The squared rings are built
+// here on the round ones' centres and sizes, read off the model; the strip follows the top edge of the lamp's cover,
+// 1 cm below it and 2 cm behind the glass (measured off the cover: its top edge and its depth at eight places); a disc
+// in each projector lights with the headlights. Left side built, right side mirrored.
+function buildMk2(r) {
+  const d = (r.kinds.drl || [])[0]; if (!d) return null;
+  const p = d.geometry.attributes.position, pts = [];
+  for (let i = 0; i < p.count; i++) if (p.getX(i) > 0.05) pts.push([p.getX(i), p.getY(i), p.getZ(i)]);
+  if (pts.length < 12) return null;
+  // the two rings stand at different depths: split the points half way between the nearest and the furthest
+  const zs = pts.map((q) => q[2]), zMid = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const rings = [pts.filter((q) => q[2] >= zMid), pts.filter((q) => q[2] < zMid)].filter((g) => g.length > 5).map((g) => {
+    const mn = [0, 1, 2].map((k) => Math.min(...g.map((q) => q[k]))), mx = [0, 1, 2].map((k) => Math.max(...g.map((q) => q[k])));
+    return { x: (mn[0] + mx[0]) / 2, y: (mn[1] + mx[1]) / 2, z: mx[2], R: Math.max(mx[0] - mn[0], mx[1] - mn[1]) / 2 };
+  });
+  const pos = [], idx = [], beamPos = [], beamIdx = [];
+  const quad = (a, b, c, e) => idx.push(a, b, c, a, c, e);
+  // the inner ring (the nearer one) comes 12 mm forward: on its own plane its squared corners ran into the housing
+  if (rings.length > 1) rings[0].z += 0.012;
+  // where each projector's lens is, looking straight in from the front (for the disc that lights with the headlights)
+  r.body.updateWorldMatrix(true, true);
+  const ray = new THREE.Raycaster(), back = new THREE.Vector3(0, 0, -1).transformDirection(r.body.matrixWorld), housing = (r.kinds.head || []).filter((m) => m.visible);
+  for (const g of rings) { ray.set(new THREE.Vector3(g.x, g.y, g.z + 0.3).applyMatrix4(r.body.matrixWorld), back); const h = ray.intersectObjects(housing, false)[0]; g.lens = h ? g.z + 0.3 - h.distance + 0.002 : g.z - 0.012; }
+  for (const g of rings) {
+    // a squircle (|x|^n + |y|^n = 1, n = 3.4) a touch bigger than the round ring, its band 11.5 mm at the bottom and
+    // sides and 6.5 mm across the top, 7 mm deep
+    const N = 80, n = 3.4, a = g.R + 0.001, base = pos.length / 3;
+    for (let k = 0; k < N; k++) {
+      const th = (k / N) * Math.PI * 2, c = Math.cos(th), s = Math.sin(th);
+      const ox = a * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), oy = a * Math.sign(s) * Math.pow(Math.abs(s), 2 / n);
+      const w = lerp(0.0115, 0.0065, smooth01(0.25, 0.9, s)), f = 1 - w / a;
+      pos.push(g.x + ox, g.y + oy, g.z, g.x + ox * f, g.y + oy * f, g.z, g.x + ox, g.y + oy, g.z - 0.007, g.x + ox * f, g.y + oy * f, g.z - 0.007);
+    }
+    for (let k = 0; k < N; k++) { const A = base + k * 4, B = base + ((k + 1) % N) * 4; quad(A, B, B + 1, A + 1); quad(A, A + 2, B + 2, B); quad(A + 1, B + 1, B + 3, A + 3); }
+    // the projector's lens, lit with the headlights: a disc a little behind the ring
+    const b0 = beamPos.length / 3, M = 28, rr = g.R * 0.5; beamPos.push(g.x, g.y, g.lens);
+    for (let k = 0; k < M; k++) { const th = (k / M) * Math.PI * 2; beamPos.push(g.x + Math.cos(th) * rr, g.y + Math.sin(th) * rr, g.lens); }
+    for (let k = 0; k < M; k++) beamIdx.push(b0, b0 + 1 + k, b0 + 1 + ((k + 1) % M));
+  }
+  // the strip along the top of the lamp: 7 mm tall, thinner towards its ends
+  {
+    const path = new THREE.CatmullRomCurve3([[0.468, 0.640, 1.992], [0.52, 0.651, 1.966], [0.58, 0.660, 1.924], [0.64, 0.665, 1.886], [0.70, 0.668, 1.835], [0.748, 0.668, 1.785]].map((q) => new THREE.Vector3(...q)));
+    const N = 48, base = pos.length / 3;
+    for (let k = 0; k <= N; k++) { const u = k / N, q = path.getPoint(u), h = 0.0035 * lerp(0.4, 1, smooth01(0, 0.12, Math.min(u, 1 - u))); pos.push(q.x, q.y + h, q.z, q.x, q.y - h, q.z); }
+    for (let k = 0; k < N; k++) { const A = base + k * 2; quad(A, A + 2, A + 3, A + 1); }
+  }
+  const mk = (P, I) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setIndex(I); return g; };
+  const lit = new THREE.MeshBasicMaterial({ name: 'mk2 running light', color: new THREE.Color(2.6, 2.6, 2.6), side: THREE.DoubleSide, fog: false });
+  const beam = new THREE.MeshBasicMaterial({ name: 'mk2 projector', color: new THREE.Color(3.4, 3.4, 3.4), side: THREE.DoubleSide, fog: false });
+  const group = new THREE.Group(); group.name = 'mk2 lamps';
+  for (const [geo, mat, kind] of [[mk(pos, idx), lit, 'mk2'], [mk(beamPos, beamIdx), beam, 'mk2beam']]) for (const sx of [1, -1]) { const m = new THREE.Mesh(sx > 0 ? geo : geo.clone().scale(-1, 1, 1), mat); m.userData.kind = kind; m.layers.mask = d.layers.mask; group.add(m); }
+  return group;
+}
 // ---------------------------------------------------------------- badges (v61)
 // The owner: "add custom badges on the m4 csl", with links to four roundels: BMW's own, the 50-year "Heritage" M
 // roundel, IND's carbon roundel (gloss black surround, carbon where the blue was) and G-Power's. The model's own
@@ -7755,7 +7897,8 @@ function badgeTexture(kind) {
 }
 // The badge discs for a car whose model has a 'logo' material (the M4 CSL): one per blank dome, fitted to it.
 function buildBadges(r) {
-  let L = null; r.body.traverse((o) => { if (o.isMesh && o.material && o.material.name === 'logo') L = o; });
+  const want = r.def.badges?.mat || 'logo';   // (v92: the M3's roundels are material bmw_emblem_c)
+  let L = null; r.body.traverse((o) => { if (o.isMesh && o.material && o.material.name === want) L = o; });
   if (!L) return null;
   const p = L.geometry.attributes.position, nrm = L.geometry.attributes.normal, group = new THREE.Group(); group.name = 'badges';
   group.position.copy(L.position); group.quaternion.copy(L.quaternion); group.scale.copy(L.scale);
