@@ -8088,7 +8088,9 @@ function fetchModelText(def, wasmOk, onProgress) {
   if (textCache[key]) { if (textCache[key].done) onProgress(1); else textCache[key].listeners.push(onProgress); return textCache[key].promise; }
   const entry = textCache[key] = { listeners: [onProgress], done: false };
   entry.promise = (async () => {
-    const res = await fetch(file.url);
+    // v88: the file's size rides along as a query, so a rebuilt model (same name, new size) can never be answered from
+    // the browser's stored copy of the old one (the owner saw the GR Supra's old nose after v87 was live)
+    const res = await fetch(file.size ? `${file.url}?s=${file.size}` : file.url);
     if (!res.ok) throw new Error(`Model request failed (${res.status})`);
     let text;
     if (res.body && res.body.getReader) {
