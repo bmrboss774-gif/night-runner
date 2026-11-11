@@ -771,6 +771,7 @@ body.is-touch .cc{font-size:22px}
       <section class="set-row" id="gfxRow"><div class="set-k"><b>Graphics</b><small>Drop a level if the frame rate stutters.</small></div><div class="seg"><button type="button" role="radio" data-set="gfx:2">High</button><button type="button" role="radio" data-set="gfx:1">Medium</button><button type="button" role="radio" data-set="gfx:0">Low</button></div></section>
       <section class="set-row"><div class="set-k"><b>Gearbox</b><small>Manual shifts with + and −, near the redline for a perfect shift.</small></div><div class="seg"><button type="button" role="radio" data-set="gearbox:manual">Manual</button><button type="button" role="radio" data-set="gearbox:auto">Automatic</button></div></section>
       <section class="set-row"><div class="set-k"><b>Traction control</b><small>Off lets the back step out for drifts.</small></div><div class="seg"><button type="button" role="radio" data-set="tcs:on">On</button><button type="button" role="radio" data-set="tcs:off">Off</button></div></section>
+      <section class="set-row"><div class="set-k"><b>Steering assist</b><small>Keys and touch: holds the car round bends and straightens it after a tap.</small></div><div class="seg"><button type="button" role="radio" data-set="assist:full">Full</button><button type="button" role="radio" data-set="assist:light">Light</button><button type="button" role="radio" data-set="assist:off">Off</button></div></section>
       <section class="set-row"><div class="set-k"><b>Units</b></div><div class="seg"><button type="button" role="radio" data-set="units:mph">mph</button><button type="button" role="radio" data-set="units:kmh">km/h</button></div></section>
       <section class="set-row"><div class="set-k"><b>Sound</b></div><div class="seg"><button type="button" role="radio" data-set="sound:on">On</button><button type="button" role="radio" data-set="sound:off">Off</button></div></section>
       <section class="set-row"><div class="set-k"><b>Music</b><small>“Midnight Touge”, made for the game, in the menus, the garage and on the road. N turns it on or off, 6 starts it again.</small></div><div class="seg"><button type="button" role="radio" data-set="radio:on">On</button><button type="button" role="radio" data-set="radio:off">Off</button></div></section>
@@ -1440,6 +1441,24 @@ const tireForce = (alpha, C, cap) => { if (cap < 1) return 0; const B = C / (1.4
 
 // high-speed handling: steering authority at speed (fraction of peak slip), yaw tracking strength, characteristic speed
 const HS_AUTH = 0.45, HS_DAMP = 2.4, HS_VCH = 34;
+// Steering assist (v91, the user: "the steering isn't quite ready for that, the handling isn't tuned enough", asked
+// together with the city viaduct and the mountain pass). Keys are all or nothing, so a bend had to be taken as a string
+// of full-strength taps: measured with build/tools/bends.mjs, a keyboard driver strayed 3 m (most of a lane) round a
+// 330 m bend with four key changes a second. With the assist the front wheels hold the angle the bend under the car
+// needs (`follow` of it: the rest is still the driver's), so the keys steer against the road, not against a straight
+// line; and once the keys are let go the car settles back in line with the road over about `settle` seconds, at no more
+// than `maxG` g of sideways push, so a tap moves the car across and leaves it straight. It fades out in a slide (drifts stay the
+// driver's), below ~30 mph, with the handbrake, and going the wrong way. Sticks get none of it (they can hold an angle).
+const ASSIST = { follow: 0.92, settle: 0.7, maxG: 0.42 };
+// Keyboard and touch steering (v91; was two fixed rates in readInput): the input builds gently for the first part of
+// a hold and faster after it, so at speed a tap is a nudge and a held key still reaches full lock in about 0.4 s;
+// it drops back fast on release. `speed` in m/s.
+const keySteer = (cur, key, speed, dt) => {
+  const f = smooth01(10, 42, speed), dn = lerp(10, 7.5, f);
+  if (key === 0 || (cur !== 0 && Math.sign(key) !== Math.sign(cur))) return cur > 0 ? Math.max(0, cur - dn * dt) : Math.min(0, cur + dn * dt);
+  const up = lerp(9, lerp(1.5, 6.5, smooth01(0.18, 0.55, Math.abs(cur))), f);
+  return key > 0 ? Math.min(key, cur + up * dt) : Math.max(key, cur - up * dt);
+};
 // wet roads: less grip all round (set from the rain amount every frame)
 const WEATHER = { grip: 1 };
 // Nitrous (v39, the user's ask): a shot adds `gain` to the engine's torque for `burn` seconds, then takes `refill`
@@ -1529,10 +1548,26 @@ class Vehicle {
     const vAbs = Math.abs(this.vx);
     const lock = CAR.steerLock / (1 + vAbs * 0.02);
     let target = clamp(inp.steer, -1, 1) * lock;
+    // steering assist (see ASSIST): the angle for the bend under the car, plus settling in line with the road
+    let apAssist = 0;
+    this.assist = 0;
+    if (inp.assist > 0 && this.vx > 8 && !hb && !(this.hbTimer > 0)) {
+      const psi = inp.roadPsi || 0, slide = Math.abs(Math.atan2(this.vy, this.vx));
+      const aw = inp.assist * smooth01(9, 24, this.vx) * (1 - smooth01(0.09, 0.2, slide)) * smooth01(0.5, 0.85, Math.cos(psi));
+      if (aw > 0) {
+        const free = 1 - smooth01(0.04, 0.45, Math.abs(inp.steer));
+        const rMax = ASSIST.maxG * GRAV / this.vx, rSettle = clamp(-psi / ASSIST.settle, -rMax, rMax) * free;
+        const kWant = ((inp.roadK || 0) * ASSIST.follow + rSettle / this.vx) * aw;
+        target += Math.atan(L * kWant * (1 + (this.vx / HS_VCH) ** 2));
+        // the front tyres' slip that much cornering takes (the window below must leave room for it)
+        apAssist = 1.5 * this.vx * this.vx * Math.abs(kWant) / (GRAV * CAR.csF) + 0.004;
+        this.assist = aw;
+      }
+    }
     if (this.vx > 3) {
       // at motorway speeds full lock asks for less of the tyres' peak slip, so a keyboard tap is a nudge, not a swerve
       const ap0 = 2.88 * CAR.muF / CAR.csF * 1.05, mag = Math.max(Math.abs(inp.steer), 0.25);
-      const betaF = Math.atan2(this.vy + a * this.r, this.vx), ap = lerp(ap0, ap0 * HS_AUTH * mag, this.tcs ? smooth01(20, 70, this.vx) : smooth01(40, 90, this.vx));
+      const betaF = Math.atan2(this.vy + a * this.r, this.vx), ap = Math.max(lerp(ap0, ap0 * HS_AUTH * mag, this.tcs ? smooth01(20, 70, this.vx) : smooth01(40, 90, this.vx)), Math.min(ap0, apAssist));
       const w = smooth01(3, 9, this.vx);
       target = lerp(target, clamp(target, Math.max(-lock, betaF - ap), Math.min(lock, betaF + ap)), w);
     }
@@ -1608,7 +1643,18 @@ class Vehicle {
       if (Math.abs(drive) > lim) { drive = Math.sign(drive) * lim; this.tcsActive = true; }
     }
     let req = drive + engBrake;
-    if (BrReq > 0) req -= Math.sign(this.vx) * BrReq * clamp(vAbs * 4, 0, 1);
+    // Braking in a bend (v91): with the stability systems on, the rear brakes (and engine braking) only take the grip
+    // the rear tyres are not using to hold the car's line, the way a real car's brake-force distribution does. Before,
+    // half brakes in a fast bend used up the rear tyres, the tail came round and the car spun to a stop across the road.
+    let rearBrake = BrReq;
+    if (this.tcs && !hb && vAbs > 6) {
+      const latUse = clamp(Math.abs(m * a / L * this.vx * this.r) / Math.max(capR, 1), 0, 0.97);
+      const room = capR * Math.sqrt(1 - latUse * latUse) * 0.8;
+      rearBrake = Math.min(rearBrake, room);
+      if (engBrake !== 0 && Math.abs(engBrake) > room - rearBrake) engBrake = Math.sign(engBrake) * Math.max(0, room - rearBrake);
+      req = drive + engBrake;
+    }
+    if (rearBrake > 0) req -= Math.sign(this.vx) * rearBrake * clamp(vAbs * 4, 0, 1);
     let spinning = false, Fxr, Fyr;
     const wheelspin = !hb && drive !== 0 && Math.abs(req) > capR && Math.sign(req) === Math.sign(drive);
     if (wheelspin) {
@@ -1655,8 +1701,15 @@ class Vehicle {
         // slides back toward straight.
         const rMax = CAR.muR * WEATHER.grip * GRAV * 1.1 / this.vx, excess = Math.abs(this.r) - rMax;
         if (excess > 0) Mz -= Math.sign(this.r) * excess * CAR.Iz * 9;
-        const over = Math.abs(beta) - 0.14;
+        // v91: it steps in sooner at speed (8 degrees of slide at a walking pace is nothing; at 100 mph it is the start of a spin)
+        const over = Math.abs(beta) - lerp(0.14, 0.085, smooth01(22, 48, this.vx));
         if (over > 0) Mz += Math.sign(beta) * over * CAR.Iz * 7;
+        // ...and it holds the car to the turn the steering asks for (v91): when the car is turning faster than that
+        // with its tail starting out (braking or lifting off in a bend), the extra rotation is taken out, as a real
+        // car's stability control does by braking one wheel. Turning less than asked (a plough) is left alone.
+        const rAsk = this.vx * Math.tan(d) / (L * (1 + (this.vx / HS_VCH) ** 2));
+        const extra = (this.r - rAsk) * Math.sign(this.r) - 0.045;
+        if (extra > 0 && this.r * beta < 0) Mz -= Math.sign(this.r) * extra * CAR.Iz * 9 * smooth01(8, 18, this.vx);
       } else if (!this.tcs) {
         // Drift assist (traction control off): lets the car slide freely up to ~45 degrees, then resists
         // the angle growing and pulls it back, so a held drift doesn't turn into a spin.
@@ -5314,11 +5367,8 @@ function readInput(dt) {
   // keyboard steering: the input builds while a key is held (slower at speed, so a tap is a small correction)
   // and drops back fast when released; a pad's stick goes straight through
   if (analog) inp.steer = st;
-  else {
-    const s = car.speed, up = lerp(9, 5, smooth01(15, 70, s)), dn = lerp(10, 8, smooth01(15, 70, s));
-    if (st === 0 || (inp.steer !== 0 && Math.sign(st) !== Math.sign(inp.steer))) inp.steer = approach(inp.steer, 0, dn, dn, dt);
-    else inp.steer = approach(inp.steer, st, up, up, dt);
-  }
+  else inp.steer = keySteer(inp.steer, st, car.speed, dt);   // v91: gentle at first, quick when held (see keySteer)
+  inp.stick = analog;
   inp.handbrake = hb;
 }
 
@@ -6109,7 +6159,7 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => audio.ra
 // ---------------------------------------------------------------- game state, camera, HUD
 const state = {
   ready: false, driving: false, paused: false, simTime: 0, lightbar: false, headOn: true,
-  cam: store.get('cam', 0), units: store.get('units', 'mph'),
+  cam: store.get('cam', 0), units: store.get('units', 'mph'), assist: store.get('assist', 'full'),
   t060: null, t060Start: null, armed060: true,
   dist: 0, bestRun: store.get('bestRun', 0), gfx: GFX_LOCK ?? store.get('gfx', isTouch ? 1 : 2),
   vmax: 0, bestDrift: store.get('bestDrift', 0),
@@ -6263,7 +6313,7 @@ function setGfxLevel(q) { if (GFX_LOCK != null) return; state.gfx = q; store.set
 function syncSettings() {
   for (const b of document.querySelectorAll('[data-set]')) {
     const [k, v] = b.dataset.set.split(':');
-    const cur = { cops: police.enabled ? 'on' : 'off', mirror: mirror.on ? 'on' : 'off', traffic: state.traffic, weather: state.weather, gfx: String(state.gfx), units: state.units, sound: audio.muted ? 'off' : 'on', radio: audio.radio.on ? 'on' : 'off', gearbox: car.manual ? 'manual' : 'auto', tcs: car.tcs ? 'on' : 'off' }[k];
+    const cur = { cops: police.enabled ? 'on' : 'off', mirror: mirror.on ? 'on' : 'off', traffic: state.traffic, weather: state.weather, gfx: String(state.gfx), units: state.units, sound: audio.muted ? 'off' : 'on', radio: audio.radio.on ? 'on' : 'off', gearbox: car.manual ? 'manual' : 'auto', tcs: car.tcs ? 'on' : 'off', assist: state.assist }[k];
     b.setAttribute('aria-checked', v === cur);
   }
 }
@@ -9226,7 +9276,13 @@ function showOverCard(o) {
   $('overRetry').focus({ preventScroll: true });
 }
 
+const ASSIST_LEVEL = { full: 1, light: 0.55, off: 0 };
 function physicsStep(input) {
+  // v91 steering assist: the bend under the car (curvature in the direction it is travelling) and how far the car
+  // points away from the road. Not for a stick, and not on the entrance ramp (its lane runs across the road's line).
+  { const W = world.lastLoc, psi = W ? wrapAngle(car.yaw - W.th) : 0;
+    input.assist = W && !input.stick && !world.onRamp ? (ASSIST_LEVEL[state.assist] ?? 1) : 0;
+    input.roadK = W ? (W.k || 0) * Math.cos(psi) : 0; input.roadPsi = psi; }
   car.step(STEP, input);
   if (car.nitro > 0 && car.gear > 0 && car.vx > 1) car.vx += NOS.push * car.nitro * STEP;   // the nitrous shove (see NOS)
   // gravity along the grade, then the barriers
@@ -9468,6 +9524,7 @@ for (const b of document.querySelectorAll('[data-set]')) b.addEventListener('cli
   else if (k === 'radio') audio.radioToggle(v === 'on');
   else if (k === 'gearbox') { car.manual = v === 'manual'; store.set('manual', car.manual); syncButtons(); syncSettings(); }
   else if (k === 'tcs') { car.tcs = v === 'on'; store.set('tcs', car.tcs); syncButtons(); syncSettings(); }
+  else if (k === 'assist') { state.assist = v; store.set('assist', v); syncSettings(); }   // v91: steering assist (see ASSIST)
 });
 // start screen -> car select
 const menuSel = { i: 0 };

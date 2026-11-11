@@ -38,6 +38,16 @@ const POLE_EVERY = 60, POLE_H = 11.6, ARM = 2.75;
 const TUN_W = U_PAVE + 0.46, TUN_H = 6.4, TUN_LID = 7.7, TUN_FACE = 27;
 const S_WRAP = 4800;                                // road texture coordinates wrap here (keeps floats small)
 const TERRAIN_A = [19.9, 20.6, 21.6, 23, 24.5, 26.5, 29, 33, 39, 48, 62, 82, 110, 150, 200, 260];
+// v91, the user: "an overpass through a city is cool and the mountain pass is cool". Two new kinds of zone.
+// A 'city' zone carries the road on a viaduct CITY-high above the streets of a downtown: blocks of buildings with lit
+// windows either side (CITY_BLOCK m of buildings, then a cross street), street lamps below, and two roads crossing
+// over the top on their own bridges. A 'mountain' zone climbs to a summit and comes down again in a string of tight
+// bends: a rock face and the mountain on one side (zone.mtn.hill), a long drop to a valley with a town's lights on the
+// other. Mountain chunks get terrain (and trees) much further out than the rest, so the slopes do not end in mid air.
+const CITY_BLOCK = 96, CITY_PITCH = 108;            // a block of buildings, and block + cross street
+const OVER = { clear: 6.3, girder: 1.5, half: 7.6, reach: 250 };   // the crossing roads: clearance over the highway, girder depth, half width, how far out they run
+const TERRAIN_A_FAR = [...TERRAIN_A, 330, 420, 540, 700, 900, 1150];
+const MTN_TREES = 620;                              // trees out to here on a mountain
 export const LANE_CENTERS = [0, 1, 2, 3].map((k) => U_IN + LANE * (k + 0.5));
 export const LIMITS = { inner: MED_HALF + 0.06, outer: U_PAVE - 0.05 };
 export const ROAD_DS = DS;
@@ -105,7 +115,7 @@ class Road {
     this.seed = seed;
     // per sample (every DS metres): position, heading, grade, curvature, zone blend
     this.X = []; this.Z = []; this.Y = []; this.T = []; this.G = []; this.K = []; this.ZA = []; this.ZB = []; this.ZT = []; this.BR = [];
-    this.zones = []; this.rivers = []; this.lakes = []; this.tunnels = []; this.events = []; this.zoneEnd = 0;
+    this.zones = []; this.rivers = []; this.lakes = []; this.tunnels = []; this.cities = []; this.mountains = []; this.events = []; this.zoneEnd = 0;
     this.st = { x: 0, z: 0, y: 0, th: 0, k: 0, g: 0, kT: 0, gT: 0, gLeft: 700, pLeft: 520, pieceS: 0 };
     this.exitNo = 9 + Math.floor(this.rng() * 8); this.mile = 0;
     this.planZone(true);
@@ -118,11 +128,13 @@ class Road {
     if (first) { type = 'forest'; len = 1100; }
     else if (this.zones.length === 1) type = 'river';    // a bridge early on
     else if (this.zones.length === 2) type = 'tunnel';   // and a tunnel soon after it
+    else if (this.zones.length === 3) type = 'city';     // v91: then the city viaduct
+    else if (this.zones.length === 4) type = 'mountain'; // and the mountain pass
     else {
       // a shuffled bag keeps the mix varied: no repeats, never water straight after water
       const prev = this.zones[this.zones.length - 1].type, isWater = (t) => t === 'river' || t === 'lake';
       if (!this.bag || !this.bag.length) {
-        this.bag = ['forest', 'forest', 'fields', 'cut', 'cut', 'embank', 'river', 'river', 'lake', 'fields', 'tunnel'];
+        this.bag = ['forest', 'forest', 'fields', 'cut', 'cut', 'embank', 'river', 'river', 'lake', 'fields', 'tunnel', 'city', 'mountain'];
         for (let k = this.bag.length - 1; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [this.bag[k], this.bag[j]] = [this.bag[j], this.bag[k]]; }
       }
       let k = this.bag.findIndex((t) => t !== prev && !(isWater(t) && isWater(prev)));
@@ -141,6 +153,28 @@ class Road {
       z.cutL = z.cutR = 12 + r() * 4;
       z.tunnel = { s0: s0 + 240, s1: s0 + 240 + L, H: z.cutL };
       this.tunnels.push(z.tunnel);
+    }
+    if (type === 'city') {
+      // the viaduct runs from c.s0 to c.s1; the ground falls away to street level over the 190 m before it and comes
+      // back up after it. Two roads cross over, each on a cross street between two blocks.
+      len = 2500 + r() * 900;
+      const c = { s0: s0 + 210, s1: s0 + len - 210, H: 11 + r() * 3, groundY: null, deckY: null, seed: (r() * 1e9) | 0, name: CITIES[(r() * CITIES.length) | 0], over: [] };
+      c.b0 = c.s0 - 100;                               // where the first block starts
+      const nB = Math.floor((c.s1 + 100 - c.b0) / CITY_PITCH);
+      for (const f of [0.3 + r() * 0.08, 0.62 + r() * 0.1]) { const k = Math.round(nB * f); c.over.push({ k, s: c.b0 + k * CITY_PITCH - (CITY_PITCH - CITY_BLOCK) / 2 }); }
+      this.cities.push(c); z.city = c;
+    }
+    if (type === 'mountain') {
+      // up at grade G from m.s0 to the summit at m.top, down again to m.s1; the mountain is on the m.hill side
+      len = 4200 + r() * 1400;
+      const hill = r() < 0.5 ? -1 : 1, H = 11 + r() * 5;
+      const m = { s0: s0 + 160, s1: s0 + len - 160, G: 0.046 + r() * 0.012, hill, baseY: null, topY: null, seed: (r() * 1e9) | 0, towns: [], th0: null, sign: 0 };
+      m.top = (m.s0 + m.s1) / 2;
+      if (hill < 0) z.cutL = H; else z.cutR = H;
+      // a town on the valley floor, and a smaller one further along
+      m.towns.push({ s: m.top - 500 + r() * 700, a: 560 + r() * 240, r: 300 + r() * 120, seed: (r() * 1e9) | 0, n: 620 });
+      m.towns.push({ s: m.top + 700 + r() * 600, a: 420 + r() * 200, r: 150 + r() * 80, seed: (r() * 1e9) | 0, n: 220 });
+      this.mountains.push(m); z.mtn = m;
     }
     if (type === 'river') {
       const halfW = 60 + r() * 230, bank = 22 + r() * 30, valley = 70 + r() * 90;
@@ -186,7 +220,25 @@ class Road {
     let room = Infinity;
     for (const [a] of regions) if (a > s) room = Math.min(room, a - s);
     if (room < 140) return { kT: 0, len: room + 2, straight: true };
-    const zt = this.zones[this.zoneIndexAt(s)].type;
+    const zc = this.zones[this.zoneIndexAt(s)], zt = zc.type;
+    if (zt === 'mountain' && room >= 300 && s > zc.mtn.s0 - 120 && s < zc.mtn.s1 - 160) {
+      // the pass: short straights and tight bends, mostly one way then the other. The road's heading is kept within
+      // about 80 degrees of the way it came in, so it never doubles back on itself.
+      const m = zc.mtn;
+      if (m.th0 === null) m.th0 = this.st.th;
+      if (r() < 0.16) return { kT: 0, len: 70 + r() * 130, straight: true };
+      const R = r() < 0.6 ? 330 + r() * 150 : 480 + r() * 320, ang = (36 + r() * 52) * Math.PI / 180, off = this.st.th - m.th0;
+      let sign = m.sign && r() < 0.75 ? -m.sign : (r() < 0.5 ? -1 : 1);
+      if (Math.abs(off + sign * ang) > 1.4) sign = -Math.sign(off);
+      m.sign = sign;
+      return { kT: sign / R, len: Math.min(room - 30, R * ang + 110), R, sign };
+    }
+    if (zt === 'city' && room >= 300) {
+      // the viaduct: long straights and wide sweeps between the towers
+      if (r() < 0.4) return { kT: 0, len: Math.min(room - 30, 220 + r() * 420), straight: true };
+      const R = 900 + r() * 900, ang = (14 + r() * 24) * Math.PI / 180, sign = r() < 0.5 ? -1 : 1;
+      return { kT: sign / R, len: Math.min(room - 30, R * ang + 110), R, sign };
+    }
     if (r() < (zt === 'cut' ? 0.25 : 0.42) || room < 300) return { kT: 0, len: Math.min(room - 30, 160 + r() * 520), straight: true };
     const roll = r();
     const R = roll < 0.27 ? 430 + r() * 380 : roll < 0.72 ? 800 + r() * 700 : 1500 + r() * 1500;
@@ -203,8 +255,20 @@ class Road {
     }
     if (st.gLeft <= 0) { st.gT = (r() * 2 - 1) * 0.032; st.gLeft = 280 + r() * 620; }
     let gT = st.gT;
+    // the mountain pass sets its own grade (and is let out of the height limits below); the city viaduct is level
+    const zNow = this.zones[this.zoneIndexAt(s)], mt = zNow.mtn || null;
+    if (mt) {
+      if (mt.baseY === null) mt.baseY = st.y;
+      const lead = mt.G * 2600;                          // the length of road a change of grade takes (see below)
+      gT = s < mt.s0 ? 0 : s < mt.top - lead ? mt.G : s < mt.s1 - lead ? -mt.G : 0;
+      if (mt.topY === null && s >= mt.top) { mt.topY = st.y; this.events.push({ s: mt.top + 30, type: 'name', text: `SUMMIT  ELEV ${Math.round((420 + st.y * 3.281) / 10) * 10} FT` }); }
+    }
+    for (const c of this.cities) {
+      if (s > c.s0 - 320 && s < c.s1 + 60) gT = 0;
+      if (c.groundY === null && s >= c.s0 - 150) { c.deckY = st.y; c.groundY = st.y - c.H; this.events.push({ s: c.s0 - 232, type: 'name', text: `${c.name.toUpperCase()} CITY LIMIT` }); }
+    }
     for (const [a, b] of this.flatRegions()) if (s > a - 320 && s < b + 60) gT = 0;
-    if (st.y > 28 && gT > 0) gT = -gT; if (st.y < -22 && gT < 0) gT = -gT;
+    if (!mt) { if (st.y > 28 && gT > 0) gT = -gT; if (st.y < -22 && gT < 0) gT = -gT; }
     // curvature ramps (clothoid-ish) and vertical curves
     const KR = 1 / (450 * 70);
     st.k += clamp(st.kT - st.k, -KR * DS, KR * DS);
@@ -257,9 +321,39 @@ class Road {
   }
   ensure(n) { while (this.X.length < n) this.gen(); }
   // ---- terrain
-  profile(z, side, a, wx, wz) {
+  // how much of a city zone's street level (or a mountain zone's mountain) there is at s: 0 at the zone's ends
+  cityEnv(z, s) { return sstep(z.s0 + 20, z.s0 + 185, s) * (1 - sstep(z.s1 - 185, z.s1 - 20, s)); }
+  mtnEnv(z, s) { return sstep(z.s0 + 10, z.s0 + 330, s) * (1 - sstep(z.s1 - 330, z.s1 - 10, s)); }
+  profile(z, side, a, wx, wz, s = 0, y = 0) {
     const ditch = -0.15 * sstep(19.9, 20.8, a) - 1.05 * bump(a, 21.4, 23.2, 25.6);
+    const wild = () => ditch + sstep(26, 60, a) * (2.4 + 6.5 * fbm(wx / 170, wz / 170, z.seed)) + sstep(60, 260, a) * (15 * fbm(wx / 480, wz / 480, z.seed + 3));
     switch (z.type) {
+      case 'city': {
+        // street level: flat, c.H below the deck
+        const c = z.city, env = this.cityEnv(z, s);
+        if (env <= 0) return wild();
+        const street = (c.groundY !== null ? c.groundY - y : -c.H) + 0.1 * fbm(wx / 30, wz / 30, z.seed);
+        return lerp(wild(), street, env);
+      }
+      case 'mountain': {
+        const m = z.mtn, env = this.mtnEnv(z, s);
+        if (env <= 0) return wild();
+        let rel;
+        if (side === m.hill) {
+          // the mountain side: a rock face at the road's edge, then the slope climbing away, steeper and higher the further up the pass
+          const H = (side > 0 ? z.cutR : z.cutL) * (0.8 + 0.45 * fbm(s / 90, 3.1, z.seed + 4)) * sstep(0, 0.3, env);
+          const a0 = 22.4, a1 = a0 + 0.42 * H;
+          const face = H * sstep(a0, a1, a) + (a > a0 && a < a1 + 3 ? 0.9 * fbm(wx / 6, wz / 6 + a * 0.3, z.seed + 9) : 0);
+          const rise = env * (sstep(a1 + 2, 250, a) * 62 * (0.85 + 0.5 * fbm(wx / 210, wz / 210, z.seed + 2)) + Math.max(0, a - 250) * 0.17 * (1 + 0.5 * fbm(wx / 420, wz / 420, z.seed + 6)));
+          rel = -0.15 * sstep(19.9, 20.8, a) - 0.5 * bump(a, 20.9, 21.6, 22.4) + face + rise + 5 * fbm(wx / 70, wz / 70, z.seed + 12) * sstep(a1 + 6, 80, a);
+        } else {
+          // the valley side: past the guardrail the ground falls away to the valley floor
+          const floor = (m.baseY !== null ? m.baseY : y) - 26 - y + 6 * fbm(wx / 260, wz / 260, z.seed + 8);
+          const fall = -Math.max(0, a - 21.8) * 0.6 * (0.85 + 0.3 * fbm(wx / 120, wz / 120, z.seed + 1)) + 3 * fbm(wx / 45, wz / 45, z.seed + 14) * sstep(30, 70, a);
+          rel = -0.15 * sstep(19.9, 20.8, a) + Math.max(fall, floor);
+        }
+        return lerp(wild(), rel, sstep(0, 0.35, env));
+      }
       case 'fields': case 'lake':
         return ditch + sstep(26, 90, a) * (0.8 + 2.2 * fbm(wx / 260, wz / 260, z.seed)) + sstep(110, 260, a) * (6 + 12 * fbm(wx / 600, wz / 600, z.seed + 5));
       case 'tunnel': case 'cut': {
@@ -281,8 +375,8 @@ class Road {
   natural(i, side, a, wx, wz) {
     const s = i * DS, y = this.Y[i];
     const za = this.zones[this.ZA[i]], zb = this.zones[this.ZB[i]], t = this.ZT[i];
-    let rel = this.profile(za, side, a, wx, wz);
-    if (zb !== za && t > 0) rel = lerp(rel, this.profile(zb, side, a, wx, wz), t);
+    let rel = this.profile(za, side, a, wx, wz, s, y);
+    if (zb !== za && t > 0) rel = lerp(rel, this.profile(zb, side, a, wx, wz, s, y), t);
     let h = y + rel;
     const u = side * a;
     for (let k = this.rivers.length - 1; k >= 0; k--) {
@@ -318,6 +412,8 @@ class Road {
     for (const rv of this.rivers) if (rv.levelY !== null && Math.abs(s - rv.sMid) < rv.reach + 140) near = true;
     for (const lk of this.lakes) if (lk.levelY !== null && s > lk.s0 - 200 && s < lk.s1 + 200) near = true;
     for (const lk of this.lakes) if (lk.levelY !== null && s > lk.s0 - 40 && s < lk.s1 + 40) b = true;
+    // a city: the viaduct from end to end, and a deck wherever the ground has already dropped away on the way in and out
+    for (const c of this.cities) if (c.groundY !== null && s > c.s0 - 230 && s < c.s1 + 230) { near = true; if (s >= c.s0 && s <= c.s1) b = true; }
     if (near && !b) {
       // a deck wherever the natural ground drops well below the road within a couple of samples
       for (let j = Math.max(0, i - 3); j <= i + 3 && j < this.X.length && !b; j++) {
@@ -345,6 +441,19 @@ class Road {
     return h;
   }
   right(i) { const th = this.T[i]; return [-Math.cos(th), Math.sin(th)]; }
+  // the zones at a sample (the two the terrain blends between there)
+  zonesAt(i) { return [this.zones[this.ZA[i]], this.zones[this.ZB[i]]]; }
+  cityAt(s, pad = 0) { for (let k = this.cities.length - 1; k >= 0; k--) { const c = this.cities[k]; if (s > c.s1 + pad) break; if (s >= c.s0 - pad) return c; } return null; }
+  // the road crossing over at s (within pad metres), or null
+  overAt(s, pad = 0) { for (let k = this.cities.length - 1; k >= 0; k--) { const c = this.cities[k]; if (s > c.s1 + 300) break; for (const o of c.over) if (Math.abs(s - o.s) <= pad) return o; } return null; }
+  // how much of the ground at a sample is city street (0..1), for the terrain's look
+  urbanAt(i) {
+    const s = i * DS, [za, zb] = this.zonesAt(i), t = this.ZT[i];
+    const ua = za.city ? this.cityEnv(za, s) : 0, ub = zb.city ? this.cityEnv(zb, s) : 0;
+    return lerp(ua, ub, zb !== za ? t : 0);
+  }
+  // metres of terrain a column `a` out really gets at a sample: on the inside of a bend the far columns stop short of the bend's centre
+  reachA(i, side, a) { const k = this.K[i]; return a > 260 && k * side < 0 ? Math.max(260, Math.min(a, 0.8 / Math.abs(k))) : a; }
   point(i, u) { const th = this.T[i]; return { x: this.X[i] - Math.cos(th) * u, z: this.Z[i] + Math.sin(th) * u, y: this.Y[i] }; }
   // interpolated frame at a fractional sample
   frameAt(fi) {
@@ -524,14 +633,15 @@ float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0
 function terrainMaterial(tex) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tDirt: { value: tex.dirt }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise });
+    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tDirt: { value: tex.dirt }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tPaved: { value: tex.asphalt } });
+    // aUrban (v91): 1 where the ground is a city's street level (worn tarmac and concrete, not grass)
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vNW;')
+      .replace('#include <common>', '#include <common>\nattribute float aUrban; varying float vUrban; varying vec3 vWP; varying vec3 vNW;')
       .replace('#include <project_vertex>', `#include <project_vertex>
-  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = normalize(objectNormal);`);
+  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = normalize(objectNormal); vUrban = aUrban;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec3 vWP; varying vec3 vNW; uniform sampler2D tGrass; uniform sampler2D tDirt; uniform sampler2D tRock; uniform sampler2D tNoise;`)
+varying vec3 vWP; varying vec3 vNW; varying float vUrban; uniform sampler2D tGrass; uniform sampler2D tDirt; uniform sampler2D tRock; uniform sampler2D tNoise; uniform sampler2D tPaved;`)
       .replace('#include <map_fragment>', `#include <map_fragment>
   vec3 nz = texture2D(tNoise, vWP.xz / 128.0).rgb;
   vec3 g = texture2D(tGrass, vWP.xz / 8.0).rgb;
@@ -542,11 +652,89 @@ varying vec3 vWP; varying vec3 vNW; uniform sampler2D tGrass; uniform sampler2D 
   rk /= (an.x + an.y + an.z);
   float steep = smoothstep(0.82, 0.62, vNW.y);
   col = mix(col, rk * 0.85, steep);
+  if (vUrban > 0.001) { vec3 pv = texture2D(tPaved, vWP.xz / 7.0).rgb * (0.34 + 0.22 * nz.g); col = mix(col, pv, vUrban * (1.0 - steep)); }
   diffuseColor.rgb = col * 0.8;`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
   roughnessFactor = mix(0.9, 0.6, steep);`);
   };
-  m.customProgramCacheKey = () => 'nr-terrain';
+  m.customProgramCacheKey = () => 'nr-terrain2';
+  return m;
+}
+
+// City buildings (v91). Every wall of every building in a chunk is one mesh; the windows are drawn by the shader
+// from the wall's own measurements (uv = metres along the wall and up from the street), so no two buildings repeat
+// and nothing has to be downloaded. aB = (the building's random number, its kind, how many of its windows are lit,
+// 1 on a roof). Kinds: 0 glass office tower (narrow bays, whole floors lit or dark), 1 concrete office block,
+// 2 brick apartments (few, warm windows), 3 apartment tower. Lit windows are brighter towards the ceiling, as a room
+// seen from below is; unlit glass is dark and glossy and mirrors the sky. Far enough away for a window to be smaller
+// than a pixel, the wall fades to the average of its windows, so distant towers do not sparkle as the car moves.
+function buildingMaterial() {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0, envMapIntensity: 0.9 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec4 aB; varying vec4 vB; varying vec2 vFuv;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vB = aB; vFuv = uv;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec4 vB; varying vec2 vFuv;
+float bh(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+vec3 bEmit = vec3(0.0); float bGlass = 0.0;`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+  {
+    float seed = vB.x, kind = vB.y, litF = vB.z;
+    vec2 cs; vec4 win; vec3 wall;
+    if (kind < 0.5) { cs = vec2(1.6, 3.9); win = vec4(0.05, 0.95, 0.14, 0.9); wall = vec3(0.03, 0.036, 0.045); }
+    else if (kind < 1.5) { cs = vec2(3.2, 3.7); win = vec4(0.13, 0.87, 0.3, 0.8); wall = vec3(0.2, 0.19, 0.18); }
+    else if (kind < 2.5) { cs = vec2(3.4, 3.05); win = vec4(0.3, 0.7, 0.28, 0.76); wall = vec3(0.15, 0.08, 0.058); }
+    else { cs = vec2(4.2, 2.95); win = vec4(0.12, 0.88, 0.34, 0.84); wall = vec3(0.19, 0.18, 0.165); }
+    wall *= 0.7 + 0.6 * bh(vec2(seed, 7.0));
+    if (vB.w > 0.5) { diffuseColor.rgb = vec3(0.045, 0.045, 0.05) * (0.7 + 0.6 * bh(vec2(seed, 3.0))); }
+    else {
+      vec2 c = vFuv / cs, id = floor(c), f = fract(c), fw = fwidth(c);
+      vec2 e = clamp(fw, vec2(0.012), vec2(0.5));
+      float wm = smoothstep(win.x - e.x, win.x + e.x, f.x) * (1.0 - smoothstep(win.y - e.x, win.y + e.x, f.x))
+               * smoothstep(win.z - e.y, win.z + e.y, f.y) * (1.0 - smoothstep(win.w - e.y, win.w + e.y, f.y));
+      float r1 = bh(id + seed), r2 = bh(id * 1.7 + seed + 31.0), rf = bh(vec2(id.y, seed + 3.0));
+      // offices light whole floors (cleaners, late workers), with the odd dark window; flats light one room at a time
+      float prob = kind < 1.5 ? litF * mix(0.3, 2.3, step(0.64, rf)) : litF;
+      float ground = step(id.y, 0.5);
+      prob = mix(prob, 0.72, ground);                                   // shop fronts and lobbies at street level
+      float lit = step(r1, prob);
+      vec3 lc = kind < 1.5 ? mix(vec3(0.86, 0.93, 1.0), vec3(1.0, 0.88, 0.7), step(0.72, r2)) : mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.9, 0.76), step(0.6, r2));
+      float fy = clamp((f.y - win.z) / (win.w - win.z), 0.0, 1.0), fx = clamp((f.x - win.x) / (win.y - win.x), 0.0, 1.0);
+      // the room behind the glass: ceiling lights at the top, furniture and people breaking up the lower half,
+      // a blind part way down some windows
+      float room = mix(0.42, 1.0, smoothstep(0.15, 0.95, fy)) * (0.8 + 0.2 * sin(fx * 9.0 + r2 * 40.0));
+      float blind = step(0.7, bh(id + seed + 9.0)) * step(0.35 + 0.5 * r2, fy);
+      room *= 1.0 - 0.55 * blind;
+      // flats: half of them have curtains drawn (an even, dimmer, warmer glow), and every window is two panes
+      if (kind > 1.5 && ground < 0.5) {
+        float curtain = step(0.5, bh(id + seed + 17.0));
+        room = mix(room, 0.5, curtain); lc = mix(lc, vec3(1.0, 0.76, 0.5), curtain * 0.7);
+        room *= 1.0 - smoothstep(0.05 + fw.x * 2.0, 0.02, abs(fx - 0.5)) * (1.0 - smoothstep(0.1, 0.3, fw.x));
+      } else if (ground < 0.5) {
+        // offices: rows of ceiling lights seen through the top of the glass, desks and partitions below
+        room *= 0.82 + 0.18 * step(0.5, fract(fy * 2.0 + 0.25)) * (1.0 - smoothstep(0.08, 0.25, fw.y));
+      }
+      float level = (0.4 + 0.6 * r2) * mix(1.0, 1.3, ground);
+      vec3 em = lc * lit * wm * room * level;
+      // too far to see a window: the wall's average instead
+      float area = (win.y - win.x) * (win.w - win.z), mean = min(1.0, kind < 1.5 ? litF * 1.02 : litF);
+      float far = smoothstep(0.4, 1.0, max(fw.x, fw.y));
+      em = mix(em, mix(vec3(0.93, 0.9, 0.85), vec3(1.0, 0.8, 0.56), step(1.5, kind)) * mean * area * 0.5, far);
+      bGlass = mix(wm, area, far);
+      // the street's sodium light washing up the bottom of the wall
+      em += vec3(1.0, 0.58, 0.28) * 0.02 * exp(-vFuv.y * 0.14) * (1.0 - bGlass);
+      bEmit = em;
+      diffuseColor.rgb = mix(wall, vec3(0.012, 0.015, 0.02), bGlass);
+    }
+  }`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+  roughnessFactor = mix(0.86, 0.1, bGlass);`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  totalEmissiveRadiance += bEmit * 1.15;`);
+  };
+  m.customProgramCacheKey = () => 'nr-building';
   return m;
 }
 
@@ -676,6 +864,8 @@ function skyMaterial() {
         // light pollution: a warm haze low on the horizon, strongest toward the city behind
         float az = atan(d.x, d.z);
         col += uGlow * exp(-max(h, 0.0) * 9.0) * (0.55 + 0.45 * cos(az - 2.6));
+        // below the horizon there is only dark land (v91: seen from high on the mountain pass, looking down past the edge of the terrain)
+        col = mix(col, uHorizon * 0.22, smoothstep(0.0, -0.05, h));
         // stars
         if (h > 0.0) {
           vec3 p = d * 420.0; vec3 c = floor(p); vec3 f = fract(p) - 0.5;
@@ -992,6 +1182,18 @@ export class World {
     SHARED.uRefl.value = this.refl.rt.texture; SHARED.uWaterRefl.value = this.waterRefl.rt.texture;
     this.initProbe();
     this.road.ensure(2200 / DS);
+    // The city's and the valley's materials are first needed minutes into a run, and building a shader the first time
+    // it is drawn froze the game for a third of a second as the skyline came into view. One speck of each, deep
+    // under the start of the road, gets them built with everything else while the title screen is up (v91).
+    {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.01, 0, 0, 0, 0, 0.01], 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1], 2)); g.setAttribute('aB', new THREE.Float32BufferAttribute([1, 0, 0.2, 0, 1, 0, 0.2, 0, 1, 0, 0.2, 0], 4));
+      g.setAttribute('color', new THREE.Float32BufferAttribute([1, 1, 1, 1, 1, 1, 1, 1, 1], 3));
+      for (const o of [new THREE.Mesh(g, this.mat.building), new THREE.Mesh(g, this.mat.pool), new THREE.Points(g, this.mat.townLights)]) {
+        o.position.set(0, -400, 0); o.frustumCulled = false; if (o.isMesh) this.layer(o, true, true); this.scene.add(o);
+      }
+    }
   }
   initTextures() {
     const b = this.base + 'tex/', a = this.renderer.capabilities.getMaxAnisotropy();
@@ -1029,6 +1231,9 @@ export class World {
       // the tunnel's walls, ceiling and portals (double-sided: seen from inside the tube and from the road outside), and its strip lights
       tunnel: new THREE.MeshStandardMaterial({ map: t.concrete, roughness: 0.9, color: 0x9a9892, side: THREE.DoubleSide }),
       tunnelLamp: new THREE.MeshBasicMaterial({ color: LED.clone().multiplyScalar(1.25) }),
+      // v91, the city: its buildings, the pools of light under its street lamps, and the lights of the valley town
+      building: buildingMaterial(),
+      townLights: new THREE.PointsMaterial({ size: 2.3, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }),
     };
     this.signMats = new Map();
     this.treeGeo = treeGeometry();
@@ -1047,6 +1252,9 @@ export class World {
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
     })();
     this.mat.glow = glowMaterial(this.glowTex, 4.2, 0.9);
+    this.mat.pool = new THREE.MeshBasicMaterial({ map: this.glowTex, color: SODIUM.clone().multiplyScalar(0.42), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+    // the valley town's lights are soft round dots, not square pixels
+    Object.assign(this.mat.townLights, { map: this.glowTex, size: 9, blending: THREE.AdditiveBlending, opacity: 1 });
     this.postGeo = new THREE.BoxGeometry(0.16, 1.05, 0.16).translate(0, 0.52, 0);
     this.delGeo = new THREE.BoxGeometry(0.05, 0.1, 0.12);
     this.lanternBulbGeo = new THREE.SphereGeometry(0.26, 12, 8).translate(0, 5.82, 0);
@@ -1088,7 +1296,7 @@ export class World {
         const t = i / N * Math.PI * 2;
         let h = base + amp * (0.5 * Math.sin(t * 3 + ph[0]) + 0.3 * Math.sin(t * 7 + ph[1]) + 0.18 * Math.sin(t * 13 + ph[2]) + 0.1 * Math.sin(t * 29 + ph[3]) + 0.06 * Math.sin(t * 61 + ph[4]));
         h = Math.max(base * 0.3, h);
-        pos.push(Math.sin(t) * radius, -60, Math.cos(t) * radius, Math.sin(t) * radius, h, Math.cos(t) * radius);
+        pos.push(Math.sin(t) * radius, -600, Math.cos(t) * radius, Math.sin(t) * radius, h, Math.cos(t) * radius);
         if (i < N) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
@@ -1181,7 +1389,9 @@ export class World {
     const f = R.frameAt(fi);
     const rx = -Math.cos(f.th), rz = Math.sin(f.th);
     const u = (ax - f.x) * rx + (az - f.z) * rz;
-    return { fi, s: fi * DS, u, y: f.y, th: f.th, g: f.g };
+    // k: the road's curvature here (1/m, + = bending left), for the steering assist (v91)
+    const ik = clamp(Math.floor(fi), 0, R.length - 2), k = lerp(R.K[ik], R.K[ik + 1], clamp(fi - ik, 0, 1));
+    return { fi, s: fi * DS, u, y: f.y, th: f.th, g: f.g, k };
   }
   // road height under a render-space point (for skid marks, smoke and the like)
   heightAt(x, z) { return this.locate(x, z).y; }
@@ -1297,6 +1507,14 @@ export class World {
     // floating origin is handled by the game calling maybeRebase()
     this.horizon.position.set(st.camX, 0, st.camZ);
     this.sky.position.set(st.camX, st.camY, st.camZ);
+    // the sky over a city: its light in the haze, up to 2.4x the usual glow, fading over 2.5 km either side (v91)
+    {
+      let near = 0;
+      for (let k = R.cities.length - 1; k >= 0; k--) { const c = R.cities[k]; if (sCar > c.s1 + 2600) break; const d = Math.max(0, c.s0 - sCar, sCar - c.s1); near = Math.max(near, 1 - sstep(0, 2500, d)); }
+      const u = this.sky.material.uniforms.uGlow.value;
+      this.skyGlow0 ||= u.clone();
+      u.copy(this.skyGlow0).multiplyScalar(1 + 1.4 * near);
+    }
     // moonlight shadows follow the car
     this.moon.position.set(st.x + this.moonDir.x * 60, L.y + this.moonDir.y * 60, st.z + this.moonDir.z * 60);
     this.moon.target.position.set(st.x, L.y, st.z);
@@ -1374,7 +1592,7 @@ export class World {
     SHARED.uWaterReflOn.value = 0;
     if (q >= 1 && this.car) {
       let level = null, best = 1e9;
-      for (const f of this.features.values()) { const d = Math.abs(f.sMid - this.car.s); if (d < f.reachS + 700 && d < best) { best = d; level = f.level; } }
+      for (const f of this.features.values()) { if (f.level == null) continue; const d = Math.abs(f.sMid - this.car.s); if (d < f.reachS + 700 && d < best) { best = d; level = f.level; } }
       if (level !== null) {
         this.waterRefl.setSize(size.x, size.y);
         const ok = this.waterRefl.render(this.scene, camera, new THREE.Vector3(camera.position.x, level, camera.position.z), new THREE.Vector3(0, 1, 0));
@@ -1485,6 +1703,8 @@ export class World {
     if (bridge.slice(i0, i1 + 1).some(Boolean)) { this.buildBridge(ch, add, i0, i1, ox, oy, oz, isB); yield; }
     // a tunnel's tube, roof, portals and lights
     if (R.tunnelAt(i0 * DS, CH_LEN + 8)) { this.buildTunnel(ch, add, i0, i1, ox, oy, oz); yield; }
+    // a city's buildings, street lamps and the roads crossing over (v91)
+    for (const city of R.cities) if (i1 * DS > city.b0 - 20 && i0 * DS < city.s1 + 120) { this.buildCity(ch, add, city, i0, i1, ox, oy, oz); yield; }
     // signs
     this.buildSigns(ch, add, i0, i1, ox, oy, oz, isB);
     if (c === 0) this.buildRoadEnd(add, ox, oy, oz);
@@ -1543,7 +1763,7 @@ export class World {
       if (side > 0 && i * DS > RAMP.sN && i * DS < RAMP.sM) return 'none';   // where the ramp joins
       if (isB(i)) return 'parapet';
       const z = zoneAt(i);
-      if ((z.type === 'cut' || z.type === 'tunnel') && (side > 0 ? z.cutR : z.cutL) > 0) return 'jersey';
+      if ((z.type === 'cut' || z.type === 'tunnel' || z.type === 'mountain') && (side > 0 ? z.cutR : z.cutL) > 0) return 'jersey';
       return 'rail';
     };
     // one mesh per material for both sides; posts and reflectors as one instanced mesh each
@@ -1599,15 +1819,17 @@ export class World {
     // where the ramp cuts through, the right side gets dense columns so the cut follows the ramp's edges; rows at
     // the ends of that stretch take their extra columns from the coarse ones so they meet the next chunk exactly
     const rampChunk = i1 * DS > RAMP.sA - 40 && i0 * DS < RAMP.sM + 20;
+    const urban = [], far = this.mtnChunk(i0, i1);
     for (const side of [-1, 1]) {
-      const dense = side > 0 && rampChunk, A = dense ? TERRAIN_A_RAMP : TERRAIN_A, na = A.length;
+      const dense = side > 0 && rampChunk, A = dense ? TERRAIN_A_RAMP : far ? TERRAIN_A_FAR : TERRAIN_A, na = A.length;
       const H = []; // heights for rows i0-1 .. i1+1 so normals can use neighbours
       const P = [];
       for (let i2 = i0 - 1; i2 <= i1 + 1; i2++) {
         const i = Math.max(0, i2), th = R.T[i], rx = -Math.cos(th), rz = Math.sin(th), b = isB(i);
         const row = [], prow = [];
         const coarse = dense && (i * DS <= RAMP.sA - 40 || i * DS >= RAMP.sM + 20);
-        for (const a of A) {
+        for (const a0 of A) {
+          const a = far ? R.reachA(i, side, a0) : a0;
           const wx = R.X[i] + rx * side * a, wz = R.Z[i] + rz * side * a;
           row.push(coarse && !TERRAIN_A.includes(a) ? NaN : R.terrainY(i, side, a, wx, wz, b)); prow.push([wx, wz]);
         }
@@ -1629,6 +1851,7 @@ export class World {
           if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
           const nl = Math.hypot(nx, ny, nz) || 1;
           gb.v(wx - ox, y - oy, wz - oz, nx / nl, ny / nl, nz / nl, 0, 0);
+          urban.push(R.urbanAt(Math.max(0, i0 + r - 1)));
         }
         if (r > 1 && r <= CHUNK + 1) {
           const b0 = base + (r - 2) * na, b1 = base + (r - 1) * na;
@@ -1636,9 +1859,12 @@ export class World {
         }
       }
     }
+    gb.extra = [['aUrban', urban, 1]];
     const m = add(new THREE.Mesh(gb.build(), this.mat.terrain), true, true);
     m.receiveShadow = true;
   }
+  // a chunk on (or next to) a mountain pass: its terrain and trees reach much further out
+  mtnChunk(i0, i1) { const R = this.road; return !!(R.zones[R.ZA[Math.max(0, i0 - 1)]].mtn || R.zones[R.ZB[i1 + 1] ?? R.ZB[i1]].mtn); }
   terrainAt(i, side, a) {
     const R = this.road, th = R.T[i], wx = R.X[i] - Math.cos(th) * side * a, wz = R.Z[i] + Math.sin(th) * side * a;
     return { y: R.terrainY(i, side, a, wx, wz, R.isBridge(i)), wx, wz };
@@ -1647,17 +1873,24 @@ export class World {
     const R = this.road, rnd = mulberry32(c * 7919 + 13);
     const inst = [];
     const cum = []; let tot = 0; for (const w of CARD_WEIGHT) { tot += w; cum.push(tot); }
+    const aMax = this.mtnChunk(i0, i1) ? MTN_TREES : 258;
     for (const side of [-1, 1]) {
       for (let s = i0 * DS; s < i1 * DS; s += 6.5) {
-        for (let a = 27; a < 258; a += 6.5 + a * 0.02) {
+        for (let a = 27; a < aMax; a += 6.5 + a * 0.02) {
           const ss = s + (rnd() - 0.5) * 5.5, aa = a + (rnd() - 0.5) * 5;
           if (side > 0 && ss > RAMP.sA - 30 && ss < RAMP.sM + 10) { const e = rampEdges(clamp(ss, RAMP.sA, RAMP.sM)); if (aa > (ss < RAMP.sN ? e.left - 7 : 19) && aa < e.right + 8) continue; }
           const fi = ss / DS, i = clamp(Math.round(fi), i0, i1);
           const z = R.zones[rnd() < R.ZT[i] ? R.ZB[i] : R.ZA[i]];
-          let dens = { forest: 0.8, fields: 0.07, cut: 0.62, tunnel: 0.62, embank: 0.22, river: 0.55, lake: 0.35 }[z.type];
+          let dens = { forest: 0.8, fields: 0.07, cut: 0.62, tunnel: 0.62, embank: 0.22, river: 0.55, lake: 0.35, city: 0.6, mountain: 0.74 }[z.type];
+          if (aa > 258 && (!z.mtn || R.reachA(i, side, aa) < aa)) continue;      // the far trees are the mountain's alone, and stop short of a bend's centre
+          if (z.city) { if (R.cityEnv(z, ss) > 0.12) continue; }                  // no woods in town
+          if (z.mtn && side !== z.mtn.hill && z.mtn.towns.some((t) => Math.abs(ss - t.s) < t.r && Math.abs(aa - t.a) < t.r)) continue;   // nor on the valley town
           if (z.type === 'fields' && fbm(R.X[i] / 140, R.Z[i] / 140 + side, z.seed + 77) > 0.12) dens = 0.75;   // tree lines between fields
-          if (z.type === 'cut' || z.type === 'tunnel') { const H = side > 0 ? z.cutR : z.cutL; if (H > 0 && aa < 22.4 + 0.42 * H + 4) dens = 0; }
+          if (z.type === 'cut' || z.type === 'tunnel' || z.type === 'mountain') { const H = side > 0 ? z.cutR : z.cutL; if (H > 0 && aa < 22.4 + 0.42 * H * 1.3 + 4) dens = 0; }
           if (aa > 150) dens = Math.max(dens, 0.55);   // the far edge is always a wall of trees
+          // the valley side of a pass: few trees on the first of the drop, so the view over their tops is open (the
+          // ones further down stand with their crowns below the road)
+          if (z.mtn && side !== z.mtn.hill && aa < 78) dens *= lerp(1, 0.12, R.mtnEnv(z, ss));
           const { y, wx, wz } = this.terrainAt(i, side, aa);
           // clearings, and nothing in the water or on the steep river banks
           if (fbm(wx / 90, wz / 90, 4242) > 0.33) dens *= 0.2;
@@ -1666,7 +1899,7 @@ export class World {
           for (const lk of R.lakes) if (lk.levelY !== null && y < lk.levelY + 1.2 && i * DS > lk.s0 - 300 && i * DS < lk.s1 + 300) wet = true;
           if (wet || rnd() > dens) continue;
           const pick = rnd() * tot, card = cum.findIndex((v) => pick <= v);
-          const H = (aa > 120 ? 14 : 9) + rnd() * 10;
+          const H = (aa > 258 ? 17 : aa > 120 ? 14 : 9) + rnd() * 10;
           const tint = 0.55 + rnd() * 0.35;
           inst.push([wx, y - 0.3, wz, H, card, rnd() * Math.PI, tint]);
         }
@@ -1692,7 +1925,7 @@ export class World {
     const R = this.road, poles = [], heads = [], lanterns = [], cones = [];
     for (let i = i0; i < i1; i++) {
       const s = i * DS;
-      if (s % POLE_EVERY === 0 && !R.tunnelAt(s, 8)) {
+      if (s % POLE_EVERY === 0 && !R.tunnelAt(s, 8) && !R.overAt(s, 13)) {
         poles.push([R.X[i], R.Y[i], R.Z[i], R.T[i]]);
         for (const side of [-1, 1]) {
           const p = R.point(i, side * ARM);
@@ -1701,7 +1934,7 @@ export class World {
           cones.push([p.x, p.y, p.z, POLE_H - 0.2, SODIUM]);
         }
       }
-      if (isB(i) && (s + 16) % 32 === 0) {
+      if (isB(i) && (s + 16) % 32 === 0 && !R.overAt(s, 11)) {
         for (const side of [-1, 1]) {
           const p = R.point(i, side * (U_PAVE + 0.22));
           lanterns.push([p.x, p.y, p.z, R.T[i]]);
@@ -2086,12 +2319,246 @@ export class World {
     g.add(grp);
   }
 
+
+  // ---- a city (v91): the blocks of buildings whose middles fall in this chunk, their street lamps, and a road crossing over
+  buildCity(ch, add, c, i0, i1, ox, oy, oz) {
+    const R = this.road, sA = i0 * DS, sB = i1 * DS, gY = c.groundY;
+    if (gY === null) return;
+    R.ensure(i1 + 90);
+    const gb = new GeoBuilder(), aB = [], pools = new GeoBuilder();
+    const lamps = [], posts = [], cones = [], navs = [];
+    const FLOOR = [3.9, 3.7, 3.05, 2.95];
+    // a wall from (x0, z0) to (x1, z1), facing away from (cx, cz); u runs on from uOff
+    const wall = (x0, z0, x1, z1, y0, y1, cx, cz, uOff, v0, B) => {
+      let tx = x1 - x0, tz = z1 - z0; const len = Math.hypot(tx, tz) || 1; tx /= len; tz /= len;
+      let nx = -tz, nz = tx;
+      if (nx * ((x0 + x1) / 2 - cx) + nz * ((z0 + z1) / 2 - cz) < 0) { [x0, x1] = [x1, x0]; [z0, z1] = [z1, z0]; nx = -nx; nz = -nz; }
+      const k = gb.v(x0 - ox, y0 - oy, z0 - oz, nx, 0, nz, uOff, v0);
+      gb.v(x1 - ox, y0 - oy, z1 - oz, nx, 0, nz, uOff + len, v0); gb.v(x1 - ox, y1 - oy, z1 - oz, nx, 0, nz, uOff + len, v0 + y1 - y0); gb.v(x0 - ox, y1 - oy, z0 - oz, nx, 0, nz, uOff, v0 + y1 - y0);
+      gb.quad(k, k + 1, k + 2, k + 3);
+      for (let q = 0; q < 4; q++) aB.push(...B);
+      return len;
+    };
+    // a box of walls with a flat roof: centre (x, z), heading th, w along the road, d across it, from y0 up to y1
+    const box = (x, z, th, w, d, y0, y1, B, v0 = 0, roofOnly = false) => {
+      const fx = Math.sin(th), fz = Math.cos(th), rx = -Math.cos(th), rz = Math.sin(th), hw = w / 2, hd = d / 2;
+      const P = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([l, t]) => [x + fx * l + rx * t, z + fz * l + rz * t]);
+      let u = B[0] * 3.7;
+      const side = roofOnly ? [B[0], B[1], B[2], 1] : B;
+      for (let q = 0; q < 4; q++) { const [x0, z0] = P[q], [x1, z1] = P[(q + 1) % 4]; u += wall(x0, z0, x1, z1, y0, y1, x, z, u, v0, side); }
+      const up = (P[1][1] - P[0][1]) * (P[3][0] - P[0][0]) - (P[1][0] - P[0][0]) * (P[3][1] - P[0][1]) > 0, Q = up ? P : P.slice().reverse();
+      const k = gb.n; for (const [px, pz] of Q) { gb.v(px - ox, y1 - oy, pz - oz, 0, 1, 0, 0, 0); aB.push(B[0], B[1], B[2], 1); }
+      gb.quad(k, k + 1, k + 2, k + 3);
+    };
+    const lamp = (i, u) => {
+      const p = R.point(clamp(i, 0, R.length - 1), u);
+      lamps.push([p.x, gY + 8.4, p.z, 0]); posts.push([p.x, gY - 0.2, p.z, 0]); cones.push([p.x, gY, p.z, 8.3, SODIUM]);
+      const k = pools.n, r = 11;
+      pools.v(p.x - r - ox, gY + 0.22 - oy, p.z - r - oz, 0, 1, 0, 0, 0); pools.v(p.x - r - ox, gY + 0.22 - oy, p.z + r - oz, 0, 1, 0, 0, 1);
+      pools.v(p.x + r - ox, gY + 0.22 - oy, p.z + r - oz, 0, 1, 0, 1, 1); pools.v(p.x + r - ox, gY + 0.22 - oy, p.z - r - oz, 0, 1, 0, 1, 0);
+      pools.quad(k, k + 1, k + 2, k + 3);
+    };
+    // rows of buildings back from the viaduct: [where the row starts (m from the median), depth, floors, width of a lot, kinds]
+    const ROWS = [
+      [36, [20, 26], [3, 11], [18, 34], [2, 2, 1, 3]],
+      [76, [28, 36], [6, 22], [24, 44], [1, 0, 3, 2]],
+      [126, [34, 46], [10, 46], [30, 48], [0, 0, 1, 3]],
+      [188, [36, 50], [8, 38], [30, 50], [0, 1, 3]],
+    ];
+    const nB = Math.ceil((c.s1 + 100 - c.b0) / CITY_PITCH);
+    for (let k = 0; k < nB; k++) {
+      const sb = c.b0 + k * CITY_PITCH, sc = sb + CITY_BLOCK / 2;
+      if (sc < sA || sc >= sB) continue;
+      const rnd = mulberry32((c.seed + k * 7919) | 0);
+      const overPrev = c.over.some((o) => o.k === k), overNext = c.over.some((o) => o.k === k + 1);
+      const lo = sb + (overPrev ? 7 : 0), hi = sb + CITY_BLOCK - (overNext ? 7 : 0);
+      // the middle of town is tall; its edges are a few floors
+      const core = sstep(c.s0 - 80, c.s0 + 650, sc) * (1 - sstep(c.s1 - 650, c.s1 + 80, sc));
+      for (const side of [-1, 1]) {
+        ROWS.forEach(([a0, dR, fR, wR, kinds], row) => {
+          let x = lo + rnd() * 3;
+          while (x < hi - 15) {
+            let w = wR[0] + rnd() * (wR[1] - wR[0]);
+            if (hi - (x + w) < 17) w = hi - x;
+            const d = dR[0] + rnd() * (dR[1] - dR[0]), kind = kinds[(rnd() * kinds.length) | 0];
+            const floors = Math.max(2, Math.round((fR[0] + Math.pow(rnd(), 1.7) * (fR[1] - fR[0])) * lerp(0.28, 1, core)));
+            const lit = kind < 1.5 ? 0.1 + rnd() * 0.3 : 0.16 + rnd() * 0.26, seed = Math.floor(rnd() * 900) + 1;
+            const gap = rnd() < 0.45 ? 0 : 2.5 + rnd() * 5;
+            const ic = clamp(Math.round((x + w / 2) / DS), 0, R.length - 1), th = R.T[ic], aC = a0 + d / 2 + rnd() * 3;
+            const p = R.point(ic, side * aC), wE = w * clamp(1 + R.K[ic] * side * aC, 0.6, 1.5) - 0.3;
+            const H = floors * FLOOR[kind] + 1.1, B = [seed, kind, lit, 0], y0 = gY - 0.6;
+            if (floors > 15 && rnd() < 0.62) {
+              // a tower on a podium, and on the tallest a narrower top
+              const pod = (3 + ((rnd() * 3) | 0)) * FLOOR[kind], inset = 0.72 + rnd() * 0.14;
+              box(p.x, p.z, th, wE, d, y0, gY + pod, B, -0.6);
+              const top = floors > 30 && rnd() < 0.6 ? H - (2 + ((rnd() * 4) | 0)) * FLOOR[kind] : H;
+              box(p.x, p.z, th, wE * inset, d * inset, gY + pod, gY + top, B, pod);
+              if (top < H) box(p.x, p.z, th, wE * inset * 0.7, d * inset * 0.7, gY + top, gY + H, B, top);
+            } else box(p.x, p.z, th, wE, d, y0, gY + H, B, -0.6);
+            // plant on the roof; a mast and a red light on anything tall enough to need one
+            if (floors > 4 && rnd() < 0.75) { const fx = Math.sin(th), fz = Math.cos(th), o = (rnd() - 0.5) * wE * 0.3; box(p.x + fx * o, p.z + fz * o, th, wE * (0.2 + rnd() * 0.2), d * (0.25 + rnd() * 0.2), gY + H - 0.2, gY + H + 2.2 + rnd() * 2, B, 0, true); }
+            if (H - c.H > 52) { box(p.x, p.z, th, 0.5, 0.5, gY + H, gY + H + 7, B, 0, true); navs.push([p.x, gY + H + 7.2, p.z]); }
+            x += w + gap;
+          }
+        });
+        // towers further back, some blocks
+        if (rnd() < 0.3 + 0.45 * core) {
+          const aC = 310 + rnd() * 190, ic = clamp(Math.round((sb + 20 + rnd() * 56) / DS), 0, R.length - 1), p = R.point(ic, side * aC);
+          const kind = rnd() < 0.7 ? 0 : 1, floors = Math.round((22 + rnd() * 42) * lerp(0.4, 1, core)), H = floors * FLOOR[kind] + 1.1, w = 38 + rnd() * 16, B = [Math.floor(rnd() * 900) + 1, kind, 0.12 + rnd() * 0.28, 0];
+          box(p.x, p.z, R.T[ic] + (rnd() - 0.5) * 0.5, w, w * (0.8 + rnd() * 0.3), gY - 0.6, gY + H, B, -0.6);
+          if (H - c.H > 52) navs.push([p.x, gY + H + 1.2, p.z]);
+        }
+        // street lamps: the street along the viaduct, the streets between the rows, and the cross street before this block
+        const iOf = (s) => Math.round(s / DS);
+        for (const ds of [12, 48, 84]) lamp(iOf(sb + ds), side * 29);
+        for (const a of [68.5, 119, 180.5]) for (const ds of [30, 66]) lamp(iOf(sb + ds), side * a);
+        if (!overPrev) for (const a of [31, 62, 97, 132, 167, 202, 237]) lamp(iOf(sb - 6), side * a);
+      }
+    }
+    const geo = gb.build();
+    if (geo) { geo.setAttribute('aB', new THREE.Float32BufferAttribute(aB, 4)); add(new THREE.Mesh(geo, this.mat.building), true, true); }
+    // the street under the viaduct itself (the terrain either side stops at the deck's edges)
+    {
+      const g2 = new GeoBuilder(), urb = [];
+      let prev = -1;
+      for (let i = i0; i <= i1; i++) {
+        if (!R.isBridge(i) || i * DS < c.s0 - 200 || i * DS > c.s1 + 200) { prev = -1; continue; }
+        const a = R.point(i, -20.2), b = R.point(i, 20.2), k = g2.v(a.x - ox, gY - 0.05 - oy, a.z - oz, 0, 1, 0, 0, 0);
+        g2.v(b.x - ox, gY - 0.05 - oy, b.z - oz, 0, 1, 0, 0, 0); urb.push(1, 1);
+        if (prev >= 0) g2.quad(prev, prev + 1, k + 1, k);
+        prev = k;
+      }
+      g2.extra = [['aUrban', urb, 1]];
+      const under = g2.build(); if (under) add(new THREE.Mesh(under, this.mat.terrain), false, false);
+    }
+    const pg = pools.build();
+    // the pools, lamps and their cones are only drawn within 700 m (tier 1 of DetailLOD): past that they are a pixel
+    // each and there are hundreds of them. The lamp posts themselves are left out: black on black from above.
+    if (pg) { const m = add(new THREE.Mesh(pg, this.mat.pool), false, false); m.renderOrder = 4; m.userData.detailTier = 1; }
+    this.instances(add, this.lensGeo, this.mat.lampSodium, lamps, ox, oy, oz, { scale: [1.5, 1.5, 1.5], refl: false, probe: false });
+    void posts;
+    if (cones.length) {
+      const im = new THREE.InstancedMesh(this.coneGeo, this.mat.cone, cones.length), col = new Float32Array(cones.length * 3);
+      const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3();
+      cones.forEach(([x, y, z, h, cc], k) => { pv.set(x - ox, y - oy, z - oz); sc.set(1, h, 1); mtx.compose(pv, q, sc); im.setMatrixAt(k, mtx); col.set([cc.r, cc.g, cc.b], k * 3); });
+      im.geometry = this.coneGeo.clone(); im.geometry.setAttribute('aColor', new THREE.InstancedBufferAttribute(col, 3));
+      im.computeBoundingSphere(); im.renderOrder = 5; im.userData.detailTier = 1; add(im, false, false);
+    }
+    if (navs.length) {
+      const im = new THREE.InstancedMesh(this.navGeo, this.mat.navRed, navs.length), mtx = new THREE.Matrix4();
+      navs.forEach(([x, y, z], k) => { mtx.makeScale(2.4, 2.4, 2.4).setPosition(x - ox, y - oy, z - oz); im.setMatrixAt(k, mtx); });
+      im.computeBoundingSphere(); im.userData.detailTier = -1; add(im, false, false);
+    }
+    for (const o of c.over) if (o.s >= sA && o.s < sB) this.buildOverpass(ch, add, c, o, ox, oy, oz);
+  }
+  // A road crossing over the viaduct on its own bridge (v91): level over the highway, OVER.clear clear of it, then
+  // coming down to the street either side along a cross street. A slab on five steel girders, concrete parapets,
+  // two-column piers either side of the highway and every 36 m beyond, and its own lamps.
+  buildOverpass(ch, add, c, o, ox, oy, oz) {
+    const R = this.road, i = Math.round(o.s / DS), th = R.T[i], y = R.Y[i], gY = c.groundY;
+    const p0 = R.point(i, 0), rx = -Math.cos(th), rz = Math.sin(th), fx = Math.sin(th), fz = Math.cos(th);
+    const top = y + OVER.clear + OVER.girder + 0.45, flat = 130, end = flat + Math.max(120, (top - gY) / 0.105);
+    const line = [[-end, gY + 0.25], [-flat, top], [flat, top], [end, gY + 0.25]];        // (metres right of the median, height of the road on top)
+    const yAt = (u) => { const a = Math.abs(u); return a <= flat ? top : lerp(top, gY + 0.25, (a - flat) / (end - flat)); };
+    // a length of the bridge between two lines along it (z0..z1 metres along the highway), from yb to yt below its top
+    const run = (gb, z0, z1, yb, yt, uvS = 0.25) => {
+      for (let q = 0; q < line.length - 1; q++) {
+        const [u0, t0] = line[q], [u1, t1] = line[q + 1], len = Math.hypot(u1 - u0, t1 - t0), sl = (t1 - t0) / (u1 - u0), nl = Math.hypot(sl, 1);
+        const P = (u, z, yy) => [p0.x + rx * u + fx * z - ox, yy - oy, p0.z + rz * u + fz * z - oz];
+        const face = (A, B, C, D, n, w, h) => { const k = gb.v(...A, ...n, 0, 0); gb.v(...B, ...n, w * uvS, 0); gb.v(...C, ...n, w * uvS, h * uvS); gb.v(...D, ...n, 0, h * uvS); gb.quad(k, k + 1, k + 2, k + 3); };
+        const up = [-rx * sl / nl, 1 / nl, -rz * sl / nl], dn = up.map((v) => -v);
+        face(P(u0, z0, t0 + yt), P(u0, z1, t0 + yt), P(u1, z1, t1 + yt), P(u1, z0, t1 + yt), up, z1 - z0, len);
+        face(P(u0, z1, t0 + yb), P(u0, z0, t0 + yb), P(u1, z0, t1 + yb), P(u1, z1, t1 + yb), dn, z1 - z0, len);
+        face(P(u1, z0, t1 + yb), P(u0, z0, t0 + yb), P(u0, z0, t0 + yt), P(u1, z0, t1 + yt), [-fx, 0, -fz], len, yt - yb);
+        face(P(u0, z1, t0 + yb), P(u1, z1, t1 + yb), P(u1, z1, t1 + yt), P(u0, z1, t0 + yt), [fx, 0, fz], len, yt - yb);
+      }
+    };
+    const slab = new GeoBuilder(), steel = new GeoBuilder(), piers = new GeoBuilder();
+    run(slab, -OVER.half, OVER.half, -0.45, 0);
+    for (const z of [-OVER.half, OVER.half - 0.36]) run(slab, z, z + 0.36, 0, 0.92);
+    for (const z of [-6, -3, 0, 3, 6]) run(steel, z - 0.26, z + 0.26, -0.45 - OVER.girder, -0.45, 1 / 6);
+    const lamps = [], posts = [], cones = [];
+    for (let u = -end + 12; u < end; u += 36) {
+      // piers: none over the highway itself, the first pair just outside its parapets
+      const a = Math.abs(u), uu = a < 24 ? null : u;
+      if (uu !== null) {
+        const under = yAt(uu) - 0.45 - OVER.girder, h = under - 1.3 - (gY - 1);
+        if (h > 1.6) {
+          const c0 = [p0.x + rx * uu, p0.z + rz * uu];
+          boxInto(piers, c0[0] - ox, under - 0.65 - oy, c0[1] - oz, 1.7, 1.3, 13.6, th, 0.25);
+          for (const z of [-4.4, 4.4]) boxInto(piers, c0[0] + fx * z - ox, gY - 1 + h / 2 - oy, c0[1] + fz * z - oz, 1.4, h, 1.4, th, 0.25);
+        }
+      }
+    }
+    for (const u of [-24.5, 24.5]) {
+      const under = top - 0.45 - OVER.girder, h = under - 1.3 - (gY - 1), c0 = [p0.x + rx * u, p0.z + rz * u];
+      boxInto(piers, c0[0] - ox, under - 0.65 - oy, c0[1] - oz, 1.7, 1.3, 13.6, th, 0.25);
+      for (const z of [-4.4, 4.4]) boxInto(piers, c0[0] + fx * z - ox, gY - 1 + h / 2 - oy, c0[1] + fz * z - oz, 1.4, h, 1.4, th, 0.25);
+    }
+    // lamps along one parapet then the other, every 42 m
+    for (let u = -end + 30, n = 0; u < end - 20; u += 42, n++) {
+      const z = (n % 2 ? 1 : -1) * (OVER.half - 0.6), x = p0.x + rx * u + fx * z, zz = p0.z + rz * u + fz * z, yy = yAt(u);
+      lamps.push([x, yy + 8.3, zz, 0]); posts.push([x, yy, zz, 0]); cones.push([x, yy, zz, 8.2, SODIUM]);
+    }
+    const m1 = slab.build(), m2 = steel.build(), m3 = piers.build();
+    if (m1) { const m = add(new THREE.Mesh(m1, this.mat.concrete)); m.userData.detailTier = -1; }
+    if (m2) { const m = add(new THREE.Mesh(m2, this.mat.green)); m.userData.detailTier = -1; }
+    if (m3) { const m = add(new THREE.Mesh(m3, this.mat.concrete)); m.userData.detailTier = -1; }
+    const a1 = this.instances(add, this.lensGeo, this.mat.lampSodium, lamps, ox, oy, oz, { scale: [1.5, 1.5, 1.5], refl: false, probe: false });
+    const a2 = this.instances(add, this.postGeo, this.mat.darkSteel, posts, ox, oy, oz, { scale: [1, 7.9, 1], refl: false, probe: false });
+    for (const a of [a1, a2]) if (a) a.userData.detailTier = -1;
+    if (cones.length) {
+      const im = new THREE.InstancedMesh(this.coneGeo, this.mat.cone, cones.length), col = new Float32Array(cones.length * 3);
+      const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3();
+      cones.forEach(([x, yy, z, h, cc], k) => { pv.set(x - ox, yy - oy, z - oz); sc.set(1, h, 1); mtx.compose(pv, q, sc); im.setMatrixAt(k, mtx); col.set([cc.r, cc.g, cc.b], k * 3); });
+      im.geometry = this.coneGeo.clone(); im.geometry.setAttribute('aColor', new THREE.InstancedBufferAttribute(col, 3));
+      im.computeBoundingSphere(); im.renderOrder = 5; add(im, false, false);
+    }
+  }
+  // ---- a mountain pass's valley (v91): the lights of its towns on the valley floor and of the road that runs along it
+  buildValley(key, m, sMid, reach) {
+    const R = this.road;
+    R.ensure(Math.ceil((m.s1 + 60) / DS));
+    const i = Math.round(sMid / DS), ox = R.X[i], oz = R.Z[i], oy = 0, side = -m.hill, floor = m.baseY - 26;
+    const group = new THREE.Group(); group.position.set(ox - this.offset.x, oy, oz - this.offset.z);
+    const ft = { group, ox, oy, oz, disposables: [], sMid, reachS: reach, level: null };
+    const pos = [], col = [];
+    const light = (x, y, z, kind, b) => { pos.push(x - ox, y - oy, z - oz); const c = kind === 0 ? [1, 0.64, 0.34] : kind === 1 ? [0.92, 0.95, 1] : [1, 0.82, 0.58]; col.push(c[0] * b, c[1] * b, c[2] * b); };
+    for (const t of m.towns) {
+      // streets on a grid, lamps along them, thinning out towards the edge of town; a few lit windows and white lights among them
+      const rnd = mulberry32(t.seed), it = clamp(Math.round(t.s / DS), 0, R.length - 1), c = R.point(it, side * t.a), ang = R.T[it] + (rnd() - 0.5) * 0.7, ca = Math.cos(ang), sa = Math.sin(ang), G = 44;
+      for (let n = 0; n < t.n; n++) {
+        const rr = t.r * Math.pow(rnd(), 0.75), aa = rnd() * Math.PI * 2;
+        let gx = Math.cos(aa) * rr, gz = Math.sin(aa) * rr * 0.8;
+        if (rnd() < 0.5) gx = Math.round(gx / G) * G + (rnd() - 0.5) * 3; else gz = Math.round(gz / G) * G + (rnd() - 0.5) * 3;
+        const k = rnd(), kind = k < 0.72 ? 0 : k < 0.86 ? 1 : 2;
+        light(c.x + gx * ca + gz * sa, floor + 6 + rnd() * 7, c.z - gx * sa + gz * ca, kind, 0.55 + rnd() * 0.45);
+      }
+    }
+    // the valley road: a lamp every 60 m or so, wandering along the foot of the slope
+    for (let s = m.s0 + 350; s < m.s1 - 350; s += 58) {
+      const j = clamp(Math.round(s / DS), 0, R.length - 1), a = 300 + 55 * Math.sin(s / 430 + m.seed % 7) + (m.topY ?? m.baseY + 100) * 0;
+      const depth = R.Y[j] - floor;                         // the road is this far above the valley floor here
+      const aa = Math.max(a, 60 + depth / 0.52);            // keep it out on the flat, past the foot of the slope
+      if (R.reachA(j, side, aa) < aa) continue;
+      const p = R.point(j, side * aa);
+      light(p.x, floor + 9, p.z, 0, 0.5);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.computeBoundingSphere();
+    const pts = new THREE.Points(g, this.mat.townLights); pts.layers.set(0); pts.renderOrder = 3;
+    group.add(pts); ft.disposables.push(g);
+    this.group.add(group);
+    this.features.set(key, ft);
+  }
+
   // ---- rivers and lakes: water planes and deck-arch spans, built when near
   updateFeatures(sCar) {
     const R = this.road;
-    const list = [...R.rivers.map((r) => ['r', r]), ...R.lakes.map((l) => ['l', l])];
+    const list = [...R.rivers.map((r) => ['r', r]), ...R.lakes.map((l) => ['l', l]), ...R.mountains.map((m) => ['m', m])];
     for (const [k, f] of list) {
-      if (f.levelY === null) continue;
+      if (k !== 'm' && f.levelY === null) continue;
       const sMid = k === 'r' ? f.sMid : (f.s0 + f.s1) / 2, reach = k === 'r' ? f.reach : (f.s1 - f.s0) / 2 + 150;
       const key = k + sMid;
       const near = sMid - reach < sCar + 2200 && sMid + reach > sCar - 600;
@@ -2100,6 +2567,7 @@ export class World {
     }
   }
   buildFeature(key, kind, f, sMid, reach) {
+    if (kind === 'm') return this.buildValley(key, f, sMid, reach);
     const R = this.road, i = Math.round(sMid / DS);
     R.ensure(Math.ceil((sMid + reach + 400) / DS));
     const ox = R.X[i], oz = R.Z[i], oy = 0;
