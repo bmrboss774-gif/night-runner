@@ -3314,7 +3314,7 @@ CAR_DEFS.a90 = {
   lampLevels: { head: 1.8, tail: [0.5, 6] },
   sound: 'bmw', audio: { rpmScale: 1, turbo: 0.5, flutter: 0.4, crackle: 1.2, popVol: 1 },   // (no recording of its own: the M4's straight six; the A90's engine is BMW's too)
   stock: { paint: '#f2b21d', finish: 'gloss' },
-  spoilers: [['stock', 'GT wing']], noParts: ['canards'],
+  spoilers: [['stock', 'GT wing']], noParts: ['canards'], wingFinish: true,
   carbonParts: [],
   model: { title: 'Toyota Supra', url: 'https://sketchfab.com/3d-models/toyota-supra-b7616ec43ecf4ffd8ed810d94f15eea6', author: 'Jiaxing', authorUrl: 'https://sketchfab.com/saitoyang' },
   maker: 'Toyota, Supra and GR are trademarks of Toyota Motor Corporation.',
@@ -4105,6 +4105,7 @@ const defaultMods = (def) => ({
   nitrous: 'off',   // v45: the NO2 kit (cars with def.nitrous)
   helmet: 'paint',   // v75: the driver's helmet (HELMETS): the car's colour unless chosen
   rimStyle: 'stock', rimLip: null, rimSize: 0,   // v79: the rim design (RIM_STYLES), its lip (RIM_LIPS; null = the design's own) and inches up
+  wingFinish: 'stock',  // v89: the GR Supra's GT wing ('paint', 'carbon')
   hoodInlay: 'stock',   // v65: the M4 CSL's bonnet scallops ('carbon', 'paint')
   tips: 'stock', tipFinish: 'steel',   // v63: exhaust tip style (TIP_STYLES) and finish (TIP_FINISHES)
   badge: 'stock',    // v61: the M4 CSL's roundels (BADGES)
@@ -5063,6 +5064,9 @@ function applyMods() {
   for (const panel in r.panels) for (const mesh of r.panels[panel]) mesh.material = m.carbon[panel === 'hoodFlat' ? 'hood' : panel] ? carbonMat : mesh.userData.stockMat;
   // v65: the bonnet's inserts (the M4 CSL's two scallops): black as modelled, carbon, or the car's paint
   if (r.panels.hoodInlay) { const k = m.hoodInlay || 'stock'; for (const mesh of r.panels.hoodInlay) mesh.material = k === 'carbon' ? carbonMat : k === 'paint' && r.mats.paint ? r.mats.paint : mesh.userData.stockMat; }
+  // v89, the owner: "add the option to make the GT wing paint matched" (def.wingFinish, the GR Supra): the factory
+  // wing as modelled (gloss black), in the car's paint, or in carbon
+  if (def.wingFinish && r.panels.wing) { const k = m.wingFinish || 'stock'; for (const mesh of r.panels.wing) mesh.material = k === 'carbon' ? carbonMat : k === 'paint' && r.mats.paint ? r.mats.paint : mesh.userData.stockMat; }
   // the livery: textured paint over everything, and the underglow
   for (const mesh of r.kinds.paint || []) if (mesh.userData.liveryMat) mesh.material = m.livery === 'on' ? mesh.userData.liveryMat : (mesh.userData.panel && m.carbon[mesh.userData.panel] ? carbonMat : mesh.userData.stockMat);
   for (const mesh of r.kinds.glow || []) mesh.visible = false;   // the movie cars' neon planes: left off (the user's call)
@@ -7141,7 +7145,7 @@ function renderGarage() {
     if (def.badges) body.append(gGroup('Badges', null, el('p', { className: 'g-note', textContent: 'The roundels on the bonnet and boot lid.' }), segRow(BADGES, m.badge || 'stock', (k) => setMod('badge', k, 'front'))));
     if (rig.panels.bumperAlt) body.append(gGroup('Front bumper', null, segRow([['stock', def.bumperName || 'Kit'], ['street', 'Street']], m.bumper || 'stock', (k) => setMod('bumper', k, 'front'))));
     if (rig.panels.hoodFlat) body.append(gGroup('Hood', null, segRow([['stock', def.hoodName || 'Vented'], ['flat', 'Smooth']], m.bonnet || 'stock', (k) => setMod('bonnet', k, 'hood'))));
-    for (const slot of slots) body.append(gGroup(TITLES[slot], null, segRow(slot === 'spoiler' ? spoilerOpts : PART_LABELS[slot].filter(([k]) => !(def.noKits || []).includes(slot + ':' + k)), m[slot], (k) => setMod(slot, k, FOCUS_OF[slot]))));
+    for (const slot of slots) { if (slot === 'lip' && def.wingFinish && rig.panels.wing && m.spoiler === 'stock') body.append(gGroup('Wing finish', null, segRow([['stock', 'Gloss black'], ['paint', 'Body colour'], ['carbon', 'Carbon']], m.wingFinish || 'stock', (k) => setMod('wingFinish', k, 'rear')))); body.append(gGroup(TITLES[slot], null, segRow(slot === 'spoiler' ? spoilerOpts : PART_LABELS[slot].filter(([k]) => !(def.noKits || []).includes(slot + ':' + k)), m[slot], (k) => setMod(slot, k, FOCUS_OF[slot])))); }
     body.append(el('p', { className: 'g-note', textContent: 'Spoilers, splitters, canards and diffusers add real downforce (more grip at speed) and a little drag.' }));
   } else if (gTab === 'carbon') {
     const row = el('div', { className: 'chips' });
