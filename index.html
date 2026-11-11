@@ -1814,7 +1814,18 @@ mirror.on = store.get('mirror', true);
 // the car (and only the car) reflects the live probe that rides with it
 // (not the unlit ones, v42: on a MeshBasicMaterial an envMap multiplies the colour by the reflection, which blacked out
 // the underglow plane everywhere but where a light bar happened to reflect, and dimmed the exhaust flames the same way)
-world.onProbeSwap = (tex) => { carRoot.traverse((o) => { const m = o.material; if (m && !Array.isArray(m) && 'envMap' in m && !m.isMeshBasicMaterial && m.envMap !== tex) m.envMap = tex; }); };
+// v90, the owner: "this reflection of the hexagon lights slightly flickers on the ground when entering the garage".
+// While the room's lights come up the car's reflection cube is re-captured, a new one every third frame, and each new
+// cube has to be filtered (PMREM) before a material can use it. three.js does that the first time something is drawn
+// with it, which was in the middle of drawing the floor's mirror picture, and that frame's mirror came out wrong:
+// measured a frame at a time, the floor jumped on every third frame for the first half second. The new cube is now
+// drawn with once here, on a 2-pixel target of its own, so the filtering is done before the mirror is.
+const probeWarm = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(50, 1, 0.1, 10), rt: new THREE.WebGLRenderTarget(2, 2), mat: new THREE.MeshStandardMaterial({ name: 'probe warm-up' }) };
+{ const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), probeWarm.mat); m.position.z = -1; m.frustumCulled = false; probeWarm.scene.add(m); }
+world.onProbeSwap = (tex) => {
+  probeWarm.mat.envMap = tex; const prev = renderer.getRenderTarget(); renderer.setRenderTarget(probeWarm.rt); renderer.render(probeWarm.scene, probeWarm.cam); renderer.setRenderTarget(prev);
+  carRoot.traverse((o) => { const m = o.material; if (m && !Array.isArray(m) && 'envMap' in m && !m.isMeshBasicMaterial && m.envMap !== tex) m.envMap = tex; });
+};
 const rain = new Rain(scene);
 let roadY = 0, roadG = 0, roadTh = 0;
 const QUALITY = ['Low', 'Medium', 'High'];
