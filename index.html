@@ -970,7 +970,7 @@ body.is-touch .cc{font-size:22px}
       <p>Carrera GT: engine sound cut from NM2255’s “<a href="https://www.youtube.com/watch?v=rHiIFeBi6GU" target="_blank" rel="noopener">Porsche Carrera GT SCREAMING V10 Sounds! - Accelerations, Revs, OnBoard, Exhaust &amp; More!</a>” and “<a href="https://www.youtube.com/watch?v=-XNOCn5g3AA" target="_blank" rel="noopener">BEST OF Porsche Carrera GT 5.7 N/A V10 Engine SOUNDS! - OnBoard, Revs, Burnouts &amp; More!</a>” (<a href="https://www.youtube.com/@NM2255" target="_blank" rel="noopener">NM2255 | Raw Car Sounds</a>): the idle at the tailpipes, onboard full-throttle pulls to 8,000 rpm and onboard overrun, played back at the revs they were recorded at.</p>
       <p>M4 CSL: engine sound cut from NW Auto’s “<a href="https://www.youtube.com/watch?v=-zcRt1ZmcJ4" target="_blank" rel="noopener">F82 BMW M4 Stock Exhaust Sound</a>”, used with permission. Its turbo and shift sounds reuse the Supra recordings, turned well down.</p>
       <p>Aventador SVJ: engine sound cut from AutoTopNL’s “<a href="https://www.youtube.com/watch?v=MLbG8Fh2OmE" target="_blank" rel="noopener">Lamborghini Aventador SVJ *Gintani Exhaust* V12 F1 SOUND!</a>” (<a href="https://www.youtube.com/@AutoTopnl" target="_blank" rel="noopener">AutoTopNL</a>), used with permission: the idle, a roadside pull to 7,400 rpm and the overrun.</p>
-      <p>812 Superfast and Competizione: no recording of their own yet; they borrow the Aventador SVJ’s V12, above.</p>
+      <p>812 Superfast and Competizione: engine sound cut from NM2255’s “<a href="https://www.youtube.com/watch?v=SRFOkfDZViE" target="_blank" rel="noopener">Novitec straight piped Ferrari 812 GTS sounds INCREDIBLE on the DYNO | 9000rpm SCREAMING V12 Eargasm</a>” (<a href="https://www.youtube.com/@NM2255" target="_blank" rel="noopener">NM2255 | Raw Car Sounds</a>), used with permission: the idle, a dyno pull from 2,400 to 8,800 rpm and the fall of the revs after it.</p>
       <p>911 GT3 RS: engine sound cut from Automann-TV’s “<a href="https://www.youtube.com/watch?v=zWdMGkpeJPo" target="_blank" rel="noopener">Porsche 991.2 GT3 RS (520hp) - pure SOUND</a>” (<a href="https://www.youtube.com/@Automann-TV" target="_blank" rel="noopener">Automann-TV</a>), used with permission. The recording is the 991.2 GT3 RS, whose 4.0-litre flat six the 992’s is developed from: its idle, pulls through the gears to 7,900 rpm, free revs and overrun.</p>
       <p>720S Spider: engine sound cut from JBB013’s “<a href="https://www.youtube.com/watch?v=2kfOZrnmlXk" target="_blank" rel="noopener">McLaren 720S Brutal SOUND - Accelerations and Loud Revs</a>” (<a href="https://www.youtube.com/@JBB013" target="_blank" rel="noopener">JBB013 - Supercar Videos</a>), used with permission: the idle, a full-throttle pull to 7,800 rpm and the crackle of the free revs.</p>
       <p>Gear changes are made in code for each car from its own engine sound: how far and how fast the revs fall, a manual’s lift or a dual-clutch’s ignition cut, the gearbox clunks and the downshift blip. The blow-off on the turbo cars is the Supra recording’s, tuned per car.</p>
@@ -3196,7 +3196,7 @@ const F812_SHARED = {
   brand: 'Ferrari', hue: '#e0221c', tach: 10, variantFor: f812Variant,
   plate: { style: 'euro', text: 'FE 812 SF', caption: 'NIGHT RUNNER', front: 'off' },
   lampLevels: { head: 1.6, tail: [0.5, 7] },
-  sound: 'svj', audio: { rpmScale: 1.04, turbo: 0, flutter: 0, crackle: 1.1, popVol: 0.9, whine: 0 },   // (no recording of its own yet: the Aventador's V12, pitched up a touch)
+  sound: 'f812', audio: { rpmScale: 1, turbo: 0, flutter: 0, crackle: 1.1, popVol: 0.9, whine: 0 },   // (v83: its own V12, from a dyno video; v82 borrowed the Aventador's)
   stock: { paint: '#c1121c', finish: 'gloss' },
   spoilers: [['stock', 'Factory']], noSpoilerOff: true, noSpoilerParts: true, noParts: ['spoiler', 'canards'],
   license: { label: 'CC BY-NC-SA 4.0', url: 'http://creativecommons.org/licenses/by-nc-sa/4.0/' },
@@ -5176,6 +5176,12 @@ const SOUND_SETS = {
   // sound switched off: a pull from 2,600 to 4,200 rpm, about 4,900 and 5,900 rpm from a harder one, two stretches of
   // slowing down. The recording has no idle (the engine is off at rest), so the idle loop is the bottom of the pull,
   // kept very quiet, as a hybrid is at a standstill.
+  // Ferrari 812 (v83; NM2255's dyno video of a straight-piped 812 GTS): V12, firing line rpm/10 Hz. An idle of 920 rpm,
+  // the on loops from one clean pull from 2,400 to 8,800 rpm, the off loops from a gentle lift at 2,000 rpm and a
+  // closed-throttle fall from 5,700 rpm (short ones: the revs drop 2,000 rpm a second there).
+  f812: { prefix: 'f812_', burnTyres: false, lp: [2600, 9500],
+    loops: { idle: 919, on_low: 2656, on_a: 3497, on_b: 4712, on_c: 5972, on_d: 7163, on_high: 8326, off_low: 2032, off_mid: 3948, off_high: 4882, burnout: 5972 },
+    on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
   i8: { prefix: 'i8_', burnTyres: false, lp: [2200, 8000],
     loops: { idle: 2305, on_low: 2782, on_a: 3109, on_b: 3533, on_c: 3787, on_d: 4914, on_high: 5893, off_low: 3316, off_mid: 4055, off_high: 4715, burnout: 4914 },
     on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
