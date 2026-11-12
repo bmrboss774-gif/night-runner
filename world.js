@@ -100,8 +100,8 @@ export const onRampS = (s, rp = RAMP) => s > rp.lo - 2 && s < rp.hi;
 // the terrain is cut down to just below the ramp, with a 1:1.4 slope back up to the natural ground
 function rampCutY(s, a, y, rp = RAMP) {
   if (s < rp.lo - 56 || s > rp.hi + 20) return Infinity;
-  const e = rampEdges(s, rp);
-  const lo = rampApart(rp, s) ? e.left - 1.0 : U_PAVE, hi = e.right + 1.0;
+  const e = rampEdges(s, rp), lot = rp.svc && s > rp.svc.s0 - 8 && s < rp.svc.s1 + 8;   // (v102) a fuel stop's lot: level ground well out to the right
+  const lo = (rampApart(rp, s) ? e.left - 1.0 : U_PAVE) - (lot ? rp.svc.wl : 0), hi = e.right + 1.0 + (lot ? rp.svc.w : 0);
   const dLat = a < lo ? lo - a : a > hi ? a - hi : 0;
   const dLon = Math.max(0, rp.lo - 4 - s, s - rp.hi - 4);
   // in the gore (between the highway's rail and the ramp's) the ground may rise, but only gently
@@ -137,6 +137,12 @@ export const highwayById = (id) => HIGHWAYS.find((h) => h.id === id) || HIGHWAYS
 // beside the highway for EXIT_RUN; the game takes the car to the next highway EXIT_GO metres past the ramp's far end
 const EXIT_IN = 140, EXIT_LEN = 540, EXIT_RUN = 320;   // (540 m: the gore's nose is 160 m after the ramp starts to leave, room to move across at speed)
 export const EXIT_GO = 36;
+// v102, the owner, on fuel: "I can pull up a model for a gas station on sketchfab ... theres one in the car parts folder".
+// A fuel stop is a pull-off on the same highway: a ramp leaves the shoulder as an exit does (kind 'svc', SVC_RAMP
+// metres long), runs beside the highway for SVC_LOT metres through the station's forecourt, and a second ramp (kind
+// 'join') brings it back. The gas station (the model, given to the world by the game: setStation) stands over the
+// lane in the middle of the lot. lot: metres of pavement to the lane's right (w) and left (wl).
+const SVC_IN = 140, SVC_RAMP = 300, SVC_LOT = 150;
 const TERRAIN_A_RAMP = (() => { const A = new Set(TERRAIN_A.filter((a) => a < 23 || a > 72)); for (let a = 23; a <= 72; a += 1.4) A.add(Math.round(a * 10) / 10); for (const a of TERRAIN_A) if (a < 75) A.add(a); return [...A].sort((x, y) => x - y); })();
 
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -177,13 +183,14 @@ class Road {
     // (v98) the first exit comes up two to three kilometres in, the first lane closure a little before or after it
     this.nextExit = 2300 + this.rng() * 900; this.nextClosure = 1500 + this.rng() * 1700;
     this.nextNarrow = 3200 + this.rng() * 2600; this.nextTrap = 1500 + this.rng() * 900;   // (v100)
+    this.services = []; this.nextService = 3400 + this.rng() * 1400;                         // (v102) the first fuel stop, a couple of miles in
     this.planZone(true);
   }
   get length() { return this.X.length; }
   sAt(i) { return i * DS; }
   planZone(first = false) {
     const r = this.rng, s0 = this.zoneEnd, hw = this.theme;
-    let type, len, exit = false;
+    let type, len, exit = false, svc = false;
     // v98, the owner: "the roads need to always be random, whether a tunnel comes up is random ... and whether you pass
     // through a city is random". Until now every run began forest, river, tunnel, city, mountain, on one fixed road.
     // Only the first stretch is fixed (woods, for the entrance ramp); the rest is dealt from the highway's own bag.
@@ -191,6 +198,9 @@ class Road {
     else if (s0 >= this.nextExit) {
       // an exit is due: a plain stretch of woods or fields, long enough for the ramp and the road it runs on to
       type = r() < 0.6 ? 'forest' : 'fields'; len = EXIT_IN + EXIT_LEN + EXIT_RUN + 160 + r() * 240; exit = true;
+    } else if (s0 >= this.nextService) {
+      // a fuel stop is due: the same kind of stretch, long enough for the way in, the lot and the way out
+      type = r() < 0.6 ? 'forest' : 'fields'; len = SVC_IN + SVC_RAMP * 2 + SVC_LOT + 170 + r() * 200; svc = true;
     } else {
       // a shuffled bag keeps the mix varied: no repeats, never water straight after water
       const prev = this.zones[this.zones.length - 1].type, isWater = (t) => t === 'river' || t === 'lake';
@@ -266,6 +276,14 @@ class Road {
       this.events.push({ s: sM - 800, type: 'gantry', exit: rp.no, city: thru, to: rp.to, dist: '1/2 MILE' });
       this.events.push({ s: sM - 40, type: 'gantry', exit: rp.no, city: thru, to: rp.to, dist: null });
       this.nextExit = z.s1 + 2000 + r() * 2200;
+    } else if (svc) {
+      const sM = s0 + SVC_IN, off = finishRamp({ ...RAMP, kind: 'svc', sA: sM + SVC_RAMP, sM, back: 0, run: SVC_LOT });
+      const on = finishRamp({ ...RAMP, kind: 'join', sA: off.sA + SVC_LOT, sM: off.sA + SVC_LOT + SVC_RAMP, back: 0 });
+      const sv = { off, on, s0: off.sA + 14, s1: off.sA + SVC_LOT - 14, sc: Math.round((off.sA + SVC_LOT / 2) / DS) * DS, w: 40, wl: 9 };
+      off.svc = on.svc = sv; this.ramps.push(off, on); this.services.push(sv); z.service = sv;
+      this.events.push({ s: sM - 1500, type: 'gas', text: '1 MILE' });
+      this.events.push({ s: sM - 380, type: 'gas', text: 'NEXT RIGHT' });
+      this.nextService = z.s1 + 3000 + r() * 2600;
     } else if (!first && s0 >= this.nextClosure && ['forest', 'fields', 'cut', 'embank', 'city'].includes(type) && len >= 900) {
       // v98, the owner: "lanes should close down and narrow sometimes". Road works: one or two lanes on one side shut
       // behind a line of drums. A taper of drums (110 m a lane) leads traffic across from s0; the lanes are shut to s1.
@@ -320,6 +338,9 @@ class Road {
   // the wall of a lane closure at s (the face towards the open lanes), or null outside it
   closureWall(cl, s) { if (s < cl.s0 || s > cl.s1) return null; const t = s - cl.s0; return t < cl.taper ? lerp(cl.uEdge, cl.uLine, t / cl.taper) : s > cl.s1 - 40 ? lerp(cl.uLine, cl.uEdge, (s - (cl.s1 - 40)) / 40) : cl.uLine; }
   trapAfter(s) { for (const t of this.traps) if (t.s > s) return t; return null; }
+  // (v102) the next fuel stop whose way in has not been passed yet, and the one whose lot s is in
+  serviceAfter(s) { for (const v of this.services) if (v.off.sN > s) return v; return null; }
+  serviceAt(s) { for (let k = this.services.length - 1; k >= 0; k--) { const v = this.services[k]; if (s > v.s1) break; if (s >= v.s0) return v; } return null; }
   // the ramp (entrance or exit) that covers s, give or take pad metres; the lane closure at s (or coming up within `ahead` metres)
   rampAt(s, pad = 0) { for (let k = this.ramps.length - 1; k >= 0; k--) { const rp = this.ramps[k]; if (s >= rp.lo - pad && s <= rp.hi + pad) return rp; } return null; }
   closureAt(s, ahead = 0, behind = 0) { for (let k = this.closures.length - 1; k >= 0; k--) { const c = this.closures[k]; if (s > c.s1 + behind) break; if (s >= c.s0 - ahead) return c; } return null; }
@@ -346,7 +367,7 @@ class Road {
   flatRegions() { return [...this.rivers.map((r) => [r.flatA, r.flatB]), ...this.lakes.map((l) => [l.flatA, l.flatB])]; }
   pickPiece(s) {
     // (v98) the road also runs straight where an exit leaves it (but keeps whatever grade it has)
-    const r = this.rng, hw = this.theme, regions = [...this.flatRegions(), ...this.exits.map((x) => [x.sM - 90, x.hi + 10])];
+    const r = this.rng, hw = this.theme, regions = [...this.flatRegions(), ...this.exits.map((x) => [x.sM - 90, x.hi + 10]), ...this.services.map((v) => [v.off.sM - 90, v.on.sM + 10])];
     for (const [a, b] of regions) if (s >= a - 1 && s < b) return { kT: 0, len: b - s + 2, straight: true };
     let room = Infinity;
     for (const [a] of regions) if (a > s) room = Math.min(room, a - s);
@@ -1175,6 +1196,15 @@ const SIGNS = {
     g.beginPath(); g.moveTo(-22, 62); g.lineTo(-22, -62); g.stroke();                                        // the lane that carries on
     g.beginPath(); g.moveTo(24, 62); g.lineTo(24, 14); g.quadraticCurveTo(24, -16, 2, -34); g.lineTo(2, -62); g.stroke();   // the one that ends, bending in
   }),
+  // (v102) fuel: the blue services board, a pump on it and a line under it ("1 MILE", "NEXT RIGHT"; none in the gore)
+  gas: (text) => signTexture('gas' + text, 256, 256, (g, w, h) => {
+    roundRect(g, 6, 6, w - 12, h - 12, 18); g.fillStyle = '#0a4ea3'; g.fill(); g.strokeStyle = '#f4f4f0'; g.lineWidth = 7; roundRect(g, 16, 16, w - 32, h - 32, 12); g.stroke();
+    g.fillStyle = '#f4f4f0'; const y0 = text ? 46 : 62;
+    roundRect(g, 84, y0, 58, 96, 6); g.fill(); g.fillRect(74, y0 + 96, 78, 12);                                    // the pump and its plinth
+    g.fillStyle = '#0a4ea3'; g.fillRect(94, y0 + 12, 38, 26);
+    g.strokeStyle = '#f4f4f0'; g.lineWidth = 8; g.lineCap = 'round'; g.beginPath(); g.moveTo(142, y0 + 30); g.lineTo(166, y0 + 44); g.lineTo(166, y0 + 84); g.stroke();   // the hose
+    if (text) { g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.textBaseline = 'middle'; fitText(g, text, w - 60, 40, 700); g.fillText(text, w / 2, 206); }
+  }),
   // (v100) road narrows: the two edge lines pinching in
   workNarrows: () => signTexture('worknarrows', 256, 256, (g, w, h) => {
     g.translate(w / 2, h / 2); g.rotate(Math.PI / 4);
@@ -1653,12 +1683,12 @@ export class World {
         // each corner is judged where it is: on the ramp (between its rails), on the highway, or past the nose
         const sc = L.s + ox * fs + oz * fc, e = rampEdges(sc, rp);
         const cornerOnRamp = rampApart(rp, sc) && u > (19.78 + e.left) / 2;
-        if (cornerOnRamp) { lo = e.left + 0.05; hi = e.right - 0.05; }
+        if (cornerOnRamp) { lo = e.left + 0.05; hi = e.right - 0.05; if (rp.svc && sc > rp.svc.s0 && sc < rp.svc.s1) hi += 6; }   // (v102: in a fuel stop's lot the car has 6 m more to its right, up to the pump island there; on its left the lane's rail and the other island stay the limit)
         else if (rampJoined(rp, sc)) hi = Math.max(hi, e.right - 0.05);
         // the closed end of the entrance behind the start, and the end of an exit's road (the game has moved the car
         // on to the next highway long before that)
-        if (cornerOnRamp && rp.dir > 0) { const back = Math.ceil(rp.lo / DS) * DS - sc; if (back > worst) { worst = back; side = 2; cx = ox; cz = oz; } }
-        if (cornerOnRamp && rp.dir < 0) { const fwd = sc - (rp.hi - 3); if (fwd > worst) { worst = fwd; side = -2; cx = ox; cz = oz; } }
+        if (cornerOnRamp && rp.kind === 'on') { const back = Math.ceil(rp.lo / DS) * DS - sc; if (back > worst) { worst = back; side = 2; cx = ox; cz = oz; } }
+        if (cornerOnRamp && rp.kind === 'off') { const fwd = sc - (rp.hi - 3); if (fwd > worst) { worst = fwd; side = -2; cx = ox; cz = oz; } }
       }
       // (v100) road works: the wall of a lane closure, and the two walls of a squeezed stretch, judged where each
       // corner is along the road (only for a car on the open side of the wall)
@@ -1783,7 +1813,7 @@ export class World {
     for (const e of this.emitters) {
       const d = Math.hypot(e.x - fx, e.z - fz);
       if (d > 420) continue;
-      sc.push([e.I / (d * d + 900), e]);
+      sc.push([e.I * (e.pri || 1) / (d * d + 900), e]);
     }
     sc.sort((a, b) => b[0] - a[0]);
     const n = this.pool.length, cut = sc.length > n ? sc[n][0] : 0;
@@ -2115,7 +2145,7 @@ export class World {
       for (let s = i0 * DS; s < i1 * DS; s += 6.5) {
         for (let a = 27; a < aMax; a += 6.5 + a * 0.02) {
           const ss = s + (rnd() - 0.5) * 5.5, aa = a + (rnd() - 0.5) * 5;
-          if (side > 0) { const rp = R.rampAt(ss, 26); if (rp) { const e = rampEdges(ss, rp); if (aa > (rampApart(rp, ss) ? e.left - 7 : 19) && aa < e.right + 8) continue; } }
+          if (side > 0) { const rp = R.rampAt(ss, 26); if (rp) { const e = rampEdges(ss, rp); if (aa > (rampApart(rp, ss) ? e.left - 7 : 19) - (rp.svc ? rp.svc.wl : 0) && aa < e.right + 8 + (rp.svc && ss > rp.svc.s0 - 12 && ss < rp.svc.s1 + 12 ? rp.svc.w : 0)) continue; } }
           const fi = ss / DS, i = clamp(Math.round(fi), i0, i1);
           const z = R.zones[rnd() < R.ZT[i] ? R.ZB[i] : R.ZA[i]];
           let dens = { forest: 0.8, fields: 0.07, cut: 0.62, tunnel: 0.62, embank: 0.22, river: 0.55, lake: 0.35, city: 0.6, mountain: 0.74 }[z.type];
@@ -2362,6 +2392,7 @@ export class World {
     const j0 = Math.max(i0, iLo), j1 = Math.min(i1, iHi);
     if (j1 <= j0) return;
     const E = (i) => rampEdges(i * DS, rp), apart = (i) => rampApart(rp, i * DS);
+    const sv = rp.svc || null, inLot = (i) => !!sv && i * DS > sv.s0 && i * DS < sv.s1;   // (v102) a fuel stop's forecourt
     const lampC = hw.light ? hw.light.c : SODIUM, lampI = hw.light ? hw.light.I : 620;
     // pavement: before the nose it is a road of its own, after it the pavement runs on from the highway's edge
     {
@@ -2369,7 +2400,7 @@ export class World {
       for (let i = j0; i <= j1; i++) {
         const s = i * DS, e = E(i), th = R.T[i], rx = -Math.cos(th), rz = Math.sin(th), g = R.G[i];
         const nl = Math.hypot(g, 1), nx = -Math.sin(th) * g / nl, ny = 1 / nl, nz = -Math.cos(th) * g / nl;
-        const L = apart(i) ? e.left - 0.3 : U_PAVE + 0.3, Rr = Math.max(L, e.right + 0.3);
+        const L = (apart(i) ? e.left - 0.3 : U_PAVE + 0.3) - (inLot(i) ? sv.wl : 0), Rr = Math.max(L, e.right + 0.3 + (inLot(i) ? sv.w : 0));
         for (let k = 0; k < NC; k++) { const u = lerp(L, Rr, k / (NC - 1)); gb.v(R.X[i] + rx * u - ox, R.Y[i] + 0.003 - oy, R.Z[i] + rz * u - oz, nx, ny, nz, u - e.c, s - sBase); deck.push(2); narrow.push(0); }
       }
       for (let r = 0; r < j1 - j0; r++) for (let k = 0; k < NC - 1; k++) { const a = r * NC + k; gb.quad(a, a + 1, a + NC + 1, a + NC); }
@@ -2380,13 +2411,14 @@ export class World {
     const railR = [[19.62, 0.52], [19.7, 0.6], [19.62, 0.68], [19.7, 0.76], [19.62, 0.84], [19.66, 0.84], [19.78, 0.78], [19.78, 0.56], [19.66, 0.52], [19.62, 0.52]];
     {
       const gb = new GeoBuilder();
-      extrudeOffset(gb, R, j0, j1, ox, oy, oz, railR.slice().reverse().map(([u, y]) => [u - 19.62, y]), (i) => E(i).right);
-      extrudeOffset(gb, R, j0, j1, ox, oy, oz, railR.map(([u, y]) => [19.62 - u, y]), (i) => E(i).left, { keep: (i) => apart(i) || apart(i - rp.dir) });
+      extrudeOffset(gb, R, j0, j1, ox, oy, oz, railR.slice().reverse().map(([u, y]) => [u - 19.62, y]), (i) => E(i).right, { keep: (i) => !inLot(i) });
+      extrudeOffset(gb, R, j0, j1, ox, oy, oz, railR.map(([u, y]) => [19.62 - u, y]), (i) => E(i).left, { keep: (i) => (apart(i) || apart(i - rp.dir)) && !(sv && Math.abs(i * DS - sv.sc) < 11) });   // (the left rail gives way to the pump island under the canopy)
       const m = add(new THREE.Mesh(gb.build(), this.mat.steel)); m.castShadow = true; m.receiveShadow = true;
     }
     const posts = [], delW = [], delY = [], poles = [], heads = [], cones = [], sFar = Math.min(rp.sA, rp.sM);
     for (let i = j0; i < j1; i++) {
       const s = i * DS, e = E(i), th = R.T[i];
+      if (inLot(i)) continue;
       const pr = R.point(i, e.right + 0.24); posts.push([pr.x, pr.y - 0.15, pr.z, th]);
       if (apart(i)) { const pl = R.point(i, e.left - 0.24); posts.push([pl.x, pl.y - 0.15, pl.z, th]); }
       if (s % 24 === 0) {
@@ -2443,12 +2475,31 @@ export class World {
     }
     // an exit: the EXIT board in the gore, a few metres behind the cushion
     const iG = iN + 5;
-    if (rp.kind === 'off' && iG >= i0 && iG < i1) {
+    if ((rp.kind === 'off' || rp.kind === 'svc') && iG >= i0 && iG < i1) {
       const e = E(iG), q = R.point(iG, (19.9 + e.left) / 2);
-      const sg = this.postSign(SIGNS.gore(rp.no), 1.5, 1.88, 2.1, { posts: 2, postR: 0.06 });
+      const sg = this.postSign(rp.kind === 'svc' ? SIGNS.gas('') : SIGNS.gore(rp.no), 1.5, 1.88, 2.1, { posts: 2, postR: 0.06 });
       sg.position.set(q.x - ox, q.y - oy, q.z - oz); sg.rotation.y = R.T[iG] + Math.PI; grp.add(sg);
     }
     if (grp.children.length) { this.layer(grp); grp.traverse((o) => { o.layers.mask = grp.layers.mask; if (o.isMesh) o.receiveShadow = true; }); ch.group.add(grp); }
+    // (v102) the gas station, over the lane in the middle of the lot, and the light under its canopy
+    if (rp.kind === 'svc') { const iS = Math.round(sv.sc / DS); if (iS >= i0 && iS < i1) {
+      const f = R.frameAt(iS), c = rampC(sv.sc, rp), x = f.x - Math.cos(f.th) * c, z = f.z + Math.sin(f.th) * c, fw = [Math.sin(f.th), Math.cos(f.th)], lf = [Math.cos(f.th), -Math.sin(f.th)];
+      ch.station = { x: x - ox, y: f.y + 0.02 - oy, z: z - oz, th: f.th };
+      // (first try: 640 each beside the pillars, four times a streetlight's light on the ground: the whole forecourt burned out white)
+      for (const [lx, lz] of [[0, -5.5], [0, 5.5], [-21, 0]]) ch.emitters.push({ x: x + lf[0] * lx + fw[0] * lz, y: f.y + 5.6, z: z + lf[1] * lx + fw[1] * lz, c: LED, I: lx < -20 ? 100 : 170, range: 40, pri: 10 });   // pri: low lamps close overhead, which must win a real light over the taller, stronger streetlights
+      this.attachStation(ch);
+    } }
+  }
+  // the gas station's model, handed over by the game once it has loaded; a lot built before then gets it now
+  setStation(obj) {
+    this.stationModel = obj; obj.traverse((o) => { if (o.geometry) this.sharedGeo.add(o.geometry); });
+    for (const ch of this.chunks.values()) this.attachStation(ch);
+  }
+  attachStation(ch) {
+    if (!ch.station || ch.stationObj || !this.stationModel) return;
+    const g = ch.stationObj = this.stationModel.clone(); g.position.set(ch.station.x, ch.station.y, ch.station.z); g.rotation.y = ch.station.th; g.userData.detailTier = -1;
+    this.layer(g, true, true); g.traverse((o) => { o.layers.mask = g.layers.mask; });
+    ch.group.add(g);
   }
   // ---- road works (v98): the drums of a lane closure that stand in this chunk, and its flashing arrow board.
   // The owner: "lanes should close down and narrow sometimes". Each drum is the real thing: an orange plastic barrel
@@ -2611,10 +2662,10 @@ export class World {
     // three groups by size, so the small ones can stop being drawn sooner with distance (see DetailLOD):
     // post-mounted signs, the big name / exit boards, gantries and billboards
     const gs = [new THREE.Group(), new THREE.Group(), new THREE.Group()];
-    const SIZE = { name: 1, exitAdvance: 1, work: 1, gantry: 2, billboard: 2 };
+    const SIZE = { name: 1, exitAdvance: 1, work: 1, gas: 1, gantry: 2, billboard: 2 };
     for (const e of events) {
       const i = clamp(Math.round(e.s / DS), i0, i1), th = R.T[i], g = gs[SIZE[e.type] ?? 0];
-      if (isB(i) && (e.type === 'billboard' || e.type === 'speed' || e.type === 'mile' || e.type === 'work' || e.type === 'exitAdvance')) continue;
+      if (isB(i) && (e.type === 'billboard' || e.type === 'speed' || e.type === 'mile' || e.type === 'work' || e.type === 'exitAdvance' || e.type === 'gas')) continue;
       if (R.tunnelAt(e.s, 40)) continue;   // nothing in a tunnel or across its mouth
       // nothing on the right-hand verge where the ramp runs
       if (R.rampAt(e.s, 16) && !(e.type === 'chevron' && e.dir < 0) && !(e.type === 'billboard' && e.side < 0)) continue;
@@ -2635,6 +2686,7 @@ export class World {
           break;
         case 'name': place(this.postSign(SIGNS.name(e.text), 4.2, 1.05, 2.3, { posts: 2, postR: 0.07 }), 21.8); break;
         case 'exitAdvance': place(this.postSign(SIGNS.exitAdvance(e.exit, e.dist, e.to), 3.4, 2.04, 2.6, { posts: 2, postR: 0.1 }), 22.2); break;
+        case 'gas': place(this.postSign(SIGNS.gas(e.text), 2.2, 2.2, 2.2, { posts: 2, postR: 0.07 }), 21.9); break;
         case 'work': place(this.postSign(e.merge ? SIGNS.workMerge(e.merge) : e.narrows ? SIGNS.workNarrows() : SIGNS.work(e.text), 1.75, 1.75, 2.0), 21.4); break;
         case 'gantry': if (!isB(i)) this.buildGantry(g, e, i, ox, oy, oz); break;
         case 'billboard': if (!isB(i)) this.buildBillboard(g, e, i, ox, oy, oz); break;
