@@ -646,6 +646,14 @@ body.is-touch .attribution{bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 @media (max-width:560px){ .hwcard b{font-size:19px} .hwcard i{min-width:44px;height:34px;font-size:16px} }
 .roadfade{position:fixed;inset:0;z-index:30;background:#000;opacity:0;pointer-events:none}
 body.in-garage .hwcard,body.in-garage .exitind{display:none}
+.vitals{display:flex;align-items:center;gap:7px;width:100%;max-width:330px;padding:0 4px;font-family:var(--f-display);font-weight:700;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.vbar{flex:1;display:block;height:6px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+.vbar b{display:block;height:100%;width:var(--p,100%);background:linear-gradient(90deg,#e9edf2,#fff);transition:width .2s linear}
+.vbar.fuel.low b{background:#ffb238;animation:flash .5s steps(2) infinite}
+.vbar.dmg b{width:var(--p,0%);background:linear-gradient(90deg,#ffb238,#ff3b30)}
+.cluster.compact .vitals{font-size:8px;gap:4px;letter-spacing:.08em}
+.over.wrecked::before{animation:none;box-shadow:inset 0 0 220px 70px rgba(255,50,30,.34)}
+.over.fuel::before{animation:none;box-shadow:inset 0 0 220px 70px rgba(255,170,40,.28)}
 .tlevel{display:flex;align-items:center;gap:8px;margin-top:5px;font-family:var(--f-display);text-transform:uppercase}
 .tlevel b{font-weight:800;font-style:italic;font-size:13px;letter-spacing:.1em;color:#ffd76a}
 .tlevel .lbar{flex:1;height:5px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden}
@@ -862,7 +870,7 @@ body.is-touch .cc{font-size:22px}
   <div class="timing" id="timing">
     <h2><span>Score</span><i id="tbestTag"></i></h2>
     <div class="tscore" id="tscore">0</div>
-    <div class="tlevel" title="Level: points from every run add up; each level unlocks a car"><b id="tlvl">LVL 1</b><span class="lbar"><i id="tlvlBar"></i></span><em id="tlvlNext"></em></div>
+    <div class="tlevel" title="Level: points from every run add up; level 15 opens the Ferrari, McLaren, Porsches and Lamborghini"><b id="tlvl">LVL 1</b><span class="lbar"><i id="tlvlBar"></i></span><em id="tlvlNext"></em></div>
     <div class="tgrid">
       <div class="tcell"><span class="k">Distance</span><span class="v" id="tdist">—</span></div>
       <div class="tcell"><span class="k">Top speed</span><span class="v" id="tvmax">—</span></div>
@@ -883,6 +891,7 @@ body.is-touch .cc{font-size:22px}
   <button type="button" class="ramp-garage" id="rampGarage" title="Garage (B), while you're on the ramp" aria-label="Garage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M7 20v-7h10v7M7 15.5h10M7 18h10"/></svg><b><i>Tune</i><span>Garage</span></b><kbd>B</kbd></button>
   <div class="cluster" id="cluster">
     <div class="shiftnote" id="shiftNote"></div>
+    <div class="vitals" id="vitals" title="Fuel: an exit fills the tank. Damage: at 100% the car is wrecked."><span>Fuel</span><i class="vbar fuel" id="vFuel"><b></b></i><span>Damage</span><i class="vbar dmg" id="vDmg"><b></b></i></div>
     <div class="shiftlights" id="shiftLights"><i class="g"></i><i class="g"></i><i class="y"></i><i class="y"></i><i class="r"></i></div>
     <div class="gaugebox"><canvas class="gauge" id="gauge" width="2" height="2"></canvas></div>
     <div class="cluster-foot"><button class="unit" id="unit" title="Switch mph / km/h">mph</button><button class="gearbox" id="gearbox" title="Switch manual / automatic (G)"><span class="gear-label" id="gearLabel">Manual</span></button><button class="lamp" id="tcsLamp" title="Traction control (T)">TRAC OFF</button></div>
@@ -5632,6 +5641,7 @@ function readInput(dt) {
   } catch {}
   inp.throttle = analog ? thr : approach(inp.throttle, thr, 5, 12, dt);
   inp.brake = analog ? brk : approach(inp.brake, brk, 7, 12, dt);
+  if (state.fuel <= 0) { inp.throttle = 0; inp.brake = Math.max(inp.brake, 0.22); }   // (v101) a dry tank: the engine has cut, and the car is brought to a stop in a quarter of a minute, not left to coast for two
   // keyboard steering: the input builds while a key is held (slower at speed, so a tap is a small correction)
   // and drops back fast when released; a pad's stick goes straight through
   if (analog) inp.steer = st;
@@ -6494,6 +6504,7 @@ const state = {
   t060: null, t060Start: null, armed060: true,
   dist: 0, bestRun: store.get('bestRun', 0), gfx: GFX_LOCK ?? store.get('gfx', isTouch ? 1 : 2),
   vmax: 0, bestDrift: store.get('bestDrift', 0),
+  damage: 0, fuel: 1, fuelWarned: false,   // (v101) how wrecked the car is (0..1) and how full its tank (1..0)
   score: 0, distPts: 0, bestScore: store.get('bestScore', 0), combo: 0, comboT: 0,
   weather: 'rain' /* always raining since v27.2 (the user's call): no toggle */, traffic: TRAFFIC_LEVELS[store.get('traffic', 'light')] ? store.get('traffic', 'light') : 'light',
 };
@@ -6554,6 +6565,7 @@ function resetCar(quiet) {
   drift.active = false; drift.points = 0; $('drift').classList.add('fade');
   state.t060Start = null; state.armed060 = true; state.dist = 0; state.vmax = 0; state.t060 = null;
   state.score = 0; state.distPts = 0; state.combo = 0; state.comboT = 0;
+  if (quiet !== true) { state.damage = 0; state.fuel = 1; state.fuelWarned = false; if (rig) repairDamage(rig); }   // (v101) a new run starts with a sound car and a full tank
   nitro.charge = 1; nitro.burn = 0; nitro.purge = 0;
   world.updateProbe(p.x, roadY, p.z, true);
   renderTiming();
@@ -6885,7 +6897,7 @@ function zFill(g, kind, shade = 0) { g.save(); g.fillStyle = zPattern(g, kind); 
 function dials(cfg) {
   const scOf = (d) => (d.role === 'tach' ? tachScale(d.sc) : d.role === 'speed' ? speedScale(cfg.mph, d.sc) : d.role === 'boost' ? { max: 4, major: 1, minor: 2, fmt: (v) => ['-1', '', '0', '', '+1'][v], numS: 0.24, numR: 0.58, ...d.sc } : { ...smallScale(d.role === 'fuel' ? ['E', '', 'F'] : ['C', '', 'H']), ...d.sc });
   const stOf = (d) => ({ ...cfg.st, ...(d.st || {}) });
-  const fOf = (d, S) => (d.role === 'tach' ? S.f : d.role === 'speed' ? S.spd / speedScale(cfg.mph, d.sc).max : d.role === 'boost' ? 0.3 + 0.62 * S.boost : d.role === 'fuel' ? 0.72 : 0.47);
+  const fOf = (d, S) => (d.role === 'tach' ? S.f : d.role === 'speed' ? S.spd / speedScale(cfg.mph, d.sc).max : d.role === 'boost' ? 0.3 + 0.62 * S.boost : d.role === 'fuel' ? 0.06 + 0.86 * (S.fuel ?? 0.76) : 0.47);
   return {
     face(g, L) {
       const t = cfg.dials.find((d) => d.role === 'tach');
@@ -7486,7 +7498,7 @@ function drawGauge() {
     const q = f.getContext('2d'); q.setTransform(L.k, 0, 0, L.k, 0, 0); q.clearRect(0, 0, L.W, L.H);
     des.face(q, L);
   }
-  const S = { rpm: car.rpm, f: clamp(car.rpm / (tachMax * 1000), 0, 1), spd: Math.round(Math.abs(car.vx) * speedUnit()), unit: state.units === 'mph' ? 'mph' : 'km/h', boost: clamp(car.boost || 0, 0, 1),
+  const S = { fuel: state.fuel, rpm: car.rpm, f: clamp(car.rpm / (tachMax * 1000), 0, 1), spd: Math.round(Math.abs(car.vx) * speedUnit()), unit: state.units === 'mph' ? 'mph' : 'km/h', boost: clamp(car.boost || 0, 0, 1),
     gear: car.gear < 0 ? 'R' : (car.speed < 0.3 && car.throttle < 0.05 && car.gear === 1 ? 'N' : String(car.gear)) };
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, GZ.cv.width, GZ.cv.height); g.drawImage(GZ.face, 0, 0);
   g.setTransform(GZ.L.k, 0, 0, GZ.L.k, 0, 0);
@@ -7506,6 +7518,7 @@ function updateHud(now) {
   g.textContent = car.gear < 0 ? 'R' : (car.speed < 0.3 && car.throttle < 0.05 && car.gear === 1 ? 'N' : car.gear);
   g.classList.toggle('r', car.gear < 0);
   updateTachDial(car.rpm);
+  { const f = $('vFuel'), d = $('vDmg'); f.style.setProperty('--p', `${Math.round(state.fuel * 100)}%`); f.classList.toggle('low', state.fuel < VITALS.low); d.style.setProperty('--p', `${Math.round(state.damage * 100)}%`); }
   $('cluster').classList.toggle('limiter', car.limiter);
   const lights = $('shiftLights'), steps = [2000, 1500, 1100, 800, 500].map((d) => CAR.limiter - d);
   lights.classList.toggle('flash', car.manual && car.gear > 0 && car.gear < CAR.gears.length && car.rpm >= CAR.limiter - 400);
@@ -8079,7 +8092,34 @@ function repairDamage(r) {
   r.damage = null;
   if (r === rig) applyMods();
 }
+// ---- damage and fuel (v101)
+// The owner, on a game that never ended while you drove: "just damage and fuel for now". Two things can now end a run
+// besides the police.
+//   Damage: every hit adds to it by how hard it was (a 20 mph hit about 18%, never more than 35% in one go) and a long
+//   scrape along a wall adds a little each second; nothing on the road mends it. At 100% the car is wrecked.
+//   Fuel: a tank is about 12 miles at a cruise and under 9 flat out (it goes by distance, faster the harder the
+//   throttle is down, and nitrous drinks more). Taking an exit fills it. A warning comes at a fifth of a tank;
+//   dry, the engine cuts and the run ends when the car has rolled to a stop.
+// A new run starts with a sound car and a full tank. Both show as bars over the gauges, and the fuel needles in
+// the clusters that have a fuel gauge read the real level.
+const VITALS = { range: 20000, low: 0.2 };
+function takeDamage(hit) {
+  if (state.over || !state.driving || state.garage) return;
+  let d = Math.min(0.35, Math.max(0, hit.impact - 1) * 0.022);
+  if (hit.scrape > 3) d += STEP * 0.012;
+  if (d <= 0) return;
+  state.damage = Math.min(1, state.damage + d);
+  if (state.damage >= 1) gameOver('wrecked');
+}
+function vitalsUpdate(dt) {
+  if (state.over) return;
+  const thr = clamp(inp.throttle || 0, 0, 1);
+  state.fuel = Math.max(0, state.fuel - Math.max(0, car.vx) * dt / VITALS.range * (0.55 + 0.9 * thr) - dt * 0.0004 - (car.nitro > 0 ? dt * 0.004 : 0));
+  if (state.fuel < VITALS.low && !state.fuelWarned) { state.fuelWarned = true; toast('Low fuel: take the next exit', 2800); audio.alert(false); }
+  if (state.fuel <= 0 && car.speed < 3 && state.leftRamp) gameOver('fuel');
+}
 function onWall(hit) {
+  takeDamage(hit);
   if (hit.impact > 0.8) { state.combo = 0; state.comboT = 0; }
   if (hit.impact > wallFx.impact) wallFx.impact = hit.impact;
   if (hit.scrape > wallFx.scrape) wallFx.scrape = hit.scrape;
@@ -10196,10 +10236,12 @@ function policeHud(dt, chasers, W, nearD) {
 //   exit taken 1,500, a speed trap passed inside the limit 1,000. Nothing is announced; the score just goes up.
 //   Levels: every point also counts towards the player's level, kept between runs (store 'xp'). Level n takes
 //   15,000 x n x (n - 1) / 2 points in all (level 2 at 15,000, level 5 at 150,000, level 19 at about 2.6 million),
-//   and each level from 2 to 19 unlocks one car; five cars are open from the start.
+//   and level 15 (about 1.6 million) unlocks the Ferrari, the McLaren, the two Porsches and the Lamborghini.
 const POINTS = { mile: 10000, spikes: 2500, unit: 1000, exit: 1500, trap: 1000 };
 const LEVEL_XP = (n) => 15000 * n * (n - 1) / 2;
-const CAR_LEVEL = { fl5: 1, miata: 1, eclipse: 1, s2k: 1, x5: 1, e92: 2, supra: 3, nsx: 4, a90: 5, r34: 6, r8: 7, csl: 8, i8: 9, zl1: 10, c7: 11, gtr: 12, hc: 13, viper: 14, gt3: 15, mcl: 16, cgt: 17, f812: 18, svj: 19 };
+// (v101, the owner: "can u remove the fact that all cars are locked lets just lock the ferrari mclaren porsche and
+// lamborghinis until level 15": v100 opened one car a level from 2 to 19. Every other car is open from the start.)
+const CAR_LEVEL = { f812: 15, mcl: 15, cgt: 15, gt3: 15, svj: 15 };
 const levelOf = (xp) => { let n = 1; while (LEVEL_XP(n + 1) <= xp) n++; return n; };
 const prog = { xp: Math.max(0, +store.get('xp', 0) || 0), level: 1, dirty: false };
 prog.level = levelOf(prog.xp);
@@ -10212,7 +10254,7 @@ function syncLocks() {
 function levelUp(lv) {
   const cars = Object.keys(CAR_LEVEL).filter((id) => CAR_LEVEL[id] === lv && LIVE.has(id)).map((id) => CAR_DEFS[id].name);
   const sh = $('hwShield'); sh.textContent = lv; sh.className = 'level';
-  $('hwKicker').textContent = 'Level up'; $('hwName').textContent = `Level ${lv}`; $('hwTag').textContent = cars.length ? `Unlocked: ${cars.join(', ')}` : 'Every car is yours';
+  $('hwKicker').textContent = 'Level up'; $('hwName').textContent = `Level ${lv}`; $('hwTag').textContent = cars.length ? `Unlocked: ${cars.join(', ')}` : lv < 15 ? `Level 15 opens the Ferrari, McLaren, Porsches and Lamborghini` : 'Every car is yours';
   $('hwCard').classList.add('show'); hwy.cardT = 4.2; audio.chime(7); syncLocks();
 }
 function gain(n) {
@@ -10357,6 +10399,8 @@ function switchHighway() {
   if (lost && !state.over) { police.outran += lost; addPoints(POINTS.unit * Math.min(4, lost)); policeNote(`${lost} unit${lost === 1 ? '' : 's'} lost at the exit`, 3.4); }
   if (!state.over) addPoints(POINTS.exit);
   hwy.count++; hwy.exit = null;
+  if (state.fuel < 0.98) toast('Tank filled', 1800);
+  state.fuel = 1; state.fuelWarned = false;   // (v101) an exit fills the tank
   highwayCard(to, 'Now on');
 }
 function highwayUpdate(dt, dtReal) {
@@ -10394,7 +10438,7 @@ function highwayUpdate(dt, dtReal) {
   if (!state.over || state.over.t < 2.4) {
     const n = world.hitDrums(car, carDims());
     if (n) {
-      car.vx *= Math.pow(0.988, n);
+      car.vx *= Math.pow(0.988, n); state.damage = Math.min(1, state.damage + 0.004 * n);
       cam.kick = Math.min(1, cam.kick + 0.12 * n); audio.impact(clamp(0.16 + 0.05 * n, 0.15, 0.4));
       state.combo = 0; state.comboT = 0;
     }
@@ -10621,12 +10665,12 @@ function gameOver(reason) {
   // the units close in round the car
   for (const c of traffic.cops) if (c.cop.mode === 'pit') c.cop.mode = 'chase';
   const el = $('over'); el.className = `over ${reason}`; el.hidden = false;
-  $('overTitle').textContent = reason === 'spikes' ? 'Spiked' : 'Busted';
-  $('overSub').textContent = reason === 'spikes' ? 'Tires shredded on a spike strip' : 'The police caught you';
+  $('overTitle').textContent = { spikes: 'Spiked', wrecked: 'Wrecked', fuel: 'Out of fuel' }[reason] || 'Busted';
+  $('overSub').textContent = { spikes: 'Tires shredded on a spike strip', wrecked: 'The car is finished', fuel: 'The tank ran dry before an exit' }[reason] || 'The police caught you';
   $('overStats').innerHTML = '';
   $('spikeWarn').hidden = true; $('touch').hidden = true; $('wanted').classList.remove('on', 'danger'); $('exitInd').hidden = true;
   drift.active = false; $('drift').classList.add('fade'); state.combo = 0; state.comboT = 0;
-  if (reason === 'spikes') audio.blowout(); else audio.bust();
+  if (reason === 'spikes') audio.blowout(); else if (reason === 'wrecked') audio.impact(1); else if (reason === 'fuel') audio.alert(false); else audio.bust();
   cam.kick = 1;
   renderTiming();
 }
@@ -10824,6 +10868,7 @@ function frameInner(now) {
     updateEffects(dt);
     if (!state.over) { updateDrift(dt); updateScore(dt); }
     highwayUpdate(dt, dtReal);
+    vitalsUpdate(dt);
   } else if (state.garage) updateGarageRev(dt);
   const live = state.driving && !state.garage;
   const alpha = live ? acc / STEP : 1;
