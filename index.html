@@ -1153,6 +1153,11 @@ body.is-touch .cc{font-size:22px}
       <p>GT-R: for now it borrows the M4 CSL’s twin-turbo engine recording below, with more turbo and blow-off sound.</p>
       <p>S2000: engine sound cut from Valvetronic Designs’ “<a href="https://www.youtube.com/watch?v=mNmOy_OUaeE" target="_blank" rel="noopener">The WORLD’S BEST SOUNDING HONDA S2000? - 8,300 RPM NEVER SOUNDED BETTER!</a>” (<a href="https://www.youtube.com/@valvetronic" target="_blank" rel="noopener">Valvetronic Designs</a>), used with permission: the idle, a long pull to 7,300 rpm and the overrun of a free rev.</p>
       <p>BMW i8: engine sound cut from Janky Whips’ “<a href="https://www.youtube.com/watch?v=zsZjavCxp9E" target="_blank" rel="noopener">I Disabled Active Sound On My BMW i8 And The Sound Of The Stock Exhaust Might Surprise You</a>” (<a href="https://www.youtube.com/@jankywhips1756" target="_blank" rel="noopener">@jankywhips1756</a>), used with permission.</p>
+      <p>Nissan GT-R: engine sound cut from cvdzijden - Supercar Videos’ “<a href="https://www.youtube.com/watch?v=BUeq9nn0pzU" target="_blank" rel="noopener">The BEST NISSAN GTR Godzilla Engine SOUNDS Ever!!</a>” (<a href="https://www.youtube.com/@cvdzijden" target="_blank" rel="noopener">@cvdzijden</a>), used with permission.</p>
+      <p>Audi R8: engine sound cut from Automann-TV’s “<a href="https://www.youtube.com/watch?v=LiBD0h0XyG8" target="_blank" rel="noopener">2017 Audi R8 V10 PLUS (610hp) - pure SOUND (60FPS)</a>” (<a href="https://www.youtube.com/@Automann-TV" target="_blank" rel="noopener">@Automann-TV</a>), used with permission.</p>
+      <p>Mitsubishi Eclipse: engine sound cut from Miguel Dsm’s “<a href="https://www.youtube.com/watch?v=8m9eWcO3RX0" target="_blank" rel="noopener">RAW Mitsubishi Eclipse GSX Turbo SOUNDS (LOUD GREDDY BLOW OFF VALVE)</a>” (<a href="https://www.youtube.com/@MiguelDsm" target="_blank" rel="noopener">@MiguelDsm</a>), used with permission.</p>
+      <p>Honda NSX: engine sound cut from CarHub’s “<a href="https://www.youtube.com/watch?v=HiPMekzQndY" target="_blank" rel="noopener">Ultimate Honda/Acura NSX Sound Compilation</a>” (<a href="https://www.youtube.com/@miltos_carhub" target="_blank" rel="noopener">@miltos_carhub</a>), used with permission.</p>
+      <p>Mazda MX-5: engine sound cut from AutomotiveCulture’s “<a href="https://www.youtube.com/watch?v=n6QgX1E33lM" target="_blank" rel="noopener">Mazda MX-5 ND 2.0 | Start Up, Exhaust Sound, Acceleration and Driving</a>” (<a href="https://www.youtube.com/@AutomotiveCulture" target="_blank" rel="noopener">@AutomotiveCulture</a>), used with permission.</p>
       <p>Civic Type R and Eclipse: for now they borrow the M4 CSL’s recording below too, with more turbo. The police Charger borrows the Corvette’s.</p>
       <p>Viper ACR: engine sound cut from AUTO BILD SPORTSCARS’ “<a href="https://www.youtube.com/watch?v=tqXh1blSLQ0" target="_blank" rel="noopener">2016 Dodge Viper ACR - Acceleration &amp; High Speed Runs (Autobahn)</a>” (filmed with GeigerCars Munich), GommeBlog’s “<a href="https://www.youtube.com/watch?v=aK7W-GNYvbs" target="_blank" rel="noopener">2016 Dodge Viper ACR | EXHAUST SOUND and ACCELERATION</a>” and 951 Hellgato’s “<a href="https://www.youtube.com/watch?v=D5oVZL1u-r0" target="_blank" rel="noopener">EXHAUST REVS 2016 DODGE VIPER ACR STOCK !</a>”: onboard pulls, track overrun, and the idle and revs of a stock car. The odd-fire beat is restored in code on the four quietest loops; the idle’s rasp above 250 Hz is borrowed from the Corvette’s idle recording below (the two fire at almost the same rate), since the street capture carried only the rumble.</p>
       <p>Carrera GT: engine sound cut from NM2255’s “<a href="https://www.youtube.com/watch?v=rHiIFeBi6GU" target="_blank" rel="noopener">Porsche Carrera GT SCREAMING V10 Sounds! - Accelerations, Revs, OnBoard, Exhaust &amp; More!</a>” and “<a href="https://www.youtube.com/watch?v=-XNOCn5g3AA" target="_blank" rel="noopener">BEST OF Porsche Carrera GT 5.7 N/A V10 Engine SOUNDS! - OnBoard, Revs, Burnouts &amp; More!</a>” (<a href="https://www.youtube.com/@NM2255" target="_blank" rel="noopener">NM2255 | Raw Car Sounds</a>): the idle at the tailpipes, onboard full-throttle pulls to 8,000 rpm and onboard overrun, played back at the revs they were recorded at.</p>
@@ -1558,13 +1563,15 @@ const S2K_SPEC = {
 };
 // Audi R8 (Type 42, 2008): 4.2 FSI V8, 420 hp at 7,800 rpm, 430 Nm, 8,250 rpm redline, six-speed manual with the
 // open gate, quattro (mostly rear: about 30% of the drive to the front), 1,560 kg.
+// (v114, the owner chose "Make it a V10 R8" when its own sound came from a 2017 R8 V10 plus: the 5.2 FSI V10 of the
+// V10 plus, 610 PS (602 hp) at 8,250 rpm, 560 Nm at 6,500, an 8,700 rpm red line, in the first car's body and gated six-speed)
 const R8_SPEC = {
-  mass: 1560, Iz: 2600, a: 1.48, b: 1.17, cgH: 0.45, wheelR: 0.33, weightFront: 0.44,
+  mass: 1590, Iz: 2600, a: 1.48, b: 1.17, cgH: 0.45, wheelR: 0.33, weightFront: 0.44,
   muF: 1.2, muR: 1.28, csF: 22, csR: 26,
   gears: [3.667, 2.211, 1.548, 1.207, 1.0, 0.862], reverse: 3.2, final: 3.9, eff: 0.88,
-  idle: 850, redline: 8250, limiter: 8500, shiftUp: 8100, shiftDown: 3600, kickdown: 5200, burnRpm: 5000,
+  idle: 1000, redline: 8700, limiter: 8900, shiftUp: 8500, shiftDown: 3900, kickdown: 5600, burnRpm: 5500,
   shiftTime: 0.1, spoolRate: 1,
-  torque: [[600, 250], [1500, 330], [2500, 380], [3500, 410], [4500, 430], [5500, 430], [6500, 416], [7300, 402], [7900, 380], [8500, 330]],
+  torque: [[600, 300], [1500, 400], [2500, 450], [3500, 490], [4500, 520], [5500, 545], [6500, 560], [7500, 545], [8250, 520], [8900, 455]],
   boostTorque: [[600, 0], [9000, 0]], spool: [0, 1],
   drag: 0.38, downforce: 0.25, rollRes: 170, brakeG: 1.35, brakeBias: 0.6,
   steerLock: 0.6, front: 2.2,
@@ -3307,7 +3314,7 @@ CAR_DEFS.gtr = {
   spec: GTR_SPEC, tach: 8, classify: classifyGtr, exhaust: gtrExhaust, plates: gtrPlates,
   plate: { style: 'jdm', text: '3535', caption: 'NIGHT RUNNER', front: 'off' },
   lampLevels: { head: 1.6, tail: [0.5, 7.5] },
-  sound: 'bmw', audio: { rpmScale: 0.92, turbo: 0.5, flutter: 0.55, crackle: 1.4, popVol: 1.1 },
+  sound: 'gtr', audio: { rpmScale: 1, turbo: 0.5, flutter: 0.55, crackle: 1.4, popVol: 1.1 },
   stock: { paint: '#141619', finish: 'gloss' },
   spoilers: [['stock', 'Aimgain GT wing'], ['none', 'None'], ['ducktail', 'Ducktail'], ['gt', 'GT wing'], ['swan', 'Swan neck']],
   carbonParts: ['hood', 'roof', 'trunk', 'mirrors', 'wing', 'lip', 'skirts', 'diffuser'],
@@ -3409,7 +3416,7 @@ CAR_DEFS.eclipse = {
   spec: ECL_SPEC, tach: 8, classify: classifyTagged('ECL', { liveryPaint: true }), wingBox: [-0.8, 0.9, -2.5, 0.8, 1.3, -2.03], exhaust: eclExhaust, plates: taggedPlates,
   plate: { style: 'us', text: 'DSM 4G63', caption: 'NIGHT RUNNER', front: 'off' },
   lampLevels: { head: 1.6, tail: [0.5, 7.5] },
-  sound: 'bmw', audio: { rpmScale: 1.05, turbo: 1.0, flutter: 1.0, crackle: 0.3, popVol: 0.5 },
+  sound: 'eclipse', audio: { rpmScale: 1, turbo: 1.0, flutter: 1.0, crackle: 0.3, popVol: 0.5 },
   stock: { paint: '#b8bdc2', finish: 'metallic' },
   spoilers: [['stock', 'Factory wing'], ['none', 'None']], noSpoilerParts: true, noParts: ['skirts'],
   // v36, the user: the spoiler can be carbon too (with the movie livery on nothing can be changed, as before)
@@ -3430,7 +3437,7 @@ CAR_DEFS.nsx = {
   spec: NSX_SPEC, tach: 9, classify: classifyTagged('NSX', { liveryPaint: true }), exhaust: nsxExhaust, plates: taggedPlates,
   plate: { style: 'jdm', text: '1990', caption: 'NIGHT RUNNER', front: 'off' },
   lampLevels: { head: 1.6, tail: [0.45, 3.2] },   // the lens runs the full width of the tail: brighter washes it out
-  sound: 'bmw', audio: { rpmScale: 1.0, turbo: 0, flutter: 0, crackle: 0.9, popVol: 0.8 },
+  sound: 'nsx', audio: { rpmScale: 1, turbo: 0, flutter: 0, crackle: 0.9, popVol: 0.8 },
   stock: { paint: '#c8102e', finish: 'gloss' },
   // the LB wing is part of the painted body shell (no separate piece to take off), so it stays
   spoilers: [['stock', 'LB★Works wing']], noSpoilerOff: true, noSpoilerParts: true, noParts: ['canards', 'skirts', 'diffuser'],
@@ -3462,15 +3469,15 @@ const R8_HOOD_CUT = {
   limits: [(x, y, z) => z - r8HoodFront(Math.abs(x)), (x, y, z) => r8HoodRear(Math.abs(x)) - z],
 };
 CAR_DEFS.r8 = {
-  id: 'r8', name: 'Audi R8', short: 'R8', title: 'R8 V8', hue: '#d7dde4', panelCut: { hood: R8_HOOD_CUT },
-  eyebrow: 'Audi R8 · Type 42 · 4.2 FSI V8 · 420 hp · quattro',
-  lede: 'A mid-engine Audi with an 8,250 rpm V8, a six-speed in an open metal gate and quattro to put it down.',
-  pick: '420 hp · AWD',
+  id: 'r8', name: 'Audi R8', short: 'R8', title: 'R8 V10', hue: '#d7dde4', panelCut: { hood: R8_HOOD_CUT },
+  eyebrow: 'Audi R8 · V10 plus · 5.2 FSI V10 · 602 hp · quattro',
+  lede: 'A mid-engine Audi with the V10 plus engine: 8,700 rpm, a six-speed in an open metal gate and quattro to put it down.',
+  pick: '602 hp · AWD',
   files: { meshopt: { url: 'r8-meshopt.txt', size: 1469248 }, plain: { url: 'r8-plain.txt', size: 1940440 } },
-  spec: R8_SPEC, tach: 9, classify: classifyTagged('R8'), exhaust: r8Exhaust, plates: r8Plates,
+  spec: R8_SPEC, tach: 10, classify: classifyTagged('R8'), exhaust: r8Exhaust, plates: r8Plates,
   plate: { style: 'euro', text: 'IN R 8420', caption: 'NIGHT RUNNER' },
   lampLevels: { head: 1.5, tail: [0.7, 6.5] },
-  sound: 'c7', audio: { rpmScale: 0.8, turbo: 0, flutter: 0, crackle: 1.3, popVol: 1.0, whine: 0 },
+  sound: 'r8', audio: { rpmScale: 1, turbo: 0, flutter: 0, crackle: 1.3, popVol: 1.0, whine: 0 },
   stock: { paint: '#c3c6ca', finish: 'metallic' },
   spoilers: [['stock', 'Factory (none)']], noSpoilerOff: true, noParts: ['canards'],
   carbonParts: ['hood', 'roof', 'mirrors', 'skirts', 'diffuser'],
@@ -3535,7 +3542,7 @@ CAR_DEFS.miata = {
   spec: MIATA_SPEC, tach: 8, classify: classifyTagged('MX5'), exhaust: mx5Exhaust, plates: mx5Plates,
   plate: { style: 'jdm', text: '1515', caption: 'NIGHT RUNNER', front: 'on' },
   lampLevels: { head: 1.8, tail: [0.5, 2.6], tint: [1, 0.03, 0.02] },
-  sound: 'bmw', audio: { rpmScale: 1.0, turbo: 0.6, flutter: 0.5, crackle: 1.6, popVol: 1.0 },
+  sound: 'miata', audio: { rpmScale: 1, turbo: 0.6, flutter: 0.5, crackle: 1.6, popVol: 1.0 },
   stock: { paint: '#a9c3c9', finish: 'gloss' },
   spoilers: [['stock', 'Pandem GT wing'], ['none', 'None']], noSpoilerParts: true, noParts: ['skirts', 'lip', 'diffuser', 'canards'],
   carbonParts: ['body', 'hood', 'trunk', 'mirrors', 'wing', 'lip', 'skirts', 'diffuser'],
@@ -5881,6 +5888,26 @@ const SOUND_SETS = {
     on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
   i8: { prefix: 'i8_', burnTyres: false, lp: [2200, 8000],
     loops: { idle: 2305, on_low: 2782, on_a: 3109, on_b: 3533, on_c: 3787, on_d: 4914, on_high: 5893, off_low: 3316, off_mid: 4055, off_high: 4715, burnout: 4914 },
+    on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
+  // v114: five cars' own engines, each cut from the video the owner chose (with the channels' permission) by tools/eng.mjs
+  // (build/audio/<car>/segments.json has each map). R8 (Automann-TV, a 2017 V10 plus; the car became a V10 plus with it):
+  // the 2.5th order (each bank) is its loudest line. GT-R (cvdzijden): idle, a pull and the next gear from a tuned VR38.
+  // Eclipse (Miguel Dsm): mostly part-throttle driving; no standing idle in it, so its idle is the bottom of a lift (1,570).
+  // NSX (CarHub's compilation): an 800 rpm idle, one clean pull 2,750-6,700, a free rev's fall. MX-5 (AutomotiveCulture).
+  r8: { prefix: 'r8_', burnTyres: false, lp: [2600, 9500],
+    loops: { idle: 1274, on_low: 1965, on_a: 2923, on_b: 4303, on_c: 5414, on_d: 6707, on_high: 8045, off_low: 2455, off_mid: 3891, off_high: 6282, burnout: 5414 },
+    on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
+  gtr: { prefix: 'gtr_', burnTyres: false, lp: [2300, 8500],
+    loops: { idle: 1054, on_low: 2027, on_a: 2993, on_b: 4060, on_c: 5636, on_d: 6172, on_high: 6858, off_low: 2580, off_mid: 2981, off_high: 5199, burnout: 5636 },
+    on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
+  eclipse: { prefix: 'eclipse_', burnTyres: false, lp: [2200, 8500],
+    loops: { idle: 1572, on_low: 2391, on_a: 2873, on_b: 3618, on_c: 4343, on_d: 5378, on_high: 6371, off_low: 2177, off_mid: 3057, off_high: 5736, burnout: 4343 },
+    on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
+  nsx: { prefix: 'nsx_', burnTyres: false, lp: [2400, 9500],
+    loops: { idle: 799, on_low: 2919, on_a: 3589, on_b: 4382, on_c: 5137, on_d: 5897, on_high: 6600, off_low: 2732, off_mid: 4431, off_high: 6102, burnout: 5137 },
+    on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
+  miata: { prefix: 'miata_', burnTyres: false, lp: [2200, 8000],
+    loops: { idle: 733, on_low: 2052, on_a: 2928, on_b: 3782, on_c: 4549, on_d: 5079, on_high: 5879, off_low: 2882, off_mid: 3845, off_high: 5051, burnout: 4549 },
     on: ['idle', 'on_low', 'on_a', 'on_b', 'on_c', 'on_d', 'on_high'], off: ['idle', 'off_low', 'off_mid', 'off_high', 'on_high'] },
 };
 // How each car changes gear, by ear (keyed by car id; a livery variant uses its base car's).
