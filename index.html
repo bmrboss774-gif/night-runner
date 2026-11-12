@@ -646,6 +646,26 @@ body.is-touch .attribution{bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 @media (max-width:560px){ .hwcard b{font-size:19px} .hwcard i{min-width:44px;height:34px;font-size:16px} }
 .roadfade{position:fixed;inset:0;z-index:30;background:#000;opacity:0;pointer-events:none}
 body.in-garage .hwcard,body.in-garage .exitind{display:none}
+.tlevel{display:flex;align-items:center;gap:8px;margin-top:5px;font-family:var(--f-display);text-transform:uppercase}
+.tlevel b{font-weight:800;font-style:italic;font-size:13px;letter-spacing:.1em;color:#ffd76a}
+.tlevel .lbar{flex:1;height:5px;border-radius:2px;background:rgba(255,255,255,.14);overflow:hidden}
+.tlevel .lbar i{display:block;height:100%;width:var(--p,0%);background:linear-gradient(90deg,#ffb238,#ffe27a)}
+.tlevel em{font-style:normal;font-weight:600;font-size:10px;letter-spacing:.1em;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.hwcard i.level{background:linear-gradient(180deg,#ffe27a,#ffb238);color:#201400;border-radius:50%;min-width:44px;height:44px}
+#carPick button.locked{opacity:.5}
+#carPick button.locked::after{content:attr(data-lock);display:block;font-family:var(--f-display);font-weight:700;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#ffd76a}
+.g-carcard.locked{opacity:.55}
+.sw-sub{display:none;font-weight:700;font-size:13px;letter-spacing:.1em;color:#fff;white-space:nowrap}
+.spikewarn.nolanes .sw-lanes{display:none}
+.spikewarn.nolanes .sw-sub{display:block}
+.spikewarn.narrow{background:rgba(22,12,4,.86);border-color:rgba(255,150,40,.7);box-shadow:0 0 22px rgba(255,140,30,.22)}
+.spikewarn.narrow .sw-dist{color:#ffb866}
+.spikewarn.trap{background:rgba(5,10,24,.88);border-color:rgba(90,150,255,.75);box-shadow:0 0 22px rgba(60,120,255,.28)}
+.spikewarn.trap .sw-dist{color:#9cc3ff}
+.spikewarn.trap .sw-ico{background:#5a96ff}
+.spikewarn.trap .sw-sub{padding:2px 9px;border-radius:3px;background:#f4f4f0;color:#111;font-size:12px}
+.spikewarn.trap.over .sw-sub{background:#ff3b30;color:#fff}
+.spikewarn.narrow.near,.spikewarn.trap.near{animation:none}
 /* road works use the spike strip's warning in orange */
 .spikewarn.works{background:rgba(22,12,4,.86);border-color:rgba(255,150,40,.7);box-shadow:0 0 22px rgba(255,140,30,.22)}
 .spikewarn.works .sw-lanes i.x{background:repeating-linear-gradient(135deg,#f47b20 0 6px,#2a1606 6px 12px);border-color:#ffa24a}
@@ -842,6 +862,7 @@ body.is-touch .cc{font-size:22px}
   <div class="timing" id="timing">
     <h2><span>Score</span><i id="tbestTag"></i></h2>
     <div class="tscore" id="tscore">0</div>
+    <div class="tlevel" title="Level: points from every run add up; each level unlocks a car"><b id="tlvl">LVL 1</b><span class="lbar"><i id="tlvlBar"></i></span><em id="tlvlNext"></em></div>
     <div class="tgrid">
       <div class="tcell"><span class="k">Distance</span><span class="v" id="tdist">—</span></div>
       <div class="tcell"><span class="k">Top speed</span><span class="v" id="tvmax">—</span></div>
@@ -898,7 +919,7 @@ body.is-touch .cc{font-size:22px}
   <div class="mirror" id="mirror" hidden></div>
   <div class="exitind" id="exitInd" hidden role="status"><div class="ex-top"><b id="exNo">Exit</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20 17 7M17 7h-8M17 7v8" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="square"/></svg></div><div class="ex-name"><i id="exShield"></i><span id="exName"></span></div><div class="ex-dist"><span id="exDist"></span><em id="exHint"></em></div></div>
   <div class="hwcard" id="hwCard"><i id="hwShield"></i><div><small id="hwKicker">Now on</small><b id="hwName"></b><span id="hwTag"></span></div></div>
-  <div class="spikewarn" id="spikeWarn" hidden role="status"><div class="sw-top"><b class="sw-ico">!</b><span id="swTitle">Spike strip</span><span class="sw-dist" id="swDist"></span></div><div class="sw-lanes" id="swLanes"><i></i><i></i><i></i><i></i></div></div>
+  <div class="spikewarn" id="spikeWarn" hidden role="status"><div class="sw-top"><b class="sw-ico">!</b><span id="swTitle">Spike strip</span><span class="sw-dist" id="swDist"></span></div><div class="sw-lanes" id="swLanes"><i></i><i></i><i></i><i></i></div><div class="sw-sub" id="swSub"></div></div>
   <pre id="diag" hidden style="position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:41;margin:0;padding:8px 12px;background:rgba(0,0,0,.8);color:#9fe;font:12px/1.5 monospace;white-space:pre-wrap;max-width:min(92vw,900px);-webkit-user-select:text;user-select:text"></pre>
   <div class="combo" id="combo"></div>
   <div class="drift fade" id="drift" aria-live="off"><span class="lbl">Drift</span><span class="ang" id="driftAng">0°</span><span class="pts" id="driftPts">0</span><span class="mul" id="driftMul">x1</span></div>
@@ -6473,7 +6494,7 @@ const state = {
   t060: null, t060Start: null, armed060: true,
   dist: 0, bestRun: store.get('bestRun', 0), gfx: GFX_LOCK ?? store.get('gfx', isTouch ? 1 : 2),
   vmax: 0, bestDrift: store.get('bestDrift', 0),
-  score: 0, bestScore: store.get('bestScore', 0), combo: 0, comboT: 0,
+  score: 0, distPts: 0, bestScore: store.get('bestScore', 0), combo: 0, comboT: 0,
   weather: 'rain' /* always raining since v27.2 (the user's call): no toggle */, traffic: TRAFFIC_LEVELS[store.get('traffic', 'light')] ? store.get('traffic', 'light') : 'light',
 };
 const camPrev = new THREE.Vector3(), camVel = new THREE.Vector3();
@@ -6532,7 +6553,7 @@ function resetCar(quiet) {
   gcam.t.set(p.x, roadY + 0.6, p.z);
   drift.active = false; drift.points = 0; $('drift').classList.add('fade');
   state.t060Start = null; state.armed060 = true; state.dist = 0; state.vmax = 0; state.t060 = null;
-  state.score = 0; state.combo = 0; state.comboT = 0;
+  state.score = 0; state.distPts = 0; state.combo = 0; state.comboT = 0;
   nitro.charge = 1; nitro.burn = 0; nitro.purge = 0;
   world.updateProbe(p.x, roadY, p.z, true);
   renderTiming();
@@ -6732,7 +6753,8 @@ function renderTiming() {
   $('tdist').textContent = state.dist > 5 ? fmtDist(state.dist) : '—';
   $('tvmax').textContent = state.vmax > 1 ? fmtSpeed(state.vmax) : '—';
   const sc = $('tscore'), txt = state.score.toLocaleString();
-  if (sc.textContent !== txt) { sc.textContent = txt; if (state.score > (renderTiming.last || 0)) { sc.classList.add('bump'); clearTimeout(renderTiming.tm); renderTiming.tm = setTimeout(() => sc.classList.remove('bump'), 130); } renderTiming.last = state.score; }
+  if (sc.textContent !== txt) sc.textContent = txt;
+  { const a = LEVEL_XP(prog.level), b = LEVEL_XP(prog.level + 1), lv = `LVL ${prog.level}`; if ($('tlvl').textContent !== lv) $('tlvl').textContent = lv; $('tlvlBar').style.setProperty('--p', `${Math.round(clamp((prog.xp - a) / (b - a), 0, 1) * 100)}%`); const nx = `${Math.max(0, Math.ceil((b - prog.xp) / 1000)).toLocaleString()}k to go`; if ($('tlvlNext').textContent !== nx) $('tlvlNext').textContent = nx; }
   // the only "best" on the panel: a tag when this run is beating your best score (the rest is on the end card)
   $('tbestTag').textContent = state.score > 0 && state.bestScore > 0 && state.score >= state.bestScore ? 'New best' : '';
 }
@@ -9247,6 +9269,7 @@ function leaveKeyWall(newCar = false) {
   setFocus(newCar ? 'overview' : TAB_FOCUS[gTab] || 'overview'); renderGarage();   // a new car is shown whole first
 }
 function chooseCar(id) {
+  if (carLocked(id)) { toast(`${CAR_DEFS[id].short || CAR_DEFS[id].name} unlocks at level ${carLevel(id)}`, 2200); return; }   // (v100: levels)
   const base = baseOf(activeId);
   if (id === base) return leaveKeyWall();
   switchCar(id);
@@ -9257,7 +9280,7 @@ function openKeyMenu(k) {
   let m = $('keyMenu'); if (!m) { m = el('div', { className: 'key-menu', id: 'keyMenu' }); document.body.append(m); }
   const base = baseOf(activeId);
   m.replaceChildren(el('h4', { textContent: k.brand }), ...k.cars.map((id) => {
-    const d = CAR_DEFS[id], b = el('button', { type: 'button', className: 'g-carcard' }, el('b', { textContent: d.short || d.name }), el('small', { textContent: d.pick }), el('span', { className: 'g-load', id: 'gLoad_' + id }));
+    const d = CAR_DEFS[id], b = el('button', { type: 'button', className: 'g-carcard' }, el('b', { textContent: d.short || d.name }), el('small', { textContent: carLocked(id) ? `Unlocks at level ${carLevel(id)}` : d.pick }), el('span', { className: 'g-load', id: 'gLoad_' + id })); b.classList.toggle('locked', carLocked(id));
     b.style.setProperty('--hue', d.hue || '#5ad7ff'); b.setAttribute('aria-checked', id === base); b.addEventListener('click', () => chooseCar(id)); return b;
   }));
   m.style.setProperty('--hue', '#' + (KEY_ACCENT[k.brand] ?? 0x5ad7ff).toString(16).padStart(6, '0'));
@@ -9888,19 +9911,9 @@ function closeCallPoints(c) {
   const tight = clamp((1.5 - c.gap) / 1.2, 0, 1), fast = clamp((c.rel - 6) / 40, 0, 1);
   return Math.round((120 + 480 * tight * tight + 300 * fast) * (c.truck ? 1.6 : 1) * (c.oncoming ? 2 : 1));
 }
-function onCloseCalls(list) {
-  if (state.over) return;   // nothing scores once the run is over
-  for (const c of list) {
-    state.combo = Math.min(state.combo + 1, 8); state.comboT = 4;
-    const pts = closeCallPoints(c) * state.combo;
-    state.score += pts;
-    // (the "Close call +pts" popup was taken out at the user's request; the points, chime and combo still count)
-    audio.chime(state.combo);
-    cam.kick = Math.max(cam.kick, 0.35);
-    if (state.score > state.bestScore) { state.bestScore = state.score; store.set('bestScore', state.score); }
-    renderTiming();
-  }
-}
+// v100, the owner: "going by cars and near misses shouldnt give u more points". Close calls used to score, with a
+// combo that multiplied them; they score nothing now (the points are for distance and for events: see gain).
+function onCloseCalls() {}
 function updateScore(dt) {
   if (state.comboT > 0) { state.comboT -= dt; if (state.comboT <= 0) state.combo = 0; }
   $('combo').textContent = '';   // the combo's "×N" under the old close call popup went with it
@@ -10003,7 +10016,7 @@ function policeNote(text, sec = 2.6) { police.note = text; police.noteT = sec; }
 function spawnAhead(W) {
   const s = W.s + 520 + Math.random() * 160, R = world.road;
   R.ensure(Math.ceil((s + 300) / 2));
-  if (R.rampAt(s, 260) || R.closureAt(s, 420, 160) || R.tunnelAt(s, 120)) return null;
+  if (R.rampAt(s, 260) || R.closureAt(s, 420, 160) || R.tunnelAt(s, 120) || R.narrowAt(s, 200)) return null;
   const pc = traffic.spawnParkedCop(s, 17.7, 0.22);
   if (pc) pc.cop.join = 'ahead';
   return pc;
@@ -10016,9 +10029,10 @@ function policeUpdate(dt) {
   // the police are about once the car is up the ramp and on the highway itself
   if (!police.on) {
     if (over || W.s < RAMP.sM + 30 || W.u > 17.2 || !traffic.kinds.cop) { policeQuiet(); return; }
-    Object.assign(police, { on: true, state: 'clear', heat: 1, heat0: 1, chaseT: 0, pursuitT: 0, calm: 9 + Math.random() * 6, evade: 0, catch: 0, spawnT: 0, outran: 0, dodged: 0, escapes: 0, ptsAcc: 0, warned: null, note: '', noteT: 0, nextStrip: 0 });
+    Object.assign(police, { on: true, state: 'clear', heat: 1, heat0: 1, chaseT: 0, pursuitT: 0, calm: 45 + Math.random() * 30, evade: 0, catch: 0, spawnT: 0, outran: 0, dodged: 0, escapes: 0, ptsAcc: 0, warned: null, note: '', noteT: 0, nextStrip: 0 });
     prepCops();
   }
+  speedTrap(W, over);
   const chasers = cops.filter(isChaser), onRoad = !world.onRamp && W.u < 17.6;
   // how good the units are: their top speed climbs with the heat but stays under what your car can do
   traffic.copTune.vTop = Math.max(50, Math.min(HEAT_TOP[police.heat - 1], carTopSpeed() * (0.84 + 0.035 * police.heat)));
@@ -10054,7 +10068,7 @@ function policeUpdate(dt) {
       c.cop.far = back > 280 ? (c.cop.far || 0) + dt : 0;
       if (back > 450 || c.cop.far > 4 || back < -320) {
         c.cop.mode = 'leave';
-        if (!over && c.cop.engaged) { police.outran++; addPoints(1000); policeNote('Unit shaken off  +1,000'); }
+        if (!over && c.cop.engaged) { police.outran++; addPoints(POINTS.unit); policeNote('Unit shaken off'); }
       }
     }
     // getting away: nobody within 220 m for eight seconds
@@ -10062,7 +10076,7 @@ function policeUpdate(dt) {
       police.evade = contact ? Math.max(0, police.evade - dt * 2.5) : police.evade + dt;
       if (police.evade >= EVADE_T) {
         const pts = 2000 + 1000 * police.heat;
-        police.escapes++; addPoints(pts); policeNote(`Escaped  +${pts.toLocaleString()}`, 3.4); audio.chime(7);
+        police.escapes++; addPoints(pts); policeNote('Escaped', 3.4); audio.chime(7);
         for (const c of cops) { if (isChaser(c)) c.cop.mode = 'leave'; else if (c.cop.mode === 'parked') c.cop.join = false; }
         Object.assign(police, { state: 'clear', calm: 32 + Math.random() * 28, heat0: Math.max(1, police.heat - 1), evade: 0, catch: 0 });
       }
@@ -10097,18 +10111,43 @@ function policeUpdate(dt) {
     police.catch = press > 0 && slow > 0 && police.state === 'pursuit' ? Math.min(1, police.catch + dt * 0.3 * Math.min(press, 2.5) * slow) : Math.max(0, police.catch - dt * 0.3);
     if (police.catch >= 1) gameOver('busted');
     // points for every second a pursuit goes on, more with more units on you
-    if (police.state === 'pursuit') { police.ptsAcc += dt * 20 * Math.max(1, chasers.length); if (police.ptsAcc >= 10) { const n = Math.floor(police.ptsAcc); state.score += n; police.ptsAcc -= n; } }
     // spike strips: from heat three, one goes down a kilometre ahead every few kilometres (never at road works, an
     // exit or a tunnel mouth: if one of those is where it would go, it waits)
     if (police.state === 'pursuit' && police.heat >= 3 && onRoad && !spikes.list.some((st) => !st.done) && W.s + STRIP_AHEAD >= police.nextStrip) {
       const s = W.s + STRIP_AHEAD, R = world.road;
       R.ensure(Math.ceil((s + 300) / 2));
-      if (R.closureAt(s, 600, 300) || R.rampAt(s, 300) || R.tunnelAt(s, 150)) police.nextStrip = W.s + STRIP_AHEAD + 350; else layStrip(s, W);
+      if (R.closureAt(s, 600, 300) || R.rampAt(s, 300) || R.tunnelAt(s, 150) || R.narrowAt(s, 400)) police.nextStrip = W.s + STRIP_AHEAD + 350; else layStrip(s, W);
     }
   }
   spikesCheck(W);
   traffic.hazards = traffic.hazards.filter((h) => spikes.list.includes(h.st));
   policeHud(dt, chasers, W, nearD);
+}
+// Speed traps (v100, the owner: "add more police on the side of the road with speed traps that cause a high wanted level
+// if you are going over the speed limit when you cross it and it will alert u before there is one. there shouldnt be a
+// speed trap if u already have the cops on you"). world.js marks where they are. Coming up to one with nobody after
+// you, a patrol car is put on the shoulder there and the warning comes up (hazardWarning). Cross it at more than
+// 9 mph over the limit and a pursuit starts at heat three, that unit first; cross it inside the limit and it stays
+// where it is (points). With a pursuit already on, the trap is simply not there.
+const trapLimit = (tp) => (state.units === 'mph' ? tp.limit : Math.round(tp.limit * 1.609 / 10) * 10);
+function speedTrap(W, over) {
+  const tp = world.road.trapAfter(W.s - 30); if (!tp || over) return;
+  const d = tp.s - W.s, chase = police.state === 'pursuit';
+  if (!tp.state && d < 1100) {
+    if (world.onRamp) return;            // (still on the entrance ramp: decided once the car is on the road)
+    if (chase) tp.state = 'off';
+    else { tp.cop = traffic.spawnParkedCop(tp.s + 6, 17.75, 0.2); tp.state = tp.cop ? 'armed' : 'off'; }
+  }
+  if (tp.state !== 'armed') return;
+  if (chase) { tp.state = 'off'; return; }
+  if (d > 0) return;
+  const v = car.speed * speedUnit(), lim = trapLimit(tp);
+  if (car.speed * MPH > tp.limit + 9) {
+    tp.state = 'caught';
+    Object.assign(police, { state: 'pursuit', pursuitT: 0, evade: 0, heat0: 3, heat: 3, spawnT: 2.5, nextStrip: W.s + 1800 + Math.random() * 900 });
+    if (tp.cop) tp.cop.cop.join = 'now';
+    policeNote(`Speed trap: ${Math.round(v)} in a ${lim}`, 4); audio.chime(4); cam.kick = Math.max(cam.kick, 0.3);
+  } else { tp.state = 'passed'; addPoints(POINTS.trap); }
 }
 // The panel: PURSUIT (or LOSING THEM, as the escape meter fills), the heat, a strip with a dot for each unit placed by
 // how far behind you it is (the white marker is you; the ticks are 100 m apart), how many and how near, and the
@@ -10147,7 +10186,48 @@ function policeHud(dt, chasers, W, nearD) {
     dot.classList.toggle('far', back > 300);
   });
 }
-function addPoints(n) { state.score += n; if (state.score > state.bestScore) { state.bestScore = state.score; store.set('bestScore', state.score); } renderTiming(); }
+// ---- points and levels (v100)
+// The owner: "the points system should be different ... escaping the cops dodging the spikes and other events should earn
+// you points as well as more points for how far you have gone a mile should be like 10,000 but it adds up as you go
+// along ... everything else should be worth under 10,000 ... extra points dont need to be displayed on screen. reset
+// all the current high scores" and "add a leveling system where you unlock specific things by leveling up".
+//   Distance: 10,000 a mile, counted continuously (state.distPts is what the distance has paid so far).
+//   Events: escaping a pursuit 3,000 to 6,000 (by heat), a spike strip cleared 2,500, a unit shaken off 1,000, an
+//   exit taken 1,500, a speed trap passed inside the limit 1,000. Nothing is announced; the score just goes up.
+//   Levels: every point also counts towards the player's level, kept between runs (store 'xp'). Level n takes
+//   15,000 x n x (n - 1) / 2 points in all (level 2 at 15,000, level 5 at 150,000, level 19 at about 2.6 million),
+//   and each level from 2 to 19 unlocks one car; five cars are open from the start.
+const POINTS = { mile: 10000, spikes: 2500, unit: 1000, exit: 1500, trap: 1000 };
+const LEVEL_XP = (n) => 15000 * n * (n - 1) / 2;
+const CAR_LEVEL = { fl5: 1, miata: 1, eclipse: 1, s2k: 1, x5: 1, e92: 2, supra: 3, nsx: 4, a90: 5, r34: 6, r8: 7, csl: 8, i8: 9, zl1: 10, c7: 11, gtr: 12, hc: 13, viper: 14, gt3: 15, mcl: 16, cgt: 17, f812: 18, svj: 19 };
+const levelOf = (xp) => { let n = 1; while (LEVEL_XP(n + 1) <= xp) n++; return n; };
+const prog = { xp: Math.max(0, +store.get('xp', 0) || 0), level: 1, dirty: false };
+prog.level = levelOf(prog.xp);
+const carLevel = (id) => CAR_LEVEL[baseOf(id)] ?? 1, carLocked = (id) => carLevel(id) > prog.level;
+// the old scores were earned under the old rules: they are cleared once
+if ((+store.get('scoreEra', 1) || 1) < 2) { store.set('bestScore', 0); store.set('bestRun', 0); store.set('bestDrift', 0); store.set('scoreEra', 2); state.bestScore = 0; state.bestRun = 0; state.bestDrift = 0; }
+function syncLocks() {
+  for (const b of $('carPick').children) { const lk = carLocked(b.dataset.car); b.classList.toggle('locked', lk); b.dataset.lock = lk ? `Level ${carLevel(b.dataset.car)}` : ''; b.setAttribute('aria-disabled', lk); }
+}
+function levelUp(lv) {
+  const cars = Object.keys(CAR_LEVEL).filter((id) => CAR_LEVEL[id] === lv && LIVE.has(id)).map((id) => CAR_DEFS[id].name);
+  const sh = $('hwShield'); sh.textContent = lv; sh.className = 'level';
+  $('hwKicker').textContent = 'Level up'; $('hwName').textContent = `Level ${lv}`; $('hwTag').textContent = cars.length ? `Unlocked: ${cars.join(', ')}` : 'Every car is yours';
+  $('hwCard').classList.add('show'); hwy.cardT = 4.2; audio.chime(7); syncLocks();
+}
+function gain(n) {
+  if (!(n > 0)) return;
+  state.score += n; prog.xp += n; prog.dirty = true;
+  if (state.score > state.bestScore) state.bestScore = state.score;
+  const lv = levelOf(prog.xp); if (lv > prog.level) { prog.level = lv; levelUp(lv); }
+}
+function addPoints(n) { gain(n); store.set('bestScore', state.bestScore); renderTiming(); }
+// the distance's points, every frame; what is kept between runs is written down four times a second
+function distancePoints(save) {
+  const want = Math.floor(state.dist / 1609.344 * POINTS.mile);
+  if (want > state.distPts) { gain(want - state.distPts); state.distPts = want; const sc = $('tscore'), txt = state.score.toLocaleString(); if (sc.textContent !== txt) sc.textContent = txt; }
+  if (save && prog.dirty) { prog.dirty = false; store.set('xp', Math.round(prog.xp)); store.set('bestScore', state.bestScore); }
+}
 // a unit touching you is as good as a moment on your bumper
 function copContact(res, veh) {
   if (!veh.cop || !police.on || state.over || veh.cop.mode === 'parked' || police.state !== 'pursuit') return;
@@ -10183,7 +10263,7 @@ function spikesCheck(W) {
   prevWheels = now;
   for (const st of spikes.list) if (!st.done && W.s > st.s + 6) {
     st.done = true;
-    if (!st.hit && !state.over && police.on) { police.dodged++; addPoints(1500); policeNote('Spike strip cleared  +1,500'); }
+    if (!st.hit && !state.over && police.on) { police.dodged++; addPoints(POINTS.spikes); policeNote('Spike strip cleared'); }
   }
 }
 // The warning for what is coming up across the lanes: a spike strip (red) or road works (orange, v98, the owner: "the
@@ -10193,25 +10273,35 @@ const fmtNear = (m) => (state.units === 'mph' ? `${Math.max(0, Math.round(m * 3.
 function hazardWarning(dt, W) {
   const el = $('spikeWarn');
   if (!W || !state.driving || state.garage || state.over) { if (!el.hidden) el.hidden = true; police.warned = null; return; }
-  const st = spikes.ahead(W.s), dS = st ? st.s - W.s : Infinity;
-  let cl = world.road.closureAt(W.s, 760); if (cl && W.s > cl.s0 + cl.taper) cl = null;   // once you are past the taper there is nothing left to warn of
-  const dC = cl ? Math.max(0, cl.s0 - W.s) : Infinity;
-  const works = dC < dS, hz = works ? cl : st, d = works ? dC : dS;
-  const show = works ? !!cl : dS < 950;
+  const R = world.road, st = spikes.ahead(W.s);
+  let cl = R.closureAt(W.s, 760); if (cl && W.s > cl.s0 + cl.taper) cl = null;       // past the taper there is nothing left to warn of
+  let nz = R.narrowAt(W.s, 700); if (nz && W.s > nz.s0 + nz.ease) nz = null;
+  const tp = R.trapAfter(W.s), trap = tp && tp.state === 'armed' && tp.s - W.s < 950 ? tp : null;
+  // (v100) kinds: spikes, works (a lane closure), narrow (the lanes squeeze), trap (a speed trap); the nearest one shows
+  const list = [[st && st.s - W.s < 950 ? st.s - W.s : Infinity, 'spikes', st], [cl ? Math.max(0, cl.s0 - W.s) : Infinity, 'works', cl], [nz ? Math.max(0, nz.s0 - W.s) : Infinity, 'narrow', nz], [trap ? trap.s - W.s : Infinity, 'trap', trap]].sort((p, q) => p[0] - q[0]);
+  const [d, kind, hz] = list[0], show = d < Infinity;
   if (el.hidden === show) el.hidden = !show;
   if (!show) { police.warned = null; return; }
   if (police.warned !== hz) {
     police.warned = hz; police.alertT = 0.9; audio.alert(false); el.dataset.lanes = '';
-    el.classList.toggle('works', works);
-    $('swTitle').textContent = works ? (cl.n === 2 ? `${cl.side > 0 ? 'Right' : 'Left'} 2 lanes closed` : `${cl.side > 0 ? 'Right' : 'Left'} lane closed`) : 'Spike strip';
+    for (const k of ['works', 'narrow', 'trap']) el.classList.toggle(k, kind === k);
+    el.classList.toggle('nolanes', kind === 'narrow' || kind === 'trap');
+    $('swTitle').textContent = kind === 'works' ? (hz.n === 2 ? `${hz.side > 0 ? 'Right' : 'Left'} 2 lanes closed` : `${hz.side > 0 ? 'Right' : 'Left'} lane closed`) : kind === 'narrow' ? 'Lanes narrow' : kind === 'trap' ? 'Speed trap' : 'Spike strip';
+    $('swSub').textContent = kind === 'narrow' ? 'No shoulder · keep it straight' : kind === 'trap' ? `Limit ${trapLimit(hz)} ${state.units === 'mph' ? 'mph' : 'km/h'}` : '';
   }
-  const txt = d < 12 && works ? 'Now' : fmtNear(d);
+  const txt = d < 12 && kind !== 'spikes' ? 'Now' : fmtNear(d);
   if ($('swDist').textContent !== txt) $('swDist').textContent = txt;
-  const me = nearestLane(W.u), key = `${hz.lanes.join('')}|${me}`;
-  if (el.dataset.lanes !== key) { el.dataset.lanes = key; [...$('swLanes').children].forEach((c, k) => { c.className = (hz.lanes.includes(k) ? 'x' : 'ok') + (k === me ? ' me' : ''); }); }
-  el.classList.toggle('near', d < 260);
-  if (works) { if (d < 280 && hz.lanes.includes(me)) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(false); police.alertT = 0.9; } } }
-  else if (d < 380) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(true); police.alertT = d < 150 ? 0.32 : 0.6; } }
+  if (kind === 'spikes' || kind === 'works') {
+    const me = nearestLane(W.u), key = `${hz.lanes.join('')}|${me}`;
+    if (el.dataset.lanes !== key) { el.dataset.lanes = key; [...$('swLanes').children].forEach((c, k) => { c.className = (hz.lanes.includes(k) ? 'x' : 'ok') + (k === me ? ' me' : ''); }); }
+    el.classList.toggle('near', d < 260);
+    if (kind === 'works') { if (d < 280 && hz.lanes.includes(me)) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(false); police.alertT = 0.9; } } }
+    else if (d < 380) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(true); police.alertT = d < 150 ? 0.32 : 0.6; } }
+  } else if (kind === 'trap') {
+    // the limit goes red while you are over it; it beeps inside the last 400 m if you still are
+    const fast = car.speed * MPH > hz.limit + 9; el.classList.toggle('over', fast);
+    if (fast && d < 400) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(false); police.alertT = 0.8; } }
+  }
 }
 // off switch / new run: the cops go home, the strips come up
 function policeEnd() {
@@ -10264,7 +10354,8 @@ function switchHighway() {
     const v = traffic.spawnCop(s, 46, Math.max(0, car.vx), f.gap);
     if (v) { v.u = v.cop.uTarget = rampC(v.s, world.road.onRamp); v.cop.ramp = world.road.onRamp; v.cop.engaged = true; v.v = f.v; v.fade = 1; }
   }
-  if (lost && !state.over) { police.outran += lost; addPoints(1000 * lost); policeNote(`${lost} unit${lost === 1 ? '' : 's'} lost at the exit  +${(1000 * lost).toLocaleString()}`, 3.4); }
+  if (lost && !state.over) { police.outran += lost; addPoints(POINTS.unit * Math.min(4, lost)); policeNote(`${lost} unit${lost === 1 ? '' : 's'} lost at the exit`, 3.4); }
+  if (!state.over) addPoints(POINTS.exit);
   hwy.count++; hwy.exit = null;
   highwayCard(to, 'Now on');
 }
@@ -10525,7 +10616,7 @@ function gameOver(reason) {
   const o = state.over = { reason, t: 0, card: false, ang: null, spark: 0 };
   keys.clear(); for (const k in touchState) touchState[k] = false;
   o.stats = { dist: state.dist, chase: police.chaseT, vmax: state.vmax, outran: police.outran, dodged: police.dodged, escapes: police.escapes, highways: hwy.count + 1 };
-  if (state.score > state.bestScore) { state.bestScore = state.score; store.set('bestScore', state.score); o.newBest = state.score > 0; }
+  o.newBest = state.score > 0 && state.score >= state.bestScore; store.set('bestScore', state.bestScore); store.set('xp', Math.round(prog.xp));
   if (state.dist > state.bestRun) { state.bestRun = state.dist; store.set('bestRun', state.bestRun); o.newRun = true; }
   // the units close in round the car
   for (const c of traffic.cops) if (c.cop.mode === 'pit') c.cop.mode = 'chase';
@@ -10605,7 +10696,8 @@ function showOverCard(o) {
   const row = (k, v, cls = '', badge = '') => `<div class="orow ${cls}"><span>${k}</span><b>${v}${badge}</b></div>`;
   $('overStats').innerHTML = row('Distance', fmtDist(s.dist), '', o.newRun ? best : '') + row('Time in pursuit', fmtClock(s.chase))
     + row('Top speed', fmtSpeed(s.vmax)) + row('Highways driven', s.highways) + row('Pursuits escaped', s.escapes) + row('Units shaken off', s.outran) + row('Spike strips cleared', s.dodged)
-    + row('Score', state.score.toLocaleString(), 'big', o.newBest ? best : '') + row('Best score', state.bestScore.toLocaleString());
+    + row('Score', state.score.toLocaleString(), 'big', o.newBest ? best : '') + row('Best score', state.bestScore.toLocaleString())
+    + row('Level', `${prog.level}  ·  ${Math.max(0, Math.ceil((LEVEL_XP(prog.level + 1) - prog.xp) / 1000)).toLocaleString()}k to level ${prog.level + 1}`);
   $('over').classList.add('card');
   $('overRetry').focus({ preventScroll: true });
 }
@@ -10725,6 +10817,7 @@ function frameInner(now) {
     if (state.over) overEffects(dt);
     watchPerf(dt);
     distT -= dt;
+    distancePoints(distT <= 0);
     if (distT <= 0) { distT = 0.25; if (state.dist > state.bestRun) { state.bestRun = state.dist; if (Math.floor(state.dist / 100) !== Math.floor((state.dist - 30) / 100)) store.set('bestRun', state.bestRun); } renderTiming(); }
     if (car.burnout && !state.wasBurnout) toast('Burnout');
     state.wasBurnout = car.burnout;
@@ -10884,6 +10977,7 @@ for (const b of document.querySelectorAll('.tool, .unit, .lamp, .attribution, .g
 
 // ---------------------------------------------------------------- title: picking a car
 let titleCar = LIVE.has(baseOf(store.get('car', 'supra'))) && CAR_DEFS[store.get('car', 'supra')] ? store.get('car', 'supra') : 'supra';
+if (carLocked(titleCar)) titleCar = 'fl5';   // (v100) a car the player's level has not reached yet: back to a starter
 function syncCarText(id = activeId || titleCar) {
   const def = CAR_DEFS[id];
   $('tEyebrow').textContent = def.eyebrow;
@@ -10990,7 +11084,8 @@ function pickTitleCar(id, data = {}) {
     $('loadErr').textContent = 'The car model did not load. Reload the page to try again.';
   });
 }
-for (const b of $('carPick').children) b.addEventListener('click', () => { if (b.dataset.car !== titleCar) pickTitleCar(b.dataset.car); });
+for (const b of $('carPick').children) b.addEventListener('click', () => { if (carLocked(b.dataset.car)) { toast(`Unlocks at level ${carLevel(b.dataset.car)}`, 2000); return; } if (b.dataset.car !== titleCar) pickTitleCar(b.dataset.car); });
+syncLocks();
 $('garageBtn').addEventListener('click', openGarage);
 $('keysBtn').addEventListener('click', () => { openGarage(); if (!state.garage) return; if (gTab !== 'car') { gTabBeforeCars = gTab; gTab = 'car'; store.set('gTab', gTab); } lookAtKeys(); renderGarage(); });
 $('btnGarage').addEventListener('click', openGarage);
@@ -11022,6 +11117,7 @@ window.__game = {
   flame, doShift, drift, exhaust, updateEffects, startTorch, fx,
   audio, MUSIC, GEN_SONGS, makeSynth, eyePoint, steeringWheelOf, rigs, CAR_DEFS, rain, setWeather, setTrafficLevel, RAMP, police, KITS, PART_LABELS, applyMods, openGarage, closeGarage, switchCar, activateCar, ensureRig, pickTitleCar, setFocus, renderGarage, gcam, garageRev, carDamage, repairDamage, damageSummary, addDent, addCrack, dropBumper, DMG, underglow, exhaust, PERF, peakHp, nitro, NOS, fireNitro, purge, loadBuilds, saveBuild, loadBuild, carbonMat, carbonLod, carbonUnwrap, carbonTune, garage, contactShadow, carShadow,
   get rig() { return rig; }, get mods() { return mods; }, set mods(m) { mods = m; },
+  prog, gain, LEVEL_XP, CAR_LEVEL, syncLocks, setXp(v) { prog.xp = v; prog.level = levelOf(v); store.set('xp', v); syncLocks(); renderTiming(); },
   spikes, mirror, copFleet, prepCops, gameOver, layStrip, policeUpdate, hwy, switchHighway, highwayUpdate, hazardWarning, HIGHWAYS, carTopSpeed, updateCopVisuals, renderMirror, measureMirror, get over() { return state.over; },
   setMod(k, v) { mods[k] = v; applyMods(); if (state.garage) renderGarage(); },
   // (v98, tests) a car's gauges drawn on a canvas of their own: f = how far round the rev counter, spd = the speed shown

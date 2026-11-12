@@ -505,7 +505,7 @@ export class Traffic {
       veh.v = 0; veh.acc = 0; veh.brake = false; veh.du = 0; veh.lat = 0; veh.latV = 0; veh.hitT = 0;
       veh.fade = Math.min(1, veh.fade + dt * 1.5);
       // a unit at a roadblock pulls out once you are by; one waiting on the shoulder ('ahead') pulls out as you come up to it
-      if (c.join === 'ahead' ? ahead > -230 : c.join && ahead > 30) { c.mode = 'chase'; c.uTarget = veh.u; c.gapT = 0; }
+      if (c.join === 'now' || (c.join === 'ahead' ? ahead > -230 : c.join && ahead > 30)) { c.mode = 'chase'; c.uTarget = veh.u; c.gapT = 0; c.engaged = true; }
       veh.gone = ahead > 700 || ahead < -1800;
       return;
     }
@@ -787,7 +787,10 @@ export class Traffic {
     const f = R.frameAt(veh.s / ROAD_DS);
     const th = f.th + (veh.dir < 0 ? Math.PI : 0);
     const rx = -Math.cos(f.th), rz = Math.sin(f.th);
-    const x = f.x + rx * veh.u - off.x, z = f.z + rz * veh.u - off.z;
+    // (v100) road works that squeeze the lanes: everything here thinks in normal lanes; the picture and the contact
+    // boxes are placed where the squeezed lanes are
+    const uu = veh.dir > 0 ? R.squeeze(veh.s, veh.u) : veh.u;
+    const x = f.x + rx * uu - off.x, z = f.z + rz * uu - off.z;
     const steer = Math.atan2(veh.du, Math.max(veh.v, 3)) * veh.dir;   // heading into a lane change
     const yaw = th - steer + veh.wob, pitch = -Math.atan(f.g) * veh.dir;
     return { x, y: f.y, z, yaw, pitch, th: f.th };
@@ -811,9 +814,9 @@ export class Traffic {
     if (!L) return;
     // the player as a vehicle the drivers react to
     const p = this.player;
-    p.active = !ctx.garage; p.s = L.s; p.u = L.u;
+    p.active = !ctx.garage; p.s = L.s; p.u = W.road.unsqueeze(L.s, L.u);   // (v100: in lane terms, where the lanes are squeezed)
     p.v = ctx.speedAlong; p.front = 2.3; p.rear = 2.3;
-    p.lanes = []; for (let k = 0; k < 4; k++) if (Math.abs(L.u - LANE_CENTERS[k]) < 2.9) p.lanes.push(k);
+    p.lanes = []; for (let k = 0; k < 4; k++) if (Math.abs(p.u - LANE_CENTERS[k]) < 2.9) p.lanes.push(k);
     if (!this.populated) { this.populate(L.s, true); this.populated = true; }
     this.spawnTimer -= dt; if (this.spawnTimer <= 0) { this.spawnTimer = 0.25; this.populate(L.s); }
     this.syncClosures(L.s);

@@ -28,6 +28,7 @@ class DetailLOD extends THREE.LOD {
   }
 }
 const LANE = 3.65, LANES = 4;
+const U_MID = 1.5 + LANE * 2;                        // the middle of a carriageway (v100: the lanes squeeze towards it at road works)
 const U_IN = 1.5, U_OUT = U_IN + LANE * LANES;      // inside (yellow) and outside (white) edge lines
 const U_PAVE = 19.6;                                // edge of the pavement = face of the outer barriers
 const MED_HALF = 0.305, MED_H = 1.07;               // New Jersey barrier on the median
@@ -167,7 +168,7 @@ class Road {
     this.rng = mulberry32(seed);
     this.seed = seed; this.theme = theme; this.entry = entry;
     this.onRamp = finishRamp({ ...RAMP, back: entry ? 150 : 4 });
-    this.ramps = [this.onRamp]; this.exits = []; this.closures = [];
+    this.ramps = [this.onRamp]; this.exits = []; this.closures = []; this.narrows = []; this.traps = [];
     // per sample (every DS metres): position, heading, grade, curvature, zone blend
     this.X = []; this.Z = []; this.Y = []; this.T = []; this.G = []; this.K = []; this.ZA = []; this.ZB = []; this.ZT = []; this.BR = [];
     this.zones = []; this.rivers = []; this.lakes = []; this.tunnels = []; this.cities = []; this.mountains = []; this.events = []; this.zoneEnd = 0;
@@ -175,6 +176,7 @@ class Road {
     this.exitNo = exitNo ?? 9 + Math.floor(this.rng() * 8); this.mile = 0;
     // (v98) the first exit comes up two to three kilometres in, the first lane closure a little before or after it
     this.nextExit = 2300 + this.rng() * 900; this.nextClosure = 1500 + this.rng() * 1700;
+    this.nextNarrow = 3200 + this.rng() * 2600; this.nextTrap = 1500 + this.rng() * 900;   // (v100)
     this.planZone(true);
   }
   get length() { return this.X.length; }
@@ -273,7 +275,8 @@ class Road {
       const cl = { s0: a, s1: a + L + 110 * n, taper: 110 * n, lanes, open: [0, 1, 2, 3].filter((k) => !lanes.includes(k)), side: right ? 1 : -1, n, seed: (r() * 1e9) | 0 };
       // the line the drums stand on once the taper is over (just inside the shut lanes), and the road's edge they start from
       cl.uLine = right ? U_IN + LANE * lanes[0] + 0.4 : U_IN + LANE * (lanes[n - 1] + 1) - 0.4;
-      cl.uEdge = right ? U_OUT + 1.7 : U_IN - 0.75;
+      // (v100: the closure is a wall now, not a row of drums: it starts at the road's own barrier on that side)
+      cl.uEdge = right ? U_PAVE - 0.3 : MED_HALF + 0.3;
       cl.uMid = (U_IN + LANE * lanes[0] + U_IN + LANE * (lanes[n - 1] + 1)) / 2;   // the middle of the shut lanes
       cl.board = { s: a + cl.taper + 14, u: cl.uMid };                              // the flashing arrow board, in the shut lanes behind the taper
       cl.truck = { s: Math.round(a + cl.taper + 60 + r() * Math.max(20, L - 150)), u: right ? U_IN + LANE * 3.5 : U_IN + LANE * 0.5 };   // a works pick-up parked further in
@@ -284,8 +287,39 @@ class Road {
       this.events.push({ s: a - 230, type: 'work', merge: right ? 1 : -1 });
       this.events.push({ s: cl.s1 + 70, type: 'work', text: ['END', 'ROAD', 'WORK'] });
       this.nextClosure = z.s1 + (1900 + r() * 2600) / hw.closures;
+    } else if (!first && s0 >= this.nextNarrow && ['forest', 'fields', 'cut', 'embank'].includes(type) && len >= 800) {
+      // v100, the owner: "there should be a different feature where the lanes just simply narrow and you are alerted".
+      // Road works of another kind: for a few hundred metres the four lanes are squeezed from 3.65 m to 3 m each and
+      // the shoulders are walled off, so the carriageway is 12 m wide between two rows of concrete barrier. k is how
+      // much of their width the lanes keep; the squeeze eases in and out over `ease` metres at each end.
+      const L = 320 + r() * 380, a = Math.round((s0 + 190 + r() * Math.max(0, len - L - 430)) / DS) * DS;
+      const nz = { s0: a, s1: a + Math.min(L, len - 430), k: 0.82, ease: 110 };
+      this.narrows.push(nz); z.narrow = nz;
+      this.events.push({ s: a - 760, type: 'work', text: ['ROAD', 'WORK', 'AHEAD'] });
+      this.events.push({ s: a - 380, type: 'work', text: ['ROAD', 'NARROWS'] });
+      this.events.push({ s: a - 160, type: 'work', narrows: 1 });
+      this.events.push({ s: nz.s1 + 70, type: 'work', text: ['END', 'ROAD', 'WORK'] });
+      this.nextNarrow = z.s1 + 4200 + r() * 4200;
+    } else if (!first && s0 >= this.nextTrap && ['forest', 'fields', 'cut', 'embank'].includes(type) && len >= 600) {
+      // v100, the owner: "add more police on the side of the road with speed traps". A patrol car waits on the right
+      // shoulder at trap.s; the game does the rest (the warning, the check of your speed as you pass, the chase).
+      const tp = { s: Math.round((s0 + len * (0.35 + r() * 0.4)) / DS) * DS, limit: hw.limit, state: '' };
+      this.traps.push(tp); z.trap = tp;
+      this.events.push({ s: tp.s - 420, type: 'speed', mph: hw.limit });
+      this.nextTrap = z.s1 + 2600 + r() * 3200;
     }
   }
+  // (v100) road works that squeeze the lanes: how far in the squeeze is at s (0 = none, 1 = full), the stretch itself, and
+  // where a place across the normal road (u) really is there. Lanes keep k of their width about the carriageway's middle.
+  narrowAt(s, pad = 0) { for (let k = this.narrows.length - 1; k >= 0; k--) { const n = this.narrows[k]; if (s > n.s1 + pad) break; if (s >= n.s0 - pad) return n; } return null; }
+  squeezeAt(s) { const n = this.narrowAt(s); return n ? sstep(n.s0, n.s0 + n.ease, s) * (1 - sstep(n.s1 - n.ease, n.s1, s)) * (1 - n.k) : 0; }
+  squeeze(s, u) { if (u <= 0) return u; const q = this.squeezeAt(s); return q ? U_MID + (u - U_MID) * (1 - q) : u; }
+  unsqueeze(s, u) { if (u <= 0) return u; const q = this.squeezeAt(s); return q ? U_MID + (u - U_MID) / (1 - q) : u; }
+  // the walls of a squeezed stretch at s: [left face, right face] in real metres across, or null where there is no squeeze
+  narrowWalls(s) { const n = this.narrowAt(s); if (!n) return null; const e = sstep(n.s0, n.s0 + n.ease, s) * (1 - sstep(n.s1 - n.ease, n.s1, s)); if (e <= 0) return null; const k = n.k; return [lerp(MED_HALF + 0.1, U_MID + (U_IN - U_MID) * k - 0.55, e), lerp(U_PAVE - 0.1, U_MID + (U_OUT - U_MID) * k + 0.55, e)]; }
+  // the wall of a lane closure at s (the face towards the open lanes), or null outside it
+  closureWall(cl, s) { if (s < cl.s0 || s > cl.s1) return null; const t = s - cl.s0; return t < cl.taper ? lerp(cl.uEdge, cl.uLine, t / cl.taper) : s > cl.s1 - 40 ? lerp(cl.uLine, cl.uEdge, (s - (cl.s1 - 40)) / 40) : cl.uLine; }
+  trapAfter(s) { for (const t of this.traps) if (t.s > s) return t; return null; }
   // the ramp (entrance or exit) that covers s, give or take pad metres; the lane closure at s (or coming up within `ahead` metres)
   rampAt(s, pad = 0) { for (let k = this.ramps.length - 1; k >= 0; k--) { const rp = this.ramps[k]; if (s >= rp.lo - pad && s <= rp.hi + pad) return rp; } return null; }
   closureAt(s, ahead = 0, behind = 0) { for (let k = this.closures.length - 1; k >= 0; k--) { const c = this.closures[k]; if (s > c.s1 + behind) break; if (s >= c.s0 - ahead) return c; } return null; }
@@ -651,19 +685,22 @@ function roadMaterial(tex) {
     });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
-attribute float aDeck; varying vec2 vRoad; varying float vDeck; varying vec3 vWP; varying vec4 vReflC; uniform mat4 uReflMatrix;`)
+attribute float aDeck; attribute float aNarrow; varying vec2 vRoad; varying float vDeck; varying float vNarrow; varying vec3 vWP; varying vec4 vReflC; uniform mat4 uReflMatrix;`)
       .replace('#include <project_vertex>', `#include <project_vertex>
-  vRoad = uv; vDeck = aDeck;
+  vRoad = uv; vDeck = aDeck; vNarrow = aNarrow;
   { vec4 wp4 = modelMatrix * vec4(transformed, 1.0); vWP = wp4.xyz; vReflC = uReflMatrix * wp4; }`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec2 vRoad; varying float vDeck; varying vec3 vWP; varying vec4 vReflC;
+varying vec2 vRoad; varying float vDeck; varying float vNarrow; varying vec3 vWP; varying vec4 vReflC;
 uniform sampler2D tAsphalt; uniform sampler2D tConcrete; uniform sampler2D tNoise; uniform sampler2D uRefl; uniform float uReflOn;
 uniform float uRain; uniform float uTime; uniform float uPave; uniform float uRetroK;
 ${RETRO_GLSL}
 float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0.5 - aa, w * 0.5 + aa, abs(x - c)); }`)
       .replace('#include <map_fragment>', `#include <map_fragment>
-  float ru = vRoad.x, au = abs(ru), rs = vRoad.y;
+  // (v100) vNarrow: how far the lanes are squeezed here (road works): the paint is laid out where the squeezed lanes are
+  float ru = vRoad.x, rs = vRoad.y;
+  if (ru > 0.0 && vNarrow > 0.0 && vDeck < 1.5) ru = 8.8 + (ru - 8.8) / (1.0 - vNarrow);
+  float au = abs(ru);
   vec3 asp = texture2D(tAsphalt, vec2(ru, rs) / 8.0).rgb;
   vec3 con = texture2D(tConcrete, vec2(ru, rs) / 7.5).rgb;
   vec3 nzA = texture2D(tNoise, vec2(ru, rs) / 30.0).rgb, nzB = texture2D(tNoise, vec2(ru, rs) / 7.5 + 0.37).rgb;
@@ -728,7 +765,7 @@ float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0
   } else radiance *= 0.3;
   #endif`);
   };
-  m.customProgramCacheKey = () => 'nr-road3';
+  m.customProgramCacheKey = () => 'nr-road4';
   return m;
 }
 
@@ -1137,6 +1174,13 @@ const SIGNS = {
     g.rotate(-Math.PI / 4); g.scale(dir > 0 ? 1 : -1, 1); g.strokeStyle = '#111'; g.lineWidth = 11; g.lineCap = 'butt';
     g.beginPath(); g.moveTo(-22, 62); g.lineTo(-22, -62); g.stroke();                                        // the lane that carries on
     g.beginPath(); g.moveTo(24, 62); g.lineTo(24, 14); g.quadraticCurveTo(24, -16, 2, -34); g.lineTo(2, -62); g.stroke();   // the one that ends, bending in
+  }),
+  // (v100) road narrows: the two edge lines pinching in
+  workNarrows: () => signTexture('worknarrows', 256, 256, (g, w, h) => {
+    g.translate(w / 2, h / 2); g.rotate(Math.PI / 4);
+    roundRect(g, -88, -88, 176, 176, 12); g.fillStyle = WORK; g.fill(); g.strokeStyle = '#111'; g.lineWidth = 6; roundRect(g, -80, -80, 160, 160, 9); g.stroke();
+    g.rotate(-Math.PI / 4); g.strokeStyle = '#111'; g.lineWidth = 11; g.lineCap = 'butt';
+    for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(sx * 34, 62); g.lineTo(sx * 34, 22); g.lineTo(sx * 16, -14); g.lineTo(sx * 16, -62); g.stroke(); }
   }),
   // (v98) the sign in the gore where an exit leaves: EXIT, its number, and an arrow up and to the right
   gore: (exit) => signTexture('gore' + exit, 256, 320, (g, w, h) => {
@@ -1600,6 +1644,7 @@ export class World {
     const rp = this.road.rampAt(L.s, 10), nearRamp = !!rp;
     const onRamp = nearRamp && rampApart(rp, L.s) && L.u > (19.78 + rampEdges(L.s, rp).left) / 2;
     this.onRamp = onRamp; this.onExit = onRamp && rp.kind === 'off' ? rp : null;
+    const wcl = this.road.closureAt(L.s, 8, 8), wnz = this.road.narrowAt(L.s, 8), works = wcl || wnz ? { cl: wcl, nz: wnz } : null;
     for (const [lx, lz] of [[dims.hw, dims.front], [-dims.hw, dims.front], [dims.hw, -dims.rear], [-dims.hw, -dims.rear]]) {
       const ox = cy * lx + sy * lz, oz = -sy * lx + cy * lz;
       const u = L.u + ox * rx + oz * rz;
@@ -1614,6 +1659,13 @@ export class World {
         // on to the next highway long before that)
         if (cornerOnRamp && rp.dir > 0) { const back = Math.ceil(rp.lo / DS) * DS - sc; if (back > worst) { worst = back; side = 2; cx = ox; cz = oz; } }
         if (cornerOnRamp && rp.dir < 0) { const fwd = sc - (rp.hi - 3); if (fwd > worst) { worst = fwd; side = -2; cx = ox; cz = oz; } }
+      }
+      // (v100) road works: the wall of a lane closure, and the two walls of a squeezed stretch, judged where each
+      // corner is along the road (only for a car on the open side of the wall)
+      if (works) {
+        const sc = L.s + ox * fs + oz * fc;
+        if (works.cl) { const w = this.road.closureWall(works.cl, sc); if (w !== null) { if (works.cl.side > 0 && L.u < w + 0.6) hi = Math.min(hi, w - 0.05); else if (works.cl.side < 0 && L.u > w - 0.6) lo = Math.max(lo, w + 0.05); } }
+        if (works.nz) { const w = this.road.narrowWalls(sc); if (w) { lo = Math.max(lo, w[0] + 0.05); hi = Math.min(hi, w[1] - 0.05); } }
       }
       const pin = lo - u, pout = u - hi;
       if (pin > worst) { worst = pin; side = 1; cx = ox; cz = oz; }
@@ -1845,17 +1897,18 @@ export class World {
 
     // road surface: both carriageways, flat across, tilted with the grade
     {
-      const gb = new GeoBuilder(), deck = [];
+      const gb = new GeoBuilder(), deck = [], narrow = [];
       const cols = [-U_PAVE - 0.3, -U_OUT - 1.5, -U_IN, 0, U_IN, U_OUT + 1.5, U_PAVE + 0.3];
       const sBase = Math.floor(i0 * DS / S_WRAP) * S_WRAP;
       for (let i = i0; i <= i1; i++) {
         const th = R.T[i], rx = -Math.cos(th), rz = Math.sin(th), g = R.G[i];
         const nl = Math.hypot(g, 1), nx = -Math.sin(th) * g / nl, ny = 1 / nl, nz = -Math.cos(th) * g / nl;
-        for (const u of cols) { gb.v(R.X[i] + rx * u - ox, R.Y[i] - oy, R.Z[i] + rz * u - oz, nx, ny, nz, u, i * DS - sBase); deck.push(isB(i) ? 1 : 0); }
+        const sq = R.squeezeAt(i * DS);
+        for (const u of cols) { gb.v(R.X[i] + rx * u - ox, R.Y[i] - oy, R.Z[i] + rz * u - oz, nx, ny, nz, u, i * DS - sBase); deck.push(isB(i) ? 1 : 0); narrow.push(sq); }
       }
       const nc = cols.length;
       for (let i = 0; i < CHUNK; i++) for (let k = 0; k < nc - 1; k++) { const a = i * nc + k; gb.quad(a, a + 1, a + nc + 1, a + nc); }
-      gb.extra = [['aDeck', deck, 1]];
+      gb.extra = [['aDeck', deck, 1], ['aNarrow', narrow, 1]];
       const mesh = add(new THREE.Mesh(gb.build(), this.mat.road), false, true);
       mesh.receiveShadow = true;
     }
@@ -1890,6 +1943,7 @@ export class World {
     if (c === 0) this.buildRoadEnd(add, ox, oy, oz);
     for (const rp of R.ramps) if (i1 * DS > rp.lo - 10 && i0 * DS < rp.hi) this.buildRamp(rp, ch, add, i0, i1, ox, oy, oz);
     for (const cl of R.closures) if (i1 * DS > cl.s0 - 2 && i0 * DS < cl.s1 + 2) this.buildClosure(cl, ch, add, i0, i1, ox, oy, oz);
+    for (const nz of R.narrows) if (i1 * DS > nz.s0 - 2 && i0 * DS < nz.s1 + 2) this.buildNarrow(nz, ch, add, i0, i1, ox, oy, oz);
     yield;
     // small and mid-size parts go under distance switches measured from the middle of the chunk
     const im = i0 + (CHUNK >> 1);
@@ -2311,15 +2365,15 @@ export class World {
     const lampC = hw.light ? hw.light.c : SODIUM, lampI = hw.light ? hw.light.I : 620;
     // pavement: before the nose it is a road of its own, after it the pavement runs on from the highway's edge
     {
-      const gb = new GeoBuilder(), deck = [], NC = 5;
+      const gb = new GeoBuilder(), deck = [], narrow = [], NC = 5;
       for (let i = j0; i <= j1; i++) {
         const s = i * DS, e = E(i), th = R.T[i], rx = -Math.cos(th), rz = Math.sin(th), g = R.G[i];
         const nl = Math.hypot(g, 1), nx = -Math.sin(th) * g / nl, ny = 1 / nl, nz = -Math.cos(th) * g / nl;
         const L = apart(i) ? e.left - 0.3 : U_PAVE + 0.3, Rr = Math.max(L, e.right + 0.3);
-        for (let k = 0; k < NC; k++) { const u = lerp(L, Rr, k / (NC - 1)); gb.v(R.X[i] + rx * u - ox, R.Y[i] + 0.003 - oy, R.Z[i] + rz * u - oz, nx, ny, nz, u - e.c, s - sBase); deck.push(2); }
+        for (let k = 0; k < NC; k++) { const u = lerp(L, Rr, k / (NC - 1)); gb.v(R.X[i] + rx * u - ox, R.Y[i] + 0.003 - oy, R.Z[i] + rz * u - oz, nx, ny, nz, u - e.c, s - sBase); deck.push(2); narrow.push(0); }
       }
       for (let r = 0; r < j1 - j0; r++) for (let k = 0; k < NC - 1; k++) { const a = r * NC + k; gb.quad(a, a + 1, a + NC + 1, a + NC); }
-      gb.extra = [['aDeck', deck, 1]];
+      gb.extra = [['aDeck', deck, 1], ['aNarrow', narrow, 1]];
       const m = add(new THREE.Mesh(gb.build(), this.mat.road), false, true); m.receiveShadow = true;
     }
     // guardrails both sides of the ramp (the left one ends at the nose of the gore)
@@ -2403,13 +2457,25 @@ export class World {
   buildClosure(cl, ch, add, i0, i1, ox, oy, oz) {
     const R = this.road, sA = i0 * DS, sB = i1 * DS;
     if (!cl.drums) {
+      // (v100, the owner: "the road closures for the lanes should prevent you from getting into those lanes": the line
+      // is a concrete wall now; the drums stand in front of its taper, on the open side, where a real crew puts them)
       const list = [], T = cl.taper;
-      for (let d = 0; d <= T; d += 9) list.push([cl.s0 + d, lerp(cl.uEdge, cl.uLine, d / T)]);
-      for (let s = cl.s0 + T + 14; s < cl.s1 - 44; s += 14) list.push([s, cl.uLine]);
-      for (let d = 0; d <= 40; d += 8) list.push([cl.s1 - 40 + d, lerp(cl.uLine, cl.uEdge, d / 40)]);
+      for (let d = 9; d <= T; d += 11) list.push([cl.s0 + d, lerp(cl.uEdge, cl.uLine, d / T) - cl.side * 0.75]);
       cl.drums = list.map(([s, u]) => ({ s, u, hit: false }));
     }
     this.initWorks();
+    {
+      // the wall: a temporary concrete barrier from the road's edge across the taper, along the lane line, and back
+      const gb = new GeoBuilder(), sd = cl.side, prof = [[-0.3, 0], [-0.3, 0.075], [-0.115, 0.33], [-0.075, 0.81], [0.075, 0.81], [0.115, 0.33], [0.3, 0.075], [0.3, 0]];
+      const ja = Math.max(i0, Math.ceil(cl.s0 / DS)), jb = Math.min(i1, Math.floor(cl.s1 / DS));
+      if (jb > ja) {
+        extrudeOffset(gb, R, ja, jb, ox, oy, oz, prof.slice().reverse(), (i) => R.closureWall(cl, i * DS) + sd * 0.3, { uScale: 1 / 6 });   // (the outline runs right to left over the top, as the road's own barriers' do, so its faces point outwards)
+        const m = add(new THREE.Mesh(gb.build(), this.mat.barrier)); m.castShadow = true; m.receiveShadow = true;
+        // (reflectors every 6 m: on an unlit road the wall is hard to see without them)
+        const del = []; for (let i = ja; i < jb; i++) if ((i * DS) % 6 === 0) { const p = R.point(i, R.closureWall(cl, i * DS) + sd * 0.3); del.push([p.x, p.y + 0.84, p.z, R.T[i]]); }
+        this.instances(add, this.delGeo, this.mat.delinY, del, ox, oy, oz, { refl: false, probe: false });
+      }
+    }
     const mine = cl.drums.filter((d) => d.s >= sA && d.s < sB && !d.hit);
     if (mine.length) {
       const im = new THREE.InstancedMesh(this.drumGeo, this.mat.drum, mine.length), mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), pv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
@@ -2428,6 +2494,20 @@ export class World {
       this.layer(g, true, false); g.traverse((o) => { o.layers.mask = g.layers.mask; if (o.isMesh) o.castShadow = true; });
       ch.group.add(g);
     }
+  }
+  // a squeezed stretch (v100): a row of concrete barrier each side of the narrowed lanes, running in from the median
+  // and the outer rail as the squeeze begins and back out as it ends, amber reflectors along their tops
+  buildNarrow(nz, ch, add, i0, i1, ox, oy, oz) {
+    const R = this.road, gb = new GeoBuilder(), prof = [[-0.3, 0], [-0.3, 0.075], [-0.115, 0.33], [-0.075, 0.81], [0.075, 0.81], [0.115, 0.33], [0.3, 0.075], [0.3, 0]];
+    const ja = Math.max(i0, Math.ceil(nz.s0 / DS)), jb = Math.min(i1, Math.floor(nz.s1 / DS));
+    if (jb <= ja) return;
+    const keep = (i) => !!R.narrowWalls(i * DS), del = [];
+    extrudeOffset(gb, R, ja, jb, ox, oy, oz, prof.slice().reverse(), (i) => (R.narrowWalls(i * DS) || [0, 0])[0] - 0.3, { uScale: 1 / 6, keep });
+    extrudeOffset(gb, R, ja, jb, ox, oy, oz, prof.slice().reverse(), (i) => (R.narrowWalls(i * DS) || [0, 0])[1] + 0.3, { uScale: 1 / 6, keep });
+    const geo = gb.build(); if (!geo) return;
+    const m = add(new THREE.Mesh(geo, this.mat.barrier)); m.castShadow = true; m.receiveShadow = true;
+    for (let i = ja; i < jb; i++) if ((i * DS) % 6 === 0) { const w = R.narrowWalls(i * DS); if (!w) continue; for (const [u, sd] of [[w[0] - 0.3, -1], [w[1] + 0.3, 1]]) { const p = R.point(i, u); del.push([p.x, p.y + 0.84, p.z, R.T[i]]); void sd; } }
+    this.instances(add, this.delGeo, this.mat.delinY, del, ox, oy, oz, { refl: false, probe: false });
   }
   initWorks() {
     if (this.drumGeo) return;
@@ -2555,7 +2635,7 @@ export class World {
           break;
         case 'name': place(this.postSign(SIGNS.name(e.text), 4.2, 1.05, 2.3, { posts: 2, postR: 0.07 }), 21.8); break;
         case 'exitAdvance': place(this.postSign(SIGNS.exitAdvance(e.exit, e.dist, e.to), 3.4, 2.04, 2.6, { posts: 2, postR: 0.1 }), 22.2); break;
-        case 'work': place(this.postSign(e.merge ? SIGNS.workMerge(e.merge) : SIGNS.work(e.text), 1.75, 1.75, 2.0), 21.4); break;
+        case 'work': place(this.postSign(e.merge ? SIGNS.workMerge(e.merge) : e.narrows ? SIGNS.workNarrows() : SIGNS.work(e.text), 1.75, 1.75, 2.0), 21.4); break;
         case 'gantry': if (!isB(i)) this.buildGantry(g, e, i, ox, oy, oz); break;
         case 'billboard': if (!isB(i)) this.buildBillboard(g, e, i, ox, oy, oz); break;
       }
