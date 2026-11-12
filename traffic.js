@@ -215,7 +215,7 @@ export class Traffic {
             vec2 q = vUv - 0.5;
             float n = texture2D(uNoise, vUv * vec2(1.5, 0.8) + vec2(vCol.b * 7.0, -uTime * 1.3)).r;
             float m = (1.0 - smoothstep(0.1, 0.5, abs(q.x))) * (1.0 - smoothstep(0.0, 0.5, abs(q.y + 0.1))) * smoothstep(-0.5, -0.3, q.y);
-            float a = m * (0.35 + 0.65 * n) * uRain * vCol.r * smoothstep(1.5, 6.0, vDepth);
+            float a = m * (0.35 + 0.65 * n) * uRain * vCol.r * smoothstep(4.0, 9.0, vDepth);   // (v113: gone well before it reaches the camera: a car's plume passing close beside it laid a soft blot over the picture)
             if (!(a > 0.002) || !(a <= 1.0)) discard;
             float f = fogDensity * vDepth, fog = 1.0 - exp(-f * f);
             gl_FragColor = vec4(mix(vec3(0.55, 0.6, 0.68) * vCol.g, fogColor, fog), a * 0.5);

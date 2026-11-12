@@ -2421,13 +2421,13 @@ class Smoke {
     }
     const tex = new THREE.CanvasTexture(c);
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: tex }, color: { value: new THREE.Color(0xd8cfc4).multiplyScalar(0.42) } },
-      vertexShader: `attribute vec3 iPos; attribute float iSize; attribute float iAlpha; attribute float iRot;
+      uniforms: { map: { value: tex }, color: { value: new THREE.Color(0xd8cfc4).multiplyScalar(0.42) }, uNear: { value: new THREE.Vector2(1, 4) } },
+      vertexShader: `attribute vec3 iPos; attribute float iSize; attribute float iAlpha; attribute float iRot; uniform vec2 uNear;
         varying vec2 vUv; varying float vAlpha;
         void main() {
           vUv = uv;
           vec4 mv = modelViewMatrix * vec4(iPos, 1.0);
-          vAlpha = iAlpha * smoothstep(1.0, 4.0, -mv.z);   // thin out puffs that reach the camera
+          vAlpha = iAlpha * smoothstep(uNear.x, uNear.y, -mv.z);   // thin out puffs that reach the camera
           float c = cos(iRot), s = sin(iRot);
           mv.xy += vec2(c * position.x - s * position.y, s * position.x + c * position.y) * iSize;
           gl_Position = projectionMatrix * mv;
@@ -2490,6 +2490,13 @@ class Smoke {
 }
 Smoke.prototype.shift = function (dx, dz) { for (let i = 0; i < this.alive; i++) { this.p[i * 3] += dx; this.p[i * 3 + 2] += dz; } };
 const smoke = new Smoke();
+// (v113) Road spray in the rain, off the car's own rear tyres. The owner, with two pictures of driving in the rain: "theres like this
+// weird reflection on the screen when driving". It was the spray: the tyre smoke's warm grey puffs, thrown back at a third of the car's
+// speed and rising, so at speed each one flew straight at the chase camera and crossed the picture as a soft brown blot, on the road
+// and up in the sky. Now it is a fine, cool-grey mist of its own: many small faint puffs that go along with the car (a real spray
+// hangs in the air behind the wheel, it does not fly back at you), stay low, and are gone well before they reach the camera.
+const spray = new Smoke(420);
+spray.mat.uniforms.color.value.setRGB(0.5, 0.55, 0.62).multiplyScalar(0.55); spray.mat.uniforms.uNear.value.set(3, 7.5);
 // the nitrous purge: the same soft puffs, in cold white, kept narrow (see fireNitro / updateNitro)
 const purge = new Smoke(460);
 purge.mat.uniforms.color.value.setRGB(0.74, 0.83, 0.93);
@@ -7908,19 +7915,20 @@ function updateCarVisual(dt, x, z, yaw) {
   }
   // rain: spray off the rear tyres
   if (world.rain > 0.05 && sp > 12 && dt > 0) {
-    smokeAcc.spray = (smokeAcc.spray || 0) + world.rain * (6 + sp * 0.35) * dt;
+    smokeAcc.spray = (smokeAcc.spray || 0) + world.rain * (14 + sp * 0.8) * dt;   // (v113: finer, so more of them)
     while (smokeAcc.spray >= 1) {
       smokeAcc.spray -= 1;
       const r = Math.random, rear = wheelSpots.filter((q) => q.key[0] === 'R'), w = rear[(r() * rear.length) | 0]; if (!w) break;
       const wx = x + cy * w.x + sy * w.z, wz = z - sy * w.x + cy * w.z, side = w.x > 0 ? 1 : -1;
-      smoke.ground = roadY;
-      smoke.emit(wx + (r() - 0.5) * 0.2, roadY + 0.15, wz + (r() - 0.5) * 0.2,
-        gvx * 0.3 - sy * (2 + r() * 2) + cy * side * (0.5 + r()), 0.9 + r() * 1.2, gvz * 0.3 - cy * (2 + r() * 2) - sy * side * (0.5 + r()),
-        0.35 + r() * 0.3, 0.7 + r() * 0.5, 0.16);
+      spray.ground = roadY;
+      spray.emit(wx + (r() - 0.5) * 0.25, roadY + 0.12 + r() * 0.12, wz + (r() - 0.5) * 0.25,
+        gvx * 0.82 - sy * (1 + r() * 1.5) + cy * side * (0.4 + r() * 0.6), 0.25 + r() * 0.45, gvz * 0.82 - cy * (1 + r() * 1.5) - sy * side * (0.4 + r() * 0.6),
+        0.28 + r() * 0.22, 0.45 + r() * 0.35, 0.09, 0.9 + r() * 0.5);
     }
   }
   if (patchT <= 0) patchT = 0.12;
   smoke.update(dt, camera.position);
+  spray.update(dt, camera.position);
   purge.update(dt, camera.position);
   sparks.update(dt);
 }
@@ -8708,7 +8716,7 @@ function openGarage() {
   car.reset(car.x, car.z, car.yaw); acc = 0;
   drift.active = false; $('drift').classList.add('fade');
   // nothing of the road comes in with the car: no sparks, smoke or scrape left hanging in the room
-  sparks.n = 0; sparks.geo.setDrawRange(0, 0); smoke.alive = 0; smoke.geo.instanceCount = 0; wallFx.impact = wallFx.scrape = 0; audio.scrapeLevel = 0;
+  sparks.n = 0; sparks.geo.setDrawRange(0, 0); smoke.alive = 0; smoke.geo.instanceCount = 0; spray.alive = 0; spray.geo.instanceCount = 0; wallFx.impact = wallFx.scrape = 0; audio.scrapeLevel = 0;
   // the room drops over the car where it stands (fetched on the first visit); the origin is moved first if the car
   // has just been put back on the ramp from far away (see rebase)
   rebase();
@@ -10645,7 +10653,7 @@ function rebase() {
   const rb = world.maybeRebase(car.x, car.z);
   if (!rb) return;
   car.x -= rb.dx; car.px -= rb.dx; car.z -= rb.dz; car.pz -= rb.dz;
-  skids.reset(); smoke.shift(-rb.dx, -rb.dz); purge.shift(-rb.dx, -rb.dz); sparks.shift(-rb.dx, -rb.dz); rain.shift(rb.dx, rb.dz); camPrev.x -= rb.dx; camPrev.z -= rb.dz;
+  skids.reset(); smoke.shift(-rb.dx, -rb.dz); spray.shift(-rb.dx, -rb.dz); purge.shift(-rb.dx, -rb.dz); sparks.shift(-rb.dx, -rb.dz); rain.shift(rb.dx, rb.dz); camPrev.x -= rb.dx; camPrev.z -= rb.dz;
   gcam.t.x -= rb.dx; gcam.t.z -= rb.dz;
   // v40: the garage room goes with the car. It used to stay where it was put, so when a long run ended and you went
   // into the garage from the end-of-run card, the car was put back on the ramp, the origin moved to it a frame later,
@@ -11824,7 +11832,7 @@ window.claude?.hot?.snapshot?.(() => ({ driving: state.driving, carId: activeId 
 // Test hook: run the simulation ahead with a fixed input, drawing skid marks along the way.
 let tickNow = 0;
 window.__game = {
-  car, state, CAR, skids, smoke, camera, cam, world, sparks, carDims, physicsStep, frameInfo, applyGfx, perf, bloom, traffic, renderer, composer, scene,
+  car, state, CAR, skids, smoke, spray, camera, cam, world, sparks, carDims, physicsStep, frameInfo, applyGfx, perf, bloom, traffic, renderer, composer, scene,
   setDebugCam(fn) { debugCam = fn; },
   // run frames by hand (tests: the browser stops calling the frame loop while the page is hidden)
   tick(n = 1, step = 33) { for (let i = 0; i < n; i++) frameInner(tickNow = Math.max(tickNow + step, performance.now())); },
