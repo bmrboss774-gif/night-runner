@@ -5510,9 +5510,13 @@ function applyMods() {
   updatePlates();
   applySpec();
   carRoot.traverse((o) => o.layers.enable(1)); contactShadow.layers.set(0); underglow.layers.set(0);
-  for (const mat of r.lamps.head) mat.emissiveIntensity *= 2.4;   // brighter for night
+  // (v106, the owner: "make sure all the headlights are turned on for all the cars but I dont want any headlight bright projection
+  // onto everything just the lights on the car". Indoors (the workshop, the collection) the lamps glow at their plain level, not the
+  // 2.4 times they are given for the road at night, and the two spotlights that throw the beams are at nothing (updateWorld). Up
+  // in the collection a car's lamps are lit whatever its own light switch says; the workshop still shows the switch as it is set.)
+  for (const mat of r.lamps.head) mat.emissiveIntensity *= state.garage ? 1 : 2.4;   // brighter for night
   // headlight modes (cars with a running-light strip): on = everything; drl = just the strip, no beams; off = dark
-  const lights = r.kinds.drl ? m.lights : 'on';
+  const lights = SR.on ? 'on' : r.kinds.drl ? m.lights : 'on';
   state.headOn = lights === 'on';
   if (!state.headOn) { for (const mat of r.lamps.head) mat.emissiveIntensity = 0; for (const mat of r.mats.headLens) mat.emissiveIntensity = 0; }
   for (const mesh of r.kinds.drl || []) { restore(mesh.material); mesh.material.emissiveIntensity = lights === 'off' ? 0 : (def.lampLevels.drl ?? 5); if (m.head) mesh.material.emissive.set(m.head); }
@@ -5547,7 +5551,7 @@ function applyMods() {
     for (const mesh of r.kinds.drl || []) mesh.visible = !on;                       // the round rings make way for the squared ones
     if (on) for (const mat of r.lamps.head) mat.emissiveIntensity = 0;              // the housing stays dark: the rings, the strip and the projectors are the light
   }
-  for (const l of headSpots) l.intensity = state.headOn ? 820 : 0;
+  for (const l of headSpots) l.intensity = state.headOn && !state.garage ? 820 : 0;
   // the GT-R's centre rear fog lamp
   for (const mesh of r.kinds.fog || []) mesh.visible = m.fog !== 'off';
   placeHeadlights();
@@ -8587,6 +8591,7 @@ function openGarage() {
   else if (fromRamp) resetCar(true);   // from the end-of-run screen: a fresh run waits outside
   if (!state.driving) startDriving();
   state.garage = true;
+  applyMods();   // (v106) the lamps at their indoor level, the beams off
   document.body.classList.add('in-garage');
   $('garage').hidden = false;
   car.reset(car.x, car.z, car.yaw); acc = 0;
@@ -8613,6 +8618,7 @@ function closeGarage() {
   if (!SR.on) srCapture();   // (v105) the car as it leaves the workshop, for its bay in the collection
   if (SR.on) { if (SR.mode !== 'ride' && SR.home && activeId !== SR.home && rigs[SR.home]) activateCar(SR.home); srEnd(true); }
   state.garage = false; closeKeyMenu(); syncRenderScale();
+  applyMods();   // (v106) the lamps and beams back as they are on the road
   car.revving = false; garageRev.held = false; car.throttle = 0; car.rpm = CAR.idle; keys.delete('KeyW'); keys.delete('ArrowUp');
   document.body.classList.remove('in-garage');
   $('garage').hidden = true;
@@ -9966,7 +9972,7 @@ const srLight = new THREE.DirectionalLight(0xfff1e0, 0); scene.add(srLight, srLi
 // bay (which mends a car last changed before this version existed). The copies are kept in the browser between visits. A car
 // with the default build keeps the stock copy shipped with the game.
 const srLods = {};   // base car id -> { id, carId, sig, parts } (or { sig, pending } while one is being made)
-const srSigOf = (carId, m) => carId + '|' + JSON.stringify(loadMods(carId, m));   // (a live build is put through loadMods too, so it reads the same as the saved one will)
+const srSigOf = (carId, m) => 'c2|' + carId + '|' + JSON.stringify(loadMods(carId, m));   // ('c2': how copies are made changed in v106 (lamp covers off, bulbs); older ones are made again)   // (a live build is put through loadMods too, so it reads the same as the saved one will)
 const srIsStock = (carId, m) => baseOf(carId) === carId && JSON.stringify(loadMods(carId, m)) === JSON.stringify(loadMods(carId, null));
 function srPaintOf(base) {
   const d0 = CAR_DEFS[base]; let cid = srLods[base]?.carId || base; if (cid === base && d0.variantFor) cid = d0.variantFor(loadMods(base));
@@ -10059,7 +10065,7 @@ function srEnd(snap = true) {
   Object.assign(SR, { on: false, mode: 'off', pose: null, bay: null, ride: null, hover: null, wantSel: false });
   srDropKey();
   showroom.show(false); showroom.setLift({ y: 0, show: false }); garage.showRoom(true); srLight.intensity = 0;
-  for (const l of headSpots) l.intensity = state.headOn ? 820 : 0;
+  applyMods();   // (v106) the car's own light switch counts again down here (SR.on is false by now)
   if (garage.cap) garage.cap.visible = true;
   document.body.classList.remove('in-showroom'); $('srUi').hidden = true; $('srTip').hidden = true; canvas.style.cursor = '';
   garageViewOffset(); probeRefresh = 2; syncRenderScale();
@@ -10204,7 +10210,6 @@ function srUpdate(dt) {
   if (SR.key) { SR.keySwing *= Math.exp(-dt * 1.4); const k = SR.key.children[0]; k.rotation.z = Math.sin(SR.t * 6.5) * SR.keySwing * 0.5 + Math.sin(SR.t * 1.1) * 0.006; k.rotation.y = Math.sin(SR.t * 0.8) * 0.03; }
   garage.toWorld([0, T.Y0 + 30, 24], srLight.position); garage.toWorld([0, T.Y0 + 6, -9], srLight.target.position); srLight.target.updateMatrixWorld();
   srLight.intensity = damp(srLight.intensity, 1.35, 6, dt);
-  for (const l of headSpots) l.intensity = 0;   // (v105) no beams thrown across the hall: the lamps glow, the spotlights (still in the scene, see the frame loop) are at nothing
 }
 function showroomCamera(dt) {
   const T = TOWER, portrait = camera.aspect < 1; let p, t, fov, k = 3.2;

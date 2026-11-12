@@ -455,6 +455,8 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     glass: new THREE.MeshStandardMaterial({ name: 'proxy glass', vertexColors: true, color: 0x0a0d12, metalness: 0.2, roughness: 0.04, envMapIntensity: 1.5 }),
     // the lamps: lit, at a modest level (the owner: "all the headlights to be on ... but not incredibly bright")
     lamp: new THREE.MeshBasicMaterial({ name: 'proxy lamp', vertexColors: true, color: new THREE.Color(1.25, 1.22, 1.16), fog: false }),
+    // the bulb in each headlamp (v106): a small ball bright enough to carry a little glow, so every car plainly has its lights on
+    bulb: new THREE.MeshBasicMaterial({ name: 'proxy bulb', vertexColors: true, color: new THREE.Color(2.6, 2.5, 2.3), fog: false }),
   };
   for (const b of bays) { b.holder = new THREE.Group(); b.holder.position.set(b.pos[0], b.y + 0.03, b.pos[2]); b.holder.rotation.y = b.yaw; cars.add(b.holder); }
   const paintOf = (b) => (b.paint ||= new THREE.MeshStandardMaterial({ name: 'proxy paint ' + b.id, vertexColors: true, color: 0xffffff, metalness: 0, roughness: 0.3, envMapIntensity: 1.15, envMap: envTex }));
@@ -462,7 +464,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
   let loading = null;
   function loadCars(decoder) {
     loading ||= (async () => {
-      const res = await fetch('showroom-cars.txt?v=105'); if (!res.ok) throw new Error('showroom cars ' + res.status);
+      const res = await fetch('showroom-cars.txt?v=106'); if (!res.ok) throw new Error('showroom cars ' + res.status);
       const bin = atob((await res.text()).trim()), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       const loader = new GLTFLoader(); if (decoder) loader.setMeshoptDecoder(decoder);
       const gltf = await new Promise((ok, no) => loader.parse(bytes.buffer, '', ok, no));
