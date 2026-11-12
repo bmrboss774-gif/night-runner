@@ -970,7 +970,7 @@ body.is-touch .cc{font-size:22px}
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2018-hennessey-the-exorcist-camaro-zl1-a0d1b13a7e3a4fdd9eea0bbec25c52ab" target="_blank" rel="noopener">2018 Hennessey THE EXORCIST Camaro ZL1</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>.</p>
       <p class="note">Changes made for this game: scaled to metres and baked into one space, each wheel split into tyre and rim so it can steer and spin, cabin and engine simplified, textures resized and compressed for the web, the bonnet, boot lid, roof and mirror caps separated as panels for the garage, and the side stripes and lettering separated from the paint so they can be taken off or recoloured.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2018-dodge-challenger-srt-hellcat-e31b4430d9934f61b212f55f194c9ef7" target="_blank" rel="noopener">2018 Dodge Challenger SRT Hellcat</a>” by <a href="https://sketchfab.com/3001105" target="_blank" rel="noopener">Emmanual Robinson, Jr.</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
-      <p class="note">Changes made for this game: every part thinned (about a seventh of the original’s triangles), a doubled tyre, disc and caliper at one corner removed, the wheels separated so they can steer and spin, the red guard strip under the front splitter made black, the red headlamp lenses made clear, and the bonnet, boot lid, mirrors and centre stripes separated for the garage.</p>
+      <p class="note">Changes made for this game: every part thinned (about a quarter of the original’s triangles), the amber side markers made white lamps, a doubled tyre, disc and caliper at one corner removed, the wheels separated so they can steer and spin, the red guard strip under the front splitter made black, the red headlamp lenses made clear, and the bonnet, boot lid, mirrors and centre stripes separated for the garage.</p>
       <p>The rim designs are based on “<a href="https://sketchfab.com/3d-models/bbs-rim-mate-black-free-16238a61e9c749369b46b64df58726e0" target="_blank" rel="noopener">BBS RIM ( MATE BLACK ) FREE</a>” by <a href="https://sketchfab.com/rajatnidaria" target="_blank" rel="noopener">rajatnidaria</a>, “<a href="https://sketchfab.com/3d-models/bmw-cscsl-rim-48dd2d121ce14a419fb55262f777df3a" target="_blank" rel="noopener">BMW CS/CSL Rim</a>” by <a href="https://sketchfab.com/pira.midale" target="_blank" rel="noopener">pira.midale</a>, “<a href="https://sketchfab.com/3d-models/realistic-jdm-rim-pack-6c0fab94636e4c60b2c2f766fe7f477f" target="_blank" rel="noopener">Realistic JDM Rim Pack</a>” by <a href="https://sketchfab.com/visthetique" target="_blank" rel="noopener">Visthétique</a>, “<a href="https://sketchfab.com/3d-models/rim-whell-b2e08fa90c9f45299f442a2a2e972ed2" target="_blank" rel="noopener">rim whell</a>” by <a href="https://sketchfab.com/diyor1fer" target="_blank" rel="noopener">diyor1fer</a>, “<a href="https://sketchfab.com/3d-models/wire-rim-bda093957f8e47a7b27270de6c3e0d14" target="_blank" rel="noopener">Wire rim</a>” by <a href="https://sketchfab.com/3dpeter" target="_blank" rel="noopener">rotating3d.com</a> and “<a href="https://sketchfab.com/3d-models/work-meister-style-5-spoke-rims-668ff4ead5384f14b6dd85051e29c912" target="_blank" rel="noopener">WORK Meister style 5 Spoke rims</a>” by <a href="https://sketchfab.com/bordres" target="_blank" rel="noopener">bordres</a>, each licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Each was thinned, stripped of its textures and rescaled to fit every car.</p>
       <p>The driver is based on “<a href="https://sketchfab.com/3d-models/driver-80-64a63abe88c54840b03ecb83d1f9f555" target="_blank" rel="noopener">driver_80</a>” by <a href="https://sketchfab.com/MattDoesBlender" target="_blank" rel="noopener">MattDoesBlender</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>; this version is shared under the same licence.</p>
       <p class="note">Changes made for this game: only the suit and gloves are used, scaled to metres, textures resized; his arms are bent onto each car’s steering wheel and his fingers curled in code; the helmet is the game’s own.</p>
@@ -2947,10 +2947,11 @@ function makeStripeMat(mask) {
   mat.customProgramCacheKey = () => 'nr-decal-mask';
   return mat;
 }
+const MARKER_GLOW = 2.4;   // (v95) how brightly a side marker lamp glows
 function classifyTagged(prefix, opts = {}) {
   return function (parts, def) {
     const items = [], paint = makePaint();
-    let stripeMat = null;
+    let stripeMat = null, markerMat = null, tipOwnMat = null;
     let headMat = null, tailMat = null, tailLens = null, tailBar = null, drlMat = null, rimMat = null, caliperMat = null, revMat = null, cageMat = null; const lb = {};
     const re = new RegExp('^' + prefix + '__([a-zA-Z]+)__([a-zA-Z0-9]+)__');   // panels may carry digits (flare014)
     for (const m of parts) {
@@ -2994,6 +2995,12 @@ function classifyTagged(prefix, opts = {}) {
       else if (role === 'tailBar') items.push({ geo, mat: tailBar ||= Object.assign(mat.clone(), { name: 'tail bar', color: new THREE.Color(0x3a0000), emissive: new THREE.Color(1, 0.05, 0.02), emissiveMap: null, emissiveIntensity: def.lampLevels.tail[0] * 1.6, transparent: false, opacity: 1 }), kind: 'tail' });
       // daytime running light strip: lit on its own when the headlights are off
       else if (role === 'drl') items.push({ geo, mat: drlMat ||= Object.assign(mat.clone(), { name: 'drl', color: new THREE.Color(0x202228), emissive: new THREE.Color(0.85, 0.92, 1), emissiveMap: null, emissiveIntensity: def.lampLevels.drl ?? 5, transparent: false, opacity: 1 }), kind: 'drl' });
+      // v95, the owner: "make these side reflectors glow white stock but there is the option to change their color or
+      // black them out, the exhaust pports should have the same option to switch their color" (the Hellcat). marker: the
+      // side marker lamps at the corners of the front bumper, one lit material (mods.marker). exhaust: the model's own
+      // tailpipe tips, one material (mods.tipColor)
+      else if (role === 'marker') items.push({ geo, mat: markerMat ||= new THREE.MeshStandardMaterial({ name: 'side marker', color: 0xdfe4ea, emissive: new THREE.Color(0xffffff), emissiveIntensity: MARKER_GLOW, roughness: 0.25, metalness: 0 }), kind: 'marker' });
+      else if (role === 'exhaust') items.push({ geo, mat: tipOwnMat ||= new THREE.MeshStandardMaterial({ name: 'exhaust tip', color: 0xc9ccd0, metalness: 1, roughness: 0.22, envMapIntensity: 1 }), kind: 'exhaustTip' });
       else if (role === 'glass') items.push({ geo, mat, kind: 'glass' });
       // a roll cage's tubes (the E92, v86): one material of their own, coloured in the garage (mods.cage; body colour until then)
       else if (role === 'cage') items.push({ geo, mat: cageMat ||= new THREE.MeshPhysicalMaterial({ name: 'roll cage', color: 0x888888, metalness: 0.1, roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.25 }), kind: 'cage' });
@@ -3664,7 +3671,7 @@ CAR_DEFS.hc = {
   eyebrow: 'Dodge Challenger SRT Hellcat · supercharged 6.2 Hemi V8 · 707 hp · 8-speed auto',
   lede: 'Two tons of coupé with the supercharged Hemi the police Charger carries: 707 hp, an eight-speed automatic, and a blower whine you hear before the car.',
   pick: '707 hp · 8-speed',
-  files: { meshopt: { url: 'hc-meshopt.txt', size: 2344488 }, plain: { url: 'hc-plain.txt', size: 5062152 } },
+  files: { meshopt: { url: 'hc-meshopt.txt', size: 2858764 }, plain: { url: 'hc-plain.txt', size: 6292248 } },
   spec: HC_SPEC, tach: 8, classify: classifyTagged('HC', { stripeTint: 'plain' }), exhaust: hcExhaust, plates: hcPlates,
   plate: { style: 'us', text: 'HLLCAT', caption: 'NIGHT RUNNER', front: 'off' },
   lampLevels: { head: 1.6, tail: [0.5, 6.5] },
@@ -4267,6 +4274,9 @@ const FINISHES = {
 const RIMS = [['Factory', null], ['Gloss Black', '#0d0d0f', 0.3, 0.2], ['Satin Black', '#131416', 0.5, 0.5], ['Gunmetal', '#3c4147', 0.85, 0.32], ['Silver', '#c4c8cc', 0.9, 0.25], ['Polished Aluminium', '#dde0e4', 1, 0.1], ['Brushed Aluminium', '#b9bdc2', 1, 0.4], ['Titanium', '#8f8b84', 1, 0.33], ['Burnt Titanium', '#5f68c9', 1, 0.24], ['Magnesium', '#6f6a5c', 0.8, 0.45], ['Bronze', '#8a5a2b', 0.9, 0.3], ['Gold', '#c9a03c', 1, 0.24], ['Rose Gold', '#c98f7a', 1, 0.22], ['Copper', '#b5683c', 1, 0.26], ['Brass', '#b59a4c', 1, 0.3], ['Chrome', '#f2f4f6', 1, 0.04], ['Black Chrome', '#34363b', 1, 0.07], ['White', '#eceeed', 0.1, 0.3], ['Red', '#b40f12', 0.3, 0.3], ['Carbon Fibre', 'carbon', 0, 0.4]];
 const CALIPERS = [['Factory', null], ['Red', '#c5141a'], ['Yellow', '#f2c21b'], ['Blue', '#1f5fc4'], ['Green', '#2f9e3a'], ['Orange', '#e8641a'], ['Gold', '#c7a046'], ['Black', '#111113']];
 const HEADS = [['Factory', null], ['Pure White', '#f4f8ff'], ['Ice Blue', '#8fc6ff'], ['Yellow', '#ffcf3a'], ['Purple', '#a65cff'], ['Green', '#5cff8a'], ['Red', '#ff3b30']];
+// v95: side marker lamps and the model's own exhaust tips (the Hellcat)
+const MARKERS = [['White', null], ['Amber', '#ff9a1f'], ['Ice Blue', '#8fc6ff'], ['Yellow', '#ffcf3a'], ['Red', '#ff3b30'], ['Purple', '#a65cff'], ['Green', '#5cff8a'], ['Blacked out', 'black']];
+const TIP_COLOURS = [['Polished steel', null], ['Black', '#0b0b0c'], ['Gunmetal', '#3a3f45'], ['Gold', '#d4a02a'], ['Bronze', '#a8683a'], ['Red', '#b0000d'], ['Blue', '#1f4fb4'], ['White', '#eef0ef']];
 // (v66, the owner: "can u add more options for the outline color that the m4 has": eleven more; the any-colour picker is wired to the paint only, so it is not on this row yet)
 const ACCENTS = [['Factory Red', null], ['Yellow', '#ffcc1a'], ['Blue', '#2a7dff'], ['White', '#f2f2f2'], ['Orange', '#ff6a14'], ['Green', '#3cff7a'], ['Black', '#101010'],
   ['Ice blue', '#7fd4ff'], ['M light blue', '#6fb0e6'], ['M dark blue', '#1c2f7f'], ['Purple', '#8a3cff'], ['Pink', '#ff4fa3'], ['Teal', '#14c8b4'], ['Lime', '#b6ff1a'], ['Gold', '#d4a02a'], ['Bronze', '#a8683a'], ['Silver', '#c4c8cc'], ['Gunmetal', '#4a4e54']];
@@ -4306,7 +4316,7 @@ const defaultMods = (def) => ({
   rim: null, caliper: null, cage: null, head: null, tail: 'stock', tint: 'stock', lights: 'on', fog: 'on', livery: 'off',
   ride: 0, camber: 0, track: 0,
   plateStyle: def.plate.style, plateBlack: 'off', plateText: def.plate.text, plateCaption: def.plate.caption, plateFront: def.plate.front || 'on',
-  stripe: 'on', stripeColor: null, roof: 'on', body: 'stock',   // (body, v82: which version of a car with versions; the 812's 'comp')
+  stripe: 'on', stripeColor: null, marker: null, tipColor: null, roof: 'on', body: 'stock',   // (body, v82: which version of a car with versions; the 812's 'comp')
   hood: 'closed', bay: { intake: null, bar: null, engine: null },   // null: the engine build's own colours
   glow: null, flame: null, perf: defaultPerf(),   // v42: underglow colour, exhaust flame colour (null = off / factory), performance parts
   nitrous: 'off',   // v45: the NO2 kit (cars with def.nitrous)
@@ -5281,6 +5291,15 @@ function applyMods() {
   // the livery: textured paint over everything, and the underglow
   for (const mesh of r.kinds.paint || []) if (mesh.userData.liveryMat) mesh.material = m.livery === 'on' ? mesh.userData.liveryMat : (mesh.userData.panel && m.carbon[mesh.userData.panel] ? carbonMat : mesh.userData.stockMat);
   for (const mesh of r.kinds.glow || []) mesh.visible = false;   // the movie cars' neon planes: left off (the user's call)
+  // v95: side marker lamps (white as they come, any colour, or blacked out: a dark lens with no light in it) and the
+  // model's own exhaust tips (polished steel as they come, or a colour: a coated tip, less of a mirror)
+  for (const mat of new Set((r.kinds.marker || []).map((mesh) => mesh.material))) {
+    if (m.marker === 'black') { mat.color.set(0x050506); mat.emissive.set(0x000000); mat.emissiveIntensity = 0; mat.roughness = 0.12; }
+    else { mat.color.set(m.marker || '#dfe4ea'); mat.emissive.set(m.marker || '#ffffff'); mat.emissiveIntensity = MARKER_GLOW; mat.roughness = 0.25; }
+  }
+  for (const mat of new Set((r.kinds.exhaustTip || []).map((mesh) => mesh.material))) {
+    if (m.tipColor) { mat.color.set(m.tipColor); mat.metalness = 0.65; mat.roughness = 0.34; } else { mat.color.set(0xc9ccd0); mat.metalness = 1; mat.roughness = 0.22; }
+  }
   // v94 (def.stripeTint: the ZL1's decals, the Hellcat's stripes): the stripe's colour, and for a masked decal the
   // paint showing through it and the paint's finish, so the lettering's cut-outs match the body in any finish
   if (def.stripeTint) for (const mat of new Set((r.kinds.stripe || []).map((mesh) => mesh.userData.stockMat))) {
@@ -7280,7 +7299,9 @@ function swatchRow(list, current, onPick, { stockColor, custom } = {}) {
     const lab = el('label', { className: 'sw custom', title: 'Pick any colour' });
     const inp = el('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(current || '') ? current : '#5ad7ff' });
     inp.setAttribute('aria-label', 'Pick any colour');
-    inp.addEventListener('input', () => { mods.paint = inp.value; applyMods(); });
+    // (v95: `custom` may be a function that stores the picked colour; until now the picker always set the paint, so on
+    // the roll cage and the v94 decal colour rows it repainted the car instead)
+    inp.addEventListener('input', () => { if (typeof custom === 'function') custom(inp.value); else mods.paint = inp.value; applyMods(); });
     inp.addEventListener('change', () => { saveMods(); renderGarage(); });
     lab.append(inp, el('span', { textContent: '+', ariaHidden: 'true' }));
     if (current && !list.some(([, h]) => h === current)) { lab.setAttribute('aria-checked', 'true'); lab.style.setProperty('--c', current); lab.classList.add('set'); }
@@ -7366,10 +7387,10 @@ function renderGarage() {
     body.append(gGroup('Finish', null, segRow(Object.entries(FINISHES).map(([k, f]) => [k, f.label]), m.finish, (k) => setMod('finish', k, 'overview'))));
     if (def.stripe) body.append(gGroup(def.stripe === true ? 'C7.R stripe' : def.stripe, null, segRow([['on', 'On'], ['off', 'Off']], m.stripe, (k) => setMod('stripe', k, 'hood'))));
     // v94, the owner: "removable red decals and make it so u can change the color of them"
-    if (def.stripeTint && m.stripe !== 'off') body.append(gGroup(def.stripeTint.label, nameOf(PAINTS, m.stripeColor, def.stripeTint.stockName), swatchRow([[def.stripeTint.stockName, null], ...PAINTS], m.stripeColor, (hex) => setMod('stripeColor', hex, 'side'), { stockColor: def.stripeTint.stock, custom: true })));
+    if (def.stripeTint && m.stripe !== 'off') body.append(gGroup(def.stripeTint.label, nameOf(PAINTS, m.stripeColor, def.stripeTint.stockName), swatchRow([[def.stripeTint.stockName, null], ...PAINTS], m.stripeColor, (hex) => setMod('stripeColor', hex, 'side'), { stockColor: def.stripeTint.stock, custom: (hex) => { mods.stripeColor = hex; } })));
     body.append(gGroup('Driver’s helmet', null, segRow(HELMETS.map(([k, label]) => [k, label]), m.helmet || 'paint', (k) => setMod('helmet', k))));
     // v86, the owner: "add the ability to change the color of the interior roll cage of the m3"
-    if (rig.kinds.cage) body.append(gGroup('Roll cage', m.cage ? nameOf(PAINTS, m.cage, 'Custom') : 'Body colour', el('p', { className: 'g-note', textContent: 'The cage’s tubes inside the cabin.' }), swatchRow([['Body colour', null], ...PAINTS], m.cage, (hex) => setMod('cage', hex, 'side'), { stockColor: m.paint, custom: true })));
+    if (rig.kinds.cage) body.append(gGroup('Roll cage', m.cage ? nameOf(PAINTS, m.cage, 'Custom') : 'Body colour', el('p', { className: 'g-note', textContent: 'The cage’s tubes inside the cabin.' }), swatchRow([['Body colour', null], ...PAINTS], m.cage, (hex) => setMod('cage', hex, 'side'), { stockColor: m.paint, custom: (hex) => { mods.cage = hex; } })));
     if (def.accent) body.append(gGroup('Accents', nameOf(ACCENTS, m.accent, 'Factory red'), el('p', { className: 'g-note', textContent: 'Kidney grille outline, hood and roof stripes, sill and diffuser pinstripes.' }), swatchRow(ACCENTS, m.accent, (hex) => setMod('accent', hex, 'front'), { stockColor: '#d1141b' })));
   } else if (gTab === 'aero') {
     // per car: no canards on the Supra, Carrera GT and Corvette (they never wear them), no add-on skirts on the
@@ -7385,6 +7406,7 @@ function renderGarage() {
       else body.append(el('p', { className: 'g-note', textContent: 'The Competizione keeps its centre stripe in any colour. It is a coupé only.' }));
     }
     if (def.softTop) body.append(gGroup('Roof', null, el('p', { className: 'g-note', textContent: 'Fold the soft top away for the open car and its roll cage.' }), segRow([['on', 'Soft top'], ['off', 'Off']], m.roof, (k) => setMod('roof', k, 'top'))));
+    if (rig.kinds.exhaustTip) body.append(gGroup('Exhaust tips', nameOf(TIP_COLOURS, m.tipColor, 'Polished steel'), swatchRow(TIP_COLOURS, m.tipColor, (hex) => setMod('tipColor', hex, 'rear'), { stockColor: '#c9ccd0', custom: (hex) => { mods.tipColor = hex; } })));
     if (rig.exhaust && rig.exhaust.length && !def.noTips) {
       const twinOk = tipTwinOk(rig), cur = m.tips === 'twin' && !twinOk ? 'stock' : (m.tips || 'stock');
       body.append(gGroup('Exhaust tips', null, segRow(TIP_STYLES.filter(([k]) => k !== 'twin' || twinOk), cur, (k) => setMod('tips', k, 'rear')),
@@ -7423,6 +7445,7 @@ function renderGarage() {
     else if (def.lampStyles) body.append(gGroup('Headlight style', null, el('p', { className: 'g-note', textContent: 'G80 style: blacked-out lamps with two angular running lights in each.' }), segRow([['stock', 'Factory'], ['g80', 'G80 style']], m.lamps || 'stock', (k) => setMod('lamps', k, 'front'))));
     if (def.lightShow) body.append(gGroup('Light show', 'N', el('p', { className: 'g-note', textContent: 'Coded in, BimmerCode fashion: N flickers the rings, the headlights and the tail lights through a quick pattern, then leaves them as they were. Here and on the road. (On this car Shift + N is music on and off.)' }),
       el('div', { className: 'g-row' }, el('button', { type: 'button', className: 'g-ghost', textContent: 'Play it', onclick: () => { setFocus('front'); lightShowStart(); } }))));
+    if (rig.kinds.marker) body.append(gGroup('Side markers', nameOf(MARKERS, m.marker, 'White'), el('p', { className: 'g-note', textContent: 'The small lamps at the corners of the front bumper: white, a colour, or blacked out.' }), swatchRow(MARKERS, m.marker, (hex) => setMod('marker', hex, 'front'), { stockColor: '#ffffff', custom: (hex) => { mods.marker = hex; } })));
     body.append(gGroup('Tail lights', null, segRow([['stock', 'Factory'], ['smoked', 'Smoked'], ...(def.blackTails ? [['black', 'Black']] : []), ...(def.whiteTails ? [['white', 'White']] : [])], m.tail, (k) => setMod('tail', k, 'rear'))));
     if (rig.kinds.fog) body.append(gGroup('Rear fog light', null, el('p', { className: 'g-note', textContent: 'The small red lamp low in the middle of the bumper.' }), segRow([['on', 'On'], ['off', 'Off']], m.fog, (k) => setMod('fog', k, 'rear'))));
     body.append(gGroup('Window tint', null, segRow(TINTS, m.tint, (k) => setMod('tint', k, 'side'))));
