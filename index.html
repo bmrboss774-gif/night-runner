@@ -863,7 +863,7 @@ body.is-touch .cc{font-size:22px}
   <div class="cluster" id="cluster">
     <div class="shiftnote" id="shiftNote"></div>
     <div class="shiftlights" id="shiftLights"><i class="g"></i><i class="g"></i><i class="y"></i><i class="y"></i><i class="r"></i></div>
-    <div class="gaugebox"><img class="gauge-logo" id="gaugeLogo" alt="" hidden><canvas class="gauge" id="gauge" width="2" height="2"></canvas></div>
+    <div class="gaugebox"><canvas class="gauge" id="gauge" width="2" height="2"></canvas></div>
     <div class="cluster-foot"><button class="unit" id="unit" title="Switch mph / km/h">mph</button><button class="gearbox" id="gearbox" title="Switch manual / automatic (G)"><span class="gear-label" id="gearLabel">Manual</span></button><button class="lamp" id="tcsLamp" title="Traction control (T)">TRAC OFF</button></div>
     <span id="speed" hidden>0</span><span id="gear" hidden>1</span><span id="rpm" hidden>850</span>
   </div>
@@ -6744,290 +6744,704 @@ function updateTiming() {
   if (state.t060Start != null && car.vx < 0) state.t060Start = null;
 
 }
-// ---------------------------------------------------------------- the gauges (v98)
-// The owner: "each car should have a customized gauge in the bottom right based on what the car's gauge actually looks
-// like and a the logo of the actual car next to it", with pictures and pages of a dozen real clusters, then: "look for
-// all the other speedometers for all the other cars research them please and use the correct ones". Every car draws
-// its own instruments, laid out and coloured after the real car's (drawn here in code from those references, not
-// copied pictures):
-//   Supra Mk4: three round dials, the rev counter in the middle, orange needles      Supra Mk5: a rev ring whose top runs on to the right as a straight bar
-//   M4 CSL: BMW's two angular bands, speed on the left and revs on the right          M3 E92: two dials, red needles, a yellow-then-red warning field
-//   X5: two thin-ringed dials, amber                                                   i8: two glowing orange rings (its Sport display)
-//   Corvette: the C8 Z06's big centre rev ring (the owner: "for a c8 but use it for the c7")   Camaro ZL1: two dials in squared hoods
-//   Challenger: two dials on carbon fibre, revs on the left                            Viper: one big centre rev counter, speed beside it
-//   GT-R R35: big centre rev counter with the gear beside it                           Skyline R34: rev counter to 10,000 in the middle, red needles
-//   Carrera GT and 911 GT3 RS: Porsche's centre rev counter (the GT3's needle yellow)  720S: a centre ring round the gear and speed
-//   812: Ferrari's yellow rev counter, black numerals                                  Aventador SVJ: the arch of revs, yellow into red, round a big gear
-//   R8: two dials in aluminium rings, red needles                                      NSX: two big dials, orange needles
-//   S2000: the orange arc of bars over a big digital speed                             Civic: two digital rings          MX-5: centre rev counter, white needle
-// On a phone there is room for one dial only: each car shows its rev counter (or a ring in its colours) with the speed in it.
-// The face (what never moves) is drawn once and kept; the needles, bars and numbers are drawn over it thirty times a second.
+// ---------------------------------------------------------------- the gauges (v99)
+// v98 gave every car a gauge of its own, drawn mostly from memory, with the maker's badge standing beside it. The
+// owner: "redo them properly for every single car, including special variants like the fast and furious cars. I dont
+// want the logos next to the gauges I want them encorporated into them somehow, make the gauges look realisitc and
+// take time finding photos online for each and every car ... this is one of the main aspects of the game".
+// So each one was looked up first (photos of the real cluster, found by image search in the built-in browser; what
+// each was built from is listed in build/notes) and is drawn after its photo: the layout, which dial sits where, the
+// colour of the faces, numerals and needles, the bezels, the little displays. The badge is in the instrument, where
+// the real car carries a mark (BMW's M stripes on the M3's rev counter, "GT3 RS" on the Porsche's, the horse on
+// Ferrari's yellow dial, R8 on the Audi's, the crossed flags in the Corvette's) or, where the real one carries none,
+// set small into the face or the plate between the dials.
+// How it is drawn: a face layer (housing, bezels, faces, scales, badges: everything that never moves) drawn once per
+// car and kept, and a live layer (needles, lit bars, the numbers in the displays, the glass over each dial) drawn
+// over it thirty times a second. On a phone there is room for one dial: the car's rev counter, with the speed in it.
 const D2R = Math.PI / 180;
 let tachMax = 10, tachRed = 0.85;
-const GZ = { cv: null, g: null, face: null, key: '', L: null, fam: 'sans-serif', sans: '"Helvetica Neue",Helvetica,Arial,sans-serif' };
-const zt = (g, t, x, y, size, color, o = {}) => { g.font = `${o.i ? 'italic ' : ''}${o.w ?? 700} ${size}px ${o.fam || GZ.fam}`; g.fillStyle = color; g.textAlign = o.a || 'center'; g.textBaseline = o.b || 'middle'; g.fillText(t, x, y); };
-const zarc = (g, cx, cy, r, a0, a1, w, color) => { if (a1 <= a0) return; g.beginPath(); g.arc(cx, cy, r, a0 * D2R, a1 * D2R); g.lineWidth = w; g.strokeStyle = color; g.stroke(); };
-const zrr = (g, x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+const GZ = { cv: null, g: null, face: null, key: '', L: null, fam: 'sans-serif', sans: '"Helvetica Neue",Helvetica,Arial,sans-serif', img: {} };
 const RED = '#e3202a';
-// an analog dial's face: bezel, face, ticks, numerals, the red zone. d: { cx, cy, r, a0, sweep }; sc: the scale; st: the style
-function zDialFace(g, d, sc, st) {
-  const { cx, cy, r } = d, a0 = d.a0 ?? 135, sw = d.sweep ?? 270, ang = (v) => a0 + sw * v / sc.max;
-  if (st.bezel) { const gr = g.createLinearGradient(cx - r, cy - r, cx + r, cy + r); gr.addColorStop(0, st.bezel[0]); gr.addColorStop(0.5, st.bezel[1]); gr.addColorStop(1, st.bezel[0]); g.beginPath(); g.arc(cx, cy, r * 1.05, 0, 7); g.fillStyle = gr; g.fill(); }
-  g.beginPath(); g.arc(cx, cy, r, 0, 7);
-  if (st.faceFn) st.faceFn(g, d); else { const gr = g.createRadialGradient(cx, cy - r * 0.25, r * 0.1, cx, cy, r); gr.addColorStop(0, st.face2 || st.face); gr.addColorStop(1, st.face); g.fillStyle = gr; g.fill(); }
-  if (st.ring) { g.beginPath(); g.arc(cx, cy, r * 0.985, 0, 7); g.lineWidth = r * 0.028; g.strokeStyle = st.ring; g.stroke(); }
-  if (sc.warn != null) zarc(g, cx, cy, r * 0.9, ang(sc.warn), ang(sc.red), r * 0.06, st.warn || '#f5b921');
-  if (sc.red != null && sc.red < sc.max) zarc(g, cx, cy, r * 0.9, ang(sc.red), ang(sc.max), r * 0.06, st.red || RED);
+const zt = (g, t, x, y, size, color, o = {}) => {
+  g.font = `${o.i ? 'italic ' : ''}${o.w ?? 700} ${size}px ${o.fam || GZ.fam}`; g.fillStyle = color; g.textAlign = o.a || 'center'; g.textBaseline = o.b || 'middle';
+  if (o.glow) { g.save(); g.shadowColor = o.glow; g.shadowBlur = o.blur ?? size * 0.5; g.fillText(t, x, y); g.restore(); } else g.fillText(t, x, y);
+};
+const zarc = (g, cx, cy, r, a0, a1, w, color, cap = 'butt') => { if (a1 <= a0) return; g.beginPath(); g.arc(cx, cy, r, a0 * D2R, a1 * D2R); g.lineWidth = w; g.lineCap = cap; g.strokeStyle = color; g.stroke(); };
+const zrr = (g, x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+const zcirc = (g, cx, cy, r) => { g.beginPath(); g.arc(cx, cy, r, 0, 6.2832); };
+// a maker's badge from the pictures on the garage's keys, drawn into a face; the face is drawn again once it has loaded
+function zLogo(g, file, x, y, w, h, o = {}) {
+  let im = GZ.img[file];
+  if (!im) { im = GZ.img[file] = new Image(); im.onload = () => { GZ.key = ''; }; im.src = `keylogo-${file}.png`; }
+  if (!im.complete || !im.naturalWidth) return;
+  let src = im;
+  if (o.tint || o.cut) {
+    // tint: the badge's shape in one colour (dark artwork on a dark face). cut: only the dark parts of a photo, as
+    // a black silhouette (Ferrari's horse, from the owner's photo of the key)
+    const k = file + (o.tint || 'cut'); src = GZ.img[k];
+    if (!src) {
+      const [sx, sy, sw, sh] = o.src || [0, 0, im.naturalWidth, im.naturalHeight]; src = GZ.img[k] = document.createElement('canvas'); src.width = sw; src.height = sh; const q = src.getContext('2d'); q.drawImage(im, sx, sy, sw, sh, 0, 0, sw, sh);
+      if (o.cut) { const d = q.getImageData(0, 0, sw, sh), a = d.data; for (let i = 0; i < a.length; i += 4) { const lum = a[i] * 0.3 + a[i + 1] * 0.59 + a[i + 2] * 0.11, yel = a[i] - a[i + 2]; a[i + 3] = yel > 70 ? 0 : Math.round(255 * clamp((120 - lum) / 60, 0, 1)); a[i] = a[i + 1] = a[i + 2] = 10; } q.putImageData(d, 0, 0); }
+      else { q.globalCompositeOperation = 'source-in'; q.fillStyle = o.tint; q.fillRect(0, 0, sw, sh); }
+    }
+  }
+  g.save(); g.globalAlpha = o.alpha ?? 1; if (o.op) g.globalCompositeOperation = o.op;
+  if (o.src && src === im) g.drawImage(im, ...o.src, x - w / 2, y - h / 2, w, h); else g.drawImage(src, x - w / 2, y - h / 2, w, h);
+  g.restore();
+}
+// ---- the parts of a real instrument
+// a metal ring round a dial: bright where the light catches it, dark where it turns away
+const METAL = { chrome: ['#f4f6f8', '#8d9299', '#e9ecef', '#5d6269', '#d9dde1', '#7b8087'], alu: ['#c9cdd2', '#8a8f96', '#b9bdc3', '#6e737a', '#aeb3b9', '#858a91'], gun: ['#6a6e75', '#2d3035', '#585c63', '#1f2125', '#4b4f56', '#2a2d32'], black: ['#3a3c40', '#0e0f11', '#2a2c30', '#08090a', '#25272b', '#101113'] };
+function zBezel(g, cx, cy, r, w, kind = 'chrome') {
+  const c = METAL[kind] || METAL.chrome; let gr;
+  if (g.createConicGradient) { gr = g.createConicGradient(-2.2, cx, cy); c.forEach((col, k) => gr.addColorStop(k / c.length, col)); gr.addColorStop(1, c[0]); }
+  else { gr = g.createLinearGradient(cx - r, cy - r, cx + r, cy + r); gr.addColorStop(0, c[0]); gr.addColorStop(0.5, c[3]); gr.addColorStop(1, c[2]); }
+  g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = w * 1.2; g.shadowOffsetY = w * 0.4;
+  g.beginPath(); g.arc(cx, cy, r + w / 2, 0, 6.2832); g.lineWidth = w; g.strokeStyle = gr; g.stroke(); g.restore();
+  zarc(g, cx, cy, r + w * 0.96, 0, 360, w * 0.1, 'rgba(255,255,255,.28)'); zarc(g, cx, cy, r + w * 0.04, 0, 360, w * 0.14, 'rgba(0,0,0,.55)');
+}
+// the face of a dial: a little lighter in the middle, shaded under its rim
+function zFace(g, cx, cy, r, c0 = '#0a0a0b', c1 = '#1a1b1e') {
+  const gr = g.createRadialGradient(cx, cy - r * 0.2, r * 0.05, cx, cy, r); gr.addColorStop(0, c1); gr.addColorStop(1, c0);
+  zcirc(g, cx, cy, r); g.fillStyle = gr; g.fill();
+  const sh = g.createRadialGradient(cx, cy, r * 0.82, cx, cy, r); sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.5)'); zcirc(g, cx, cy, r); g.fillStyle = sh; g.fill();
+}
+// the scale round a dial. d: { cx, cy, r, a0, sweep }. sc: { max, major, minor (parts a major step is cut into), every,
+// fmt, numR, numS, tickR (outer end), tickL (length of a major tick) }. st: tick, num, red, italic, weight, fam, glow
+function zScale(g, d, sc, st) {
+  const { cx, cy, r } = d, a0 = d.a0 ?? 135, sw = d.sweep ?? 270, ang = (v) => a0 + sw * v / sc.max, tr = r * (sc.tickR ?? 0.95), tl = r * (sc.tickL ?? 0.13);
+  if (sc.warn != null) zarc(g, cx, cy, tr - tl * 0.3, ang(sc.warn), ang(sc.red), tl * 0.6, st.warn || '#f5b921');
+  if (sc.red != null && sc.red < sc.max) zarc(g, cx, cy, tr - tl * (st.bandIn ? 0.5 : 0.3), ang(sc.red), ang(sc.max), tl * (st.bandIn ? 1 : 0.6), st.red || RED);
   const n = Math.round(sc.max / sc.major), sub = sc.minor || 2;
   for (let k = 0; k <= n * sub; k++) {
-    const v = k * sc.major / sub, major = k % sub === 0, a = ang(v) * D2R, hot = sc.red != null && v >= sc.red - 1e-6, r1 = r * 0.94, r0 = r * (major ? 0.8 : 0.87);
-    g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
-    g.lineWidth = r * (major ? 0.028 : 0.014); g.strokeStyle = hot ? (st.red || RED) : st.tick; g.stroke();
-    if (major && (k / sub) % (sc.every || 1) === 0) zt(g, sc.fmt ? sc.fmt(v) : String(Math.round(v)), cx + Math.cos(a) * r * (sc.numR || 0.64), cy + Math.sin(a) * r * (sc.numR || 0.64), r * (sc.numS || 0.2), hot && st.redNums ? (st.red || RED) : st.num, { fam: st.fam || GZ.sans, i: st.italic, w: st.weight ?? 700 });
+    const v = k * sc.major / sub, major = k % sub === 0, half = sub % 2 === 0 && k % (sub / 2) === 0, a = ang(v) * D2R, hot = sc.red != null && v >= sc.red - 1e-6, r0 = tr - tl * (major ? 1 : half ? 0.62 : 0.4);
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * tr, cy + Math.sin(a) * tr);
+    g.lineWidth = r * (major ? (st.tickW ?? 0.026) : 0.012); g.lineCap = 'butt'; g.strokeStyle = hot && st.redTicks ? (st.red || RED) : st.tick; g.stroke();
+    if (major && (k / sub) % (sc.every || 1) === 0 && !(sc.skip0 && k === 0)) zt(g, sc.fmt ? sc.fmt(v) : String(Math.round(v)), cx + Math.cos(a) * r * (sc.numR || 0.66), cy + Math.sin(a) * r * (sc.numR || 0.66), r * (sc.numS || 0.19), hot && st.redNums ? (st.red || RED) : st.num, { fam: st.fam || GZ.sans, i: st.italic, w: st.weight ?? 600, glow: st.glow, blur: r * 0.06 });
   }
-  if (sc.label && r >= 56) zt(g, sc.label, cx, cy + r * (d.labelY ?? -0.32), r * 0.09, st.dim || 'rgba(255,255,255,.5)', { fam: GZ.sans, w: 600 });
 }
+// a needle: tapered, with its shadow on the face, and a cap over its pivot
 function zNeedle(g, d, f, st) {
-  const { cx, cy, r } = d, a = ((d.a0 ?? 135) + (d.sweep ?? 270) * clamp(f, 0, 1)) * D2R, c = Math.cos(a), s = Math.sin(a), w = r * (st.needleW || 0.035);
-  g.save(); g.shadowColor = st.glow || 'rgba(0,0,0,.7)'; g.shadowBlur = r * 0.07;
-  g.beginPath(); g.moveTo(cx - c * r * 0.17 - s * w, cy - s * r * 0.17 + c * w); g.lineTo(cx + c * r * 0.88, cy + s * r * 0.88); g.lineTo(cx - c * r * 0.17 + s * w, cy - s * r * 0.17 - c * w); g.closePath(); g.fillStyle = st.needle; g.fill(); g.restore();
-  g.beginPath(); g.arc(cx, cy, r * (st.hubR || 0.12), 0, 7); g.fillStyle = st.hub || '#0c0c0d'; g.fill(); g.lineWidth = r * 0.014; g.strokeStyle = st.hubRing || 'rgba(255,255,255,.2)'; g.stroke();
+  const { cx, cy, r } = d, a = ((d.a0 ?? 135) + (d.sweep ?? 270) * clamp(f, 0, 1)) * D2R, c = Math.cos(a), s = Math.sin(a), w = r * (st.needleW || 0.03), len = r * (st.needleL || 0.86), tail = r * (st.tail ?? 0.18);
+  g.save(); g.shadowColor = 'rgba(0,0,0,.75)'; g.shadowBlur = r * 0.06; g.shadowOffsetX = r * 0.02; g.shadowOffsetY = r * 0.035;
+  g.beginPath(); g.moveTo(cx - c * tail - s * w, cy - s * tail + c * w); g.lineTo(cx + c * len - s * w * 0.28, cy + s * len + c * w * 0.28); g.lineTo(cx + c * len + s * w * 0.28, cy + s * len - c * w * 0.28); g.lineTo(cx - c * tail + s * w, cy - s * tail - c * w); g.closePath();
+  g.fillStyle = st.needle; g.fill(); g.restore();
+  if (st.needleGlow) { g.save(); g.shadowColor = st.needleGlow; g.shadowBlur = r * 0.1; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + c * len, cy + s * len); g.lineWidth = w * 0.9; g.strokeStyle = st.needle; g.stroke(); g.restore(); }
+  if (!st.noShine) { g.beginPath(); g.moveTo(cx + c * r * 0.1, cy + s * r * 0.1); g.lineTo(cx + c * len * 0.97, cy + s * len * 0.97); g.lineWidth = w * 0.35; g.strokeStyle = 'rgba(255,255,255,.28)'; g.stroke(); }
+  const hr = r * (st.hubR || 0.13), hg = g.createRadialGradient(cx - hr * 0.3, cy - hr * 0.35, hr * 0.1, cx, cy, hr); hg.addColorStop(0, st.hub2 || '#3a3c40'); hg.addColorStop(1, st.hub || '#08090a');
+  g.save(); g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = hr * 0.5; zcirc(g, cx, cy, hr); g.fillStyle = hg; g.fill(); g.restore();
+  zarc(g, cx, cy, hr * 0.96, 0, 360, hr * 0.08, 'rgba(255,255,255,.14)');
 }
-// the speedometer's scale for a car whose dial reads to `mph`, in the units the player has chosen
-const zSpeedScale = (mph) => (state.units === 'mph' ? { max: mph, major: 20, minor: 2, every: mph > 200 ? 2 : 1, numS: 0.125, numR: 0.67, label: 'mph' } : { max: Math.ceil(mph * 1.609 / 40) * 40, major: 20, minor: 2, every: 2, numS: 0.125, numR: 0.67, label: 'km/h' });
-// a little display: the gear on the left, the speed and its unit on the right
-function zReadout(g, r, S, st = {}) {
-  zrr(g, r.x - r.w / 2, r.y - r.h / 2, r.w, r.h, r.h * 0.2); g.fillStyle = st.bg || 'rgba(3,4,5,.92)'; g.fill(); g.lineWidth = 1; g.strokeStyle = st.edge || 'rgba(255,255,255,.16)'; g.stroke();
-  zt(g, S.gear, r.x - r.w * 0.31, r.y + r.h * 0.03, r.h * 0.74, S.gear === 'R' ? '#ffb238' : st.gear || st.ink || '#fff', { i: st.italic });
-  g.fillStyle = st.edge || 'rgba(255,255,255,.16)'; g.fillRect(r.x - r.w * 0.14, r.y - r.h * 0.3, 1, r.h * 0.6);
-  zt(g, String(S.spd), r.x + r.w * 0.2, r.y + r.h * 0.03, r.h * 0.68, st.ink || '#fff', { a: 'right', i: st.italic });
-  zt(g, S.unit, r.x + r.w * 0.23, r.y + r.h * 0.14, r.h * 0.27, st.dim || 'rgba(255,255,255,.55)', { a: 'left', w: 600 });
+// the glass over a dial: a soft band of light across its upper left
+function zGlass(g, cx, cy, r) {
+  g.save(); zcirc(g, cx, cy, r); g.clip();
+  const gr = g.createLinearGradient(cx - r, cy - r, cx + r * 0.4, cy + r * 0.6); gr.addColorStop(0, 'rgba(255,255,255,.16)'); gr.addColorStop(0.42, 'rgba(255,255,255,.035)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.beginPath(); g.ellipse(cx - r * 0.25, cy - r * 0.55, r * 1.05, r * 0.7, -0.5, 0, 6.2832); g.fill(); g.restore();
 }
-// the plate everything sits on
-function zPanel(g, L, fill = 'rgba(7,8,11,.86)') { zrr(g, 1, 1, L.W - 2, L.H - 2, L.compact ? 26 : 18); g.fillStyle = fill; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.1)'; g.stroke(); }
-// ---- analog clusters: a list of dials (role: tach, speed, boost or aux), one style, a readout
-function analogCluster(cfg) {
-  const scaleOf = (d) => (d.role === 'tach' ? { max: tachMax, major: 1, minor: cfg.tachMinor || 2, red: CAR.redline / 1000, warn: cfg.warn ? CAR.redline / 1000 - cfg.warn : null, label: 'x1000 r/min', numS: tachMax > 9 ? 0.175 : 0.2, numR: 0.64 }
-    : d.role === 'speed' ? zSpeedScale(cfg.mph) : d.role === 'boost' ? { max: 4, major: 1, minor: 2, fmt: (v) => ['', '0', '', '1', ''][v], numS: 0.2, numR: 0.6, label: 'boost' } : { max: 4, major: 2, minor: 2, fmt: (v) => ['C', '', 'H'][v / 2], numS: 0.2, numR: 0.6, label: d.label || 'temp' });
-  const styleOf = (d) => ({ ...cfg.style, ...(d.style || {}) });
+// a little display let into a face: lit segments on a dark window (amber, red, green or white)
+function zLcd(g, x, y, w, h, bg = '#120a04', edge = 'rgba(0,0,0,.9)') { zrr(g, x - w / 2, y - h / 2, w, h, Math.min(h, w) * 0.16); g.fillStyle = bg; g.fill(); g.lineWidth = 1; g.strokeStyle = edge; g.stroke(); zrr(g, x - w / 2 + 0.6, y - h / 2 + 0.6, w - 1.2, h - 1.2, Math.min(h, w) * 0.14); g.strokeStyle = 'rgba(255,255,255,.06)'; g.stroke(); }
+const lcdSpeed = (g, S, x, y, size, color, o = {}) => { zt(g, String(S.spd), x, y, size, color, { a: 'right', glow: color, blur: size * 0.35, ...o }); zt(g, S.unit, x + size * 0.14, y + size * 0.2, size * 0.38, color, { a: 'left', w: 600 }); };
+// the scales: a rev counter to the car's own limit, a speedometer to `mph` in the units the player has chosen
+const tachScale = (o = {}) => { const s = { max: tachMax, major: 1, minor: 2, red: CAR.redline / 1000, numS: tachMax > 9 ? 0.17 : 0.19, ...o }; if (o.warnBelow) s.warn = s.red - o.warnBelow; return s; };
+const speedScale = (mph, o = {}) => (state.units === 'mph' ? { max: mph, major: 20, minor: 2, every: mph > 200 ? 2 : 1, numS: 0.115, numR: 0.7, unit: 'mph', ...o } : { max: Math.ceil(mph * 1.609 / 40) * 40, major: 20, minor: 2, every: 2, numS: 0.115, numR: 0.7, unit: 'km/h', ...o });
+const smallScale = (lab) => ({ max: 4, major: 2, minor: 2, fmt: (v) => lab[v / 2], numS: 0.26, numR: 0.58 });
+// backing plates
+function zPlate(g, L, fill = '#07080b', r = 18) { zrr(g, 1, 1, L.W - 2, L.H - 2, L.compact ? 26 : r); g.fillStyle = fill; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.1)'; g.stroke(); }
+const pats = {};
+function zPattern(g, kind) {
+  if (pats[kind]) return pats[kind];
+  const c = document.createElement('canvas'), q = c.getContext('2d');
+  if (kind === 'carbon') { c.width = c.height = 8; q.fillStyle = '#0b0b0c'; q.fillRect(0, 0, 8, 8); q.fillStyle = '#25262a'; q.fillRect(0, 0, 4, 4); q.fillRect(4, 4, 4, 4); q.fillStyle = '#16171a'; q.fillRect(1, 1, 2, 2); q.fillRect(5, 5, 2, 2); }
+  else if (kind === 'mesh') { c.width = c.height = 5; q.fillStyle = '#17181a'; q.fillRect(0, 0, 5, 5); q.fillStyle = '#050506'; q.beginPath(); q.arc(2.5, 2.5, 1.5, 0, 7); q.fill(); }
+  else { c.width = 64; c.height = 4; for (let x = 0; x < 64; x++) { const v = 150 + Math.round(Math.sin(x * 12.9898) * 43758.5453 % 1 * 26); q.fillStyle = `rgb(${v},${v + 2},${v + 5})`; q.fillRect(x, 0, 1, 4); } }   // brushed metal: fine vertical grain, turned on its side when used
+  return (pats[kind] = g.createPattern(c, 'repeat'));
+}
+function zFill(g, kind, shade = 0) { g.save(); g.fillStyle = zPattern(g, kind); if (kind === 'carbon') g.transform(0.7, 0.7, -0.7, 0.7, 0, 0); if (kind === 'brushed') g.transform(0, 1, 1, 0, 0, 0); g.fill(); g.restore(); if (shade) { g.fillStyle = `rgba(0,0,0,${shade})`; g.fill(); } }
+// ---- one engine for the clusters made of round dials. cfg: { plate(g, L), dials: [{ role, cx, cy, r, a0, sweep, bezel:
+// [width, kind], face: [c0, c1], sc: scale overrides, st: style overrides, label, lcd }], st: style, mph, deco(g, L),
+// live(g, S, L) }. role: tach, speed, boost, fuel, temp (the last two stand still).
+function dials(cfg) {
+  const scOf = (d) => (d.role === 'tach' ? tachScale(d.sc) : d.role === 'speed' ? speedScale(cfg.mph, d.sc) : d.role === 'boost' ? { max: 4, major: 1, minor: 2, fmt: (v) => ['-1', '', '0', '', '+1'][v], numS: 0.24, numR: 0.58, ...d.sc } : { ...smallScale(d.role === 'fuel' ? ['E', '', 'F'] : ['C', '', 'H']), ...d.sc });
+  const stOf = (d) => ({ ...cfg.st, ...(d.st || {}) });
+  const fOf = (d, S) => (d.role === 'tach' ? S.f : d.role === 'speed' ? S.spd / speedScale(cfg.mph, d.sc).max : d.role === 'boost' ? 0.3 + 0.62 * S.boost : d.role === 'fuel' ? 0.72 : 0.47);
   return {
     face(g, L) {
-      L.dials = L.compact ? [{ ...cfg.dials.find((d) => d.role === 'tach'), cx: 90, cy: 90, r: 82 }] : cfg.dials;
-      zPanel(g, L, cfg.plate);
-      if (cfg.hoods && !L.compact) for (const d of L.dials) { zrr(g, d.cx - d.r * 1.08, d.cy - d.r * 1.06, d.r * 2.16, d.r * 2.12, d.r * 0.42); g.fillStyle = '#131417'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = 'rgba(255,255,255,.18)'; g.stroke(); }
-      for (const d of L.dials) zDialFace(g, d, scaleOf(d), styleOf(d));
+      const t = cfg.dials.find((d) => d.role === 'tach');
+      L.dials = L.compact ? [{ ...t, cx: 90, cy: 90, r: 78, lcd: { ...(t.lcd || {}), dx: 0, dy: 0.66, w: 0.66, h: 0.27, show: 'both' } }] : cfg.dials;
+      if (L.compact) zPlate(g, L, '#07080b'); else cfg.plate ? cfg.plate(g, L) : zPlate(g, L);
+      for (const d of L.dials) {
+        const st = stOf(d), sc = scOf(d);
+        if (d.bezel) zBezel(g, d.cx, d.cy, d.r, d.r * d.bezel[0], d.bezel[1]);
+        if (st.faceFn) st.faceFn(g, d); else zFace(g, d.cx, d.cy, d.r, ...(d.face || st.face || []));
+        zScale(g, d, sc, st);
+        if (d.label !== false && d.r >= 50) zt(g, d.label || (d.role === 'tach' ? 'x1000r/min' : sc.unit || ''), d.cx, d.cy + d.r * (d.labelY ?? 0.3), d.r * 0.085, st.dim || 'rgba(255,255,255,.55)', { fam: GZ.sans, w: 500 });
+        if (d.logo) zLogo(g, d.logo.file, d.cx + d.r * (d.logo.dx || 0), d.cy + d.r * (d.logo.dy ?? -0.3), d.r * d.logo.w, d.r * (d.logo.h ?? d.logo.w), d.logo);
+        if (d.mark) d.mark(g, d, L.compact);
+        // (on a phone the one dial carries the maker's badge if the full cluster had it somewhere else)
+        if (L.compact && cfg.badge && !d.logo) zLogo(g, cfg.badge, d.cx, d.cy - d.r * 0.36, d.r * (cfg.badgeW || 0.3), d.r * (cfg.badgeW || 0.3), { alpha: 0.8, tint: cfg.badgeTint });
+        if (d.lcd) zLcd(g, d.cx + d.r * d.lcd.dx, d.cy + d.r * d.lcd.dy, d.r * d.lcd.w, d.r * d.lcd.h, d.lcd.bg);
+      }
+      if (cfg.deco && !L.compact) cfg.deco(g, L);
     },
     live(g, S, L) {
-      for (const d of L.dials) zNeedle(g, d, d.role === 'tach' ? S.f : d.role === 'speed' ? S.spd / zSpeedScale(cfg.mph).max : d.role === 'boost' ? 0.2 + 0.7 * S.boost : 0.45, styleOf(d));
-      zReadout(g, L.compact ? { x: 90, y: 151, w: 64, h: 24 } : cfg.readout, S, cfg.read);
+      for (const d of L.dials) {
+        const st = stOf(d);
+        if (d.lcd) {
+          const x = d.cx + d.r * d.lcd.dx, y = d.cy + d.r * d.lcd.dy, h = d.r * d.lcd.h, w = d.r * d.lcd.w, col = d.lcd.ink || st.lcd || '#ff9a2e';
+          if (d.lcd.show === 'gear') zt(g, S.gear, x, y + h * 0.04, h * 0.8, col, { glow: col, blur: h * 0.3 });
+          else if (d.lcd.show === 'speed') lcdSpeed(g, S, x + w * 0.12, y + h * 0.04, h * 0.74, col);
+          else { zt(g, S.gear, x - w * 0.33, y + h * 0.04, h * 0.74, col, { glow: col, blur: h * 0.3 }); lcdSpeed(g, S, x + w * 0.22, y + h * 0.04, h * 0.7, col); }
+        }
+        zNeedle(g, d, fOf(d, S), st);
+        zGlass(g, d.cx, d.cy, d.r);
+      }
+      if (cfg.live && !L.compact) cfg.live(g, S, L);
     },
   };
 }
-// ---- digital rings: a track with numerals inside it, a lit sweep, a red zone
+// ---- one engine for the screens: a ring (or any shape) lit up to where the revs are
 function zRingFace(g, d, o) {
-  const a0 = d.a0 ?? 135, sw = d.sweep ?? 270, { cx, cy, r } = d, w = o.w || r * 0.11, max = o.max;
+  const a0 = d.a0 ?? 135, sw = d.sweep ?? 270, { cx, cy, r } = d, w = o.w || r * 0.1, max = o.max, sub = o.sub || 2;
   zarc(g, cx, cy, r, a0, a0 + sw, w, o.track || 'rgba(255,255,255,.1)');
   if (o.red != null) zarc(g, cx, cy, r, a0 + sw * o.red / max, a0 + sw, w, o.redTrack || 'rgba(227,32,42,.38)');
-  for (let k = 0; k <= max * (o.sub || 2); k++) {
-    const v = k / (o.sub || 2), a = (a0 + sw * v / max) * D2R, major = k % (o.sub || 2) === 0, hot = o.red != null && v >= o.red - 1e-6;
-    g.beginPath(); g.moveTo(cx + Math.cos(a) * (r + w * 0.75), cy + Math.sin(a) * (r + w * 0.75)); g.lineTo(cx + Math.cos(a) * (r + w * (major ? 1.5 : 1.15)), cy + Math.sin(a) * (r + w * (major ? 1.5 : 1.15)));
-    g.lineWidth = major ? 1.6 : 1; g.strokeStyle = hot ? RED : o.tick || 'rgba(255,255,255,.5)'; g.stroke();
-    if (major && o.nums !== false && v % (o.every || 1) === 0) zt(g, o.fmt ? o.fmt(v) : String(v), cx + Math.cos(a) * (r - w * 1.75), cy + Math.sin(a) * (r - w * 1.75), r * (o.numS || 0.17), hot ? RED : o.num || '#e9edf2', { i: o.italic, w: o.weight ?? 700 });
+  for (let k = 0; k <= max * sub; k++) {
+    const v = k / sub, a = (a0 + sw * v / max) * D2R, major = k % sub === 0, hot = o.red != null && v >= o.red - 1e-6, ro = r + w * (o.tickOut ?? 0.8);
+    if (o.ticks !== false) { g.beginPath(); g.moveTo(cx + Math.cos(a) * ro, cy + Math.sin(a) * ro); g.lineTo(cx + Math.cos(a) * (ro + w * (major ? 0.8 : 0.4)), cy + Math.sin(a) * (ro + w * (major ? 0.8 : 0.4))); g.lineWidth = major ? 1.5 : 0.9; g.strokeStyle = hot ? RED : o.tick || 'rgba(255,255,255,.5)'; g.stroke(); }
+    if (major && o.nums !== false && v % (o.every || 1) === 0) zt(g, o.fmt ? o.fmt(v) : String(v), cx + Math.cos(a) * (r + w * (o.numOut ?? -1.9)), cy + Math.sin(a) * (r + w * (o.numOut ?? -1.9)), r * (o.numS || 0.17), hot ? (o.redNum || '#ff4a40') : o.num || '#e9edf2', { i: o.italic, w: o.weight ?? 700 });
   }
 }
 function zRingLive(g, d, f, o) {
-  const a0 = d.a0 ?? 135, sw = d.sweep ?? 270, { cx, cy, r } = d, w = o.w || r * 0.11, fr = o.red != null ? o.red / o.max : 2;
+  const a0 = d.a0 ?? 135, sw = d.sweep ?? 270, { cx, cy, r } = d, w = o.w || r * 0.1, fr = o.red != null ? o.red / o.max : 2;
   g.save(); g.shadowColor = o.glow || o.fill; g.shadowBlur = r * 0.12;
   zarc(g, cx, cy, r, a0, a0 + sw * Math.min(f, fr), w, o.fill);
-  if (f > fr) zarc(g, cx, cy, r, a0 + sw * fr, a0 + sw * f, w, RED);
+  if (f > fr) zarc(g, cx, cy, r, a0 + sw * fr, a0 + sw * f, w, o.hot || RED);
   g.restore();
-  const a = (a0 + sw * f) * D2R; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - w * 0.9), cy + Math.sin(a) * (r - w * 0.9)); g.lineTo(cx + Math.cos(a) * (r + w * 0.9), cy + Math.sin(a) * (r + w * 0.9)); g.lineWidth = 2.4; g.strokeStyle = '#fff'; g.stroke();
+  if (o.pointer !== false) { const a = (a0 + sw * f) * D2R; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - w * 0.9), cy + Math.sin(a) * (r - w * 0.9)); g.lineTo(cx + Math.cos(a) * (r + w * 0.9), cy + Math.sin(a) * (r + w * 0.9)); g.lineWidth = 2.2; g.strokeStyle = '#fff'; g.stroke(); }
 }
-// one centre ring round the gear and the speed (the Corvette, the 720S, and every digital cluster on a phone)
-function ringCluster(o) {
+// what a screen-type cluster shows on a phone: one ring in the car's colours, the gear and the speed in it
+function ringOnly(o) {
   return {
-    face(g, L) { L.d = L.compact ? { cx: 90, cy: 92, r: 70 } : { cx: 180, cy: 94, r: 70 }; zPanel(g, L, o.plate); zRingFace(g, L.d, { ...o, max: tachMax, red: CAR.redline / 1000 }); if (!L.compact && o.sides) o.sides(g, L); },
-    live(g, S, L) {
-      const d = L.d; zRingLive(g, d, S.f, { ...o, max: tachMax, red: CAR.redline / 1000 });
-      zt(g, S.gear, d.cx, d.cy - d.r * 0.2, d.r * 0.66, S.gear === 'R' ? '#ffb238' : o.gear || '#fff', { i: o.italic, w: 800 });
-      zt(g, String(S.spd), d.cx, d.cy + d.r * 0.36, d.r * 0.4, o.ink || '#fff', { i: o.italic });
-      zt(g, S.unit, d.cx, d.cy + d.r * 0.66, d.r * 0.14, o.dim || 'rgba(255,255,255,.55)', { w: 600 });
-      if (!L.compact && o.sidesLive) o.sidesLive(g, S, L);
-    },
+    face(g, L) { L.d = { cx: 90, cy: 92, r: 68 }; zPlate(g, L, o.plate); zRingFace(g, L.d, { ...o, max: tachMax, red: CAR.redline / 1000 }); if (o.mark) o.mark(g, L.d); },
+    live(g, S, L) { const d = L.d; zRingLive(g, d, S.f, { ...o, max: tachMax, red: CAR.redline / 1000 }); zt(g, S.gear, d.cx, d.cy - d.r * 0.16, d.r * 0.62, S.gear === 'R' ? '#ffb238' : o.gear || '#fff', { i: o.italic, w: 800 }); zt(g, String(S.spd), d.cx, d.cy + d.r * 0.38, d.r * 0.38, o.ink || '#fff', { i: o.italic }); zt(g, S.unit, d.cx, d.cy + d.r * 0.68, d.r * 0.14, 'rgba(255,255,255,.55)', { w: 600 }); },
   };
 }
-// two rings side by side (the i8's Sport display, the Civic): one is the rev counter with the gear in it, the other the speed
-function twinRings(o) {
-  const single = ringCluster(o);
-  return {
-    face(g, L) {
-      if (L.compact) return single.face(g, L);
-      zPanel(g, L, o.plate); L.t = { cx: o.tachLeft ? 92 : 268, cy: 92, r: 66 }; L.s = { cx: o.tachLeft ? 268 : 92, cy: 92, r: 66 };
-      zRingFace(g, L.t, { ...o, max: tachMax, red: CAR.redline / 1000 });
-      const sc = zSpeedScale(o.mph); zRingFace(g, L.s, { ...o, max: sc.max / 20, sub: 1, red: null, every: 2, fmt: (v) => String(v * 20), numS: 0.14 });
-    },
-    live(g, S, L) {
-      if (L.compact) return single.live(g, S, L);
-      zRingLive(g, L.t, S.f, { ...o, max: tachMax, red: CAR.redline / 1000 });
-      const sc = zSpeedScale(o.mph); zRingLive(g, L.s, Math.min(1, S.spd / sc.max), { ...o, max: 1, red: null });
-      zt(g, S.gear, L.t.cx, L.t.cy - 4, 46, S.gear === 'R' ? '#ffb238' : o.gear || '#fff', { i: o.italic, w: 800 });
-      zt(g, 'x1000 rpm', L.t.cx, L.t.cy + 30, 9, o.dim || 'rgba(255,255,255,.55)', { w: 600 });
-      zt(g, String(S.spd), L.s.cx, L.s.cy - 4, 40, o.ink || '#fff', { i: o.italic, w: 800 });
-      zt(g, S.unit, L.s.cx, L.s.cy + 28, 10, o.dim || 'rgba(255,255,255,.55)', { w: 600 });
-    },
-  };
-}
+const screenCluster = (pal, wide) => { const small = ringOnly(pal); return { face: (g, L) => (L.compact ? small.face(g, L) : wide.face(g, L)), live: (g, S, L) => (L.compact ? small.live(g, S, L) : wide.live(g, S, L)) }; };
 // a line through points, and the part of it between two fractions of its length (for bars that are not circles)
 function zPolyLen(pts) { const seg = []; let L = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); L += l; } return { seg, L }; }
-function zPolyAt(pts, f) { const { seg, L } = zPolyLen(pts); let s = clamp(f, 0, 1) * L; for (let i = 0; i < seg.length; i++) { if (s <= seg[i] || i === seg.length - 1) { const t = seg[i] ? clamp(s / seg[i], 0, 1) : 0; return [lerp(pts[i][0], pts[i + 1][0], t), lerp(pts[i][1], pts[i + 1][1], t)]; } s -= seg[i]; } return pts[pts.length - 1]; }
+function zPolyAt(pts, f) { const { seg, L } = zPolyLen(pts); let s = clamp(f, 0, 1) * L; for (let i = 0; i < seg.length; i++) { if (s <= seg[i] || i === seg.length - 1) { const t = seg[i] ? clamp(s / seg[i], 0, 1) : 0; return [lerp(pts[i][0], pts[i + 1][0], t), lerp(pts[i][1], pts[i + 1][1], t), Math.atan2(pts[i + 1][1] - pts[i][1], pts[i + 1][0] - pts[i][0])]; } s -= seg[i]; } return [...pts[pts.length - 1], 0]; }
 function zPoly(g, pts, f0, f1, w, color) {
   if (f1 <= f0) return; const { seg, L } = zPolyLen(pts), a = f0 * L, b = f1 * L; let acc = 0, started = false; g.beginPath();
   for (let i = 0; i < seg.length; i++) { const s0 = acc, s1 = acc + seg[i]; acc = s1; if (s1 < a || s0 > b || !seg[i]) continue; const t0 = Math.max(0, (a - s0) / seg[i]), t1 = Math.min(1, (b - s0) / seg[i]); if (!started) { g.moveTo(lerp(pts[i][0], pts[i + 1][0], t0), lerp(pts[i][1], pts[i + 1][1], t0)); started = true; } g.lineTo(lerp(pts[i][0], pts[i + 1][0], t1), lerp(pts[i][1], pts[i + 1][1], t1)); }
   g.lineWidth = w; g.strokeStyle = color; g.lineJoin = 'round'; g.lineCap = 'butt'; g.stroke();
 }
 const arcPts = (cx, cy, r, a0, a1, n = 40) => Array.from({ length: n + 1 }, (_, k) => { const a = (a0 + (a1 - a0) * k / n) * D2R; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; });
-// ---- the Mk5 Supra: a ring that starts at the lower left, climbs over the top and runs on to the right as a straight bar
-const a90Cluster = (() => {
-  const pal = { fill: '#f4f6f8', num: '#e9edf2', plate: 'rgba(5,6,8,.9)' }, small = ringCluster(pal), pts = [...arcPts(112, 98, 66, 128, 270, 36), [330, 32]];
-  return {
+const quadPts = (p0, c, p1, n = 40) => Array.from({ length: n + 1 }, (_, k) => { const t = k / n, u = 1 - t; return [u * u * p0[0] + 2 * u * t * c[0] + t * t * p1[0], u * u * p0[1] + 2 * u * t * c[1] + t * t * p1[1]]; });
+// bars across a line (the S2000's and the SVJ's rev bars): n bars, lit up to fraction f
+function zBars(g, pts, n, f0, f1, len, colorOf, wide = 0.62) {
+  const { L } = zPolyLen(pts), step = L / n;
+  for (let k = Math.floor(f0 * n); k < Math.ceil(f1 * n); k++) { const [x, y, a] = zPolyAt(pts, (k + 0.5) / n), nx = -Math.sin(a), ny = Math.cos(a); g.beginPath(); g.moveTo(x - nx * len / 2, y - ny * len / 2); g.lineTo(x + nx * len / 2, y + ny * len / 2); g.lineWidth = step * wide; g.lineCap = 'butt'; g.strokeStyle = colorOf(k / n); g.stroke(); }
+}
+// the stripes of BMW M
+function mStripes(g, x, y, h, text, size) { [['#2b9ad6', 0], ['#1c2f7c', 1], [RED, 2]].forEach(([c, k]) => { const w = h * 0.34, dx = k * w * 1.02; g.beginPath(); g.moveTo(x + dx, y + h / 2); g.lineTo(x + dx + w, y + h / 2); g.lineTo(x + dx + w + h * 0.36, y - h / 2); g.lineTo(x + dx + h * 0.36, y - h / 2); g.closePath(); g.fillStyle = c; g.fill(); }); if (text) zt(g, text, x + h * 1.5, y, size || h * 1.25, '#e9edf2', { a: 'left', i: true, w: 800 }); }
+// the Corvette's crossed flags, small: a chequered flag and a red one on crossed staffs
+function crossedFlags(g, x, y, s) {
+  for (const side of [-1, 1]) {
+    g.save(); g.translate(x, y); g.scale(side, 1); g.rotate(-0.42);
+    g.fillStyle = '#cfd3d8'; g.fillRect(-s * 0.04, -s * 0.2, s * 0.08, s * 1.1);
+    g.beginPath(); g.moveTo(s * 0.04, -s * 0.2); g.quadraticCurveTo(s * 0.5, -s * 0.38, s * 0.92, -s * 0.12); g.lineTo(s * 0.86, s * 0.4); g.quadraticCurveTo(s * 0.48, s * 0.18, s * 0.04, s * 0.36); g.closePath();
+    if (side < 0) { g.fillStyle = '#f4f4f4'; g.fill(); g.save(); g.clip(); g.fillStyle = '#111'; for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) if ((i + j) % 2 === 0) g.fillRect(s * 0.04 + i * s * 0.22, -s * 0.36 + j * s * 0.26, s * 0.22, s * 0.26); g.restore(); }
+    else { g.fillStyle = '#c8102e'; g.fill(); g.fillStyle = '#f2c200'; g.fillRect(s * 0.3, -s * 0.03, s * 0.34, s * 0.09); g.fillRect(s * 0.43, -s * 0.13, s * 0.09, s * 0.3); }
+    g.restore();
+  }
+}
+// small status zLampsG, as a row of dim icons along a cluster's edge
+function zLampsG(g, x, y, list, s = 6, gap = 10) { list.forEach((c, k) => { zrr(g, x + k * gap, y, s, s * 0.72, 1.2); g.fillStyle = c; g.fill(); }); }
+const WHITE = { tick: '#f1f1ee', num: '#f1f1ee', face: ['#080809', '#19191c'] };
+
+// =================================================================== the cars
+// Toyota Supra Mk4 (photos: JZA80 OEM clusters): three pods under one hood. Rev counter in the middle, slightly the
+// highest, red band on its last stretch, two small green zLampsG windows above it; the speedometer beside it; fuel
+// and temperature in the third. Thin white numerals, slim pale-orange needles on small black caps.
+const SUPRA_ST = { ...WHITE, needle: '#ffcfa0', needleW: 0.022, hubR: 0.1, bandIn: true, weight: 500, lcd: '#7dff9a' };
+const supraPlate = (g, L) => {
+  zPlate(g, L, '#050506');
+  g.beginPath(); g.moveTo(8, 172); g.lineTo(8, 96); g.bezierCurveTo(20, 40, 96, 30, 122, 44); g.bezierCurveTo(140, 8, 220, 8, 238, 44); g.bezierCurveTo(264, 30, 340, 40, 352, 96); g.lineTo(352, 172); g.closePath();
+  const gr = g.createLinearGradient(0, 10, 0, 172); gr.addColorStop(0, '#1b1c1f'); gr.addColorStop(1, '#0b0b0d'); g.fillStyle = gr; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.1)'; g.stroke();
+};
+const supra = dials({ mph: 180, st: SUPRA_ST, plate: supraPlate,
+  dials: [
+    { role: 'fuel', cx: 66, cy: 108, r: 56, a0: 200, sweep: 80, bezel: [0.05, 'black'], sc: { numR: 0.62, numS: 0.2 }, label: false,
+      mark(g, d) { const t = { cx: d.cx, cy: d.cy + 4, r: d.r, a0: 80, sweep: 80 }; zScale(g, t, smallScale(['H', '', 'C']), SUPRA_ST); d.t = t; } },
+    { role: 'tach', cx: 180, cy: 84, r: 70, a0: 140, sweep: 235, bezel: [0.05, 'black'], labelY: 0.42, logo: { file: 'toyota', w: 0.34, h: 0.34, dy: -0.36, alpha: 0.55 }, lcd: { dx: 0, dy: 0.66, w: 0.46, h: 0.24, show: 'gear', bg: '#06140a' },
+      mark(g, d) { for (const sx of [-1, 1]) { zrr(g, d.cx + sx * d.r * 0.96 - 6, d.cy - d.r * 0.98, 12, 9, 2); g.fillStyle = '#2f6f52'; g.fill(); } } },
+    { role: 'speed', cx: 294, cy: 108, r: 56, a0: 140, sweep: 250, bezel: [0.05, 'black'], lcd: { dx: 0, dy: 0.6, w: 0.86, h: 0.28, show: 'speed', bg: '#06140a' }, labelY: 0.26 },
+  ],
+  live(g, S, L) { const d = L.dials[0]; if (d.t) { zNeedle(g, d.t, 0.5, { ...SUPRA_ST, needleL: 0.6 }); } } });
+// The Fast and the Furious Supra (photos of the film car's dash): the stock pods are gone; a flat black panel carries
+// two big aftermarket gauges with bright aluminium rims, the rev counter and a 160 mph speedometer, orange needles.
+const supraFF = dials({ mph: 180, badge: 'toyota', st: { ...WHITE, needle: '#ff4a1a', needleW: 0.03, hubR: 0.15, hub: '#111', hub2: '#55585e', weight: 700, redNums: true, lcd: '#ff7a2e' },
+  plate(g, L) { zPlate(g, L, '#0c0c0d'); zrr(g, 10, 10, 340, 160, 6); const gr = g.createLinearGradient(0, 10, 0, 170); gr.addColorStop(0, '#1d1e21'); gr.addColorStop(1, '#101113'); g.fillStyle = gr; g.fill(); g.strokeStyle = 'rgba(255,255,255,.12)'; g.stroke();
+    for (const [x, y] of [[20, 20], [340, 20], [20, 160], [340, 160], [180, 18], [180, 162]]) { zcirc(g, x, y, 3); g.fillStyle = '#8a8f96'; g.fill(); zcirc(g, x, y, 1.4); g.fillStyle = '#2a2c30'; g.fill(); }
+    zLogo(g, 'toyota', 180, 60, 22, 22, { alpha: 0.5 }); },
+  dials: [
+    { role: 'tach', cx: 92, cy: 92, r: 68, bezel: [0.13, 'chrome'], label: 'RPM x1000', labelY: 0.46, lcd: { dx: 0, dy: 0.72, w: 0.4, h: 0.22, show: 'gear', bg: '#140803' } },
+    { role: 'speed', cx: 268, cy: 92, r: 68, bezel: [0.13, 'chrome'], label: 'MPH', labelY: 0.3, lcd: { dx: 0, dy: 0.62, w: 0.8, h: 0.26, show: 'speed', bg: '#140803' } },
+  ],
+  deco(g) { zt(g, 'N2O', 180, 96, 9, '#6fb7ff', { w: 800 }); zrr(g, 170, 104, 20, 30, 3); g.fillStyle = '#0a0a0b'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.2)'; g.stroke(); zrr(g, 175, 108, 10, 12, 2); g.fillStyle = '#c8102e'; g.fill(); } });
+// BMW M4 CSL (photos: G82 M4 display): two angular bands like brackets facing each other, the speed's numbers up the
+// left one and the revs' up the right, the M stripes and the model's name at the top between them, the speed and the
+// gear in two boxes at the bottom.
+const bmwM = (() => {
+  const pal = { fill: '#eef2f6', num: '#e9edf2', plate: '#05070b', mark: (g, d) => mStripes(g, d.cx - 16, d.cy - d.r * 0.52, 8, 'M4', 11) };
+  const Lp = [[150, 150], [70, 150], [26, 104], [26, 76], [70, 30], [150, 30]], Rp = Lp.map(([x, y]) => [360 - x, y]);
+  return screenCluster(pal, {
     face(g, L) {
-      if (L.compact) return small.face(g, L);
-      zPanel(g, L, pal.plate); const fr = CAR.redline / 1000 / tachMax;
-      zPoly(g, pts, 0, 1, 9, 'rgba(255,255,255,.11)'); zPoly(g, pts, fr, 1, 9, 'rgba(227,32,42,.4)');
-      for (let k = 0; k <= tachMax; k++) { const [x, y] = zPolyAt(pts, k / tachMax), onArc = x < 113, dx = onArc ? 112 - x : 0, dy = onArc ? 98 - y : 1, n = Math.hypot(dx, dy) || 1; zt(g, String(k), x + dx / n * 17, y + dy / n * 17, 13, k >= CAR.redline / 1000 ? RED : pal.num, { w: 700 }); }
-      zt(g, 'x1000 rpm', 300, 70, 9, 'rgba(255,255,255,.5)', { w: 600 });
+      zPlate(g, L, pal.plate);
+      const bg = g.createRadialGradient(180, 90, 10, 180, 90, 190); bg.addColorStop(0, 'rgba(40,70,130,.28)'); bg.addColorStop(1, 'rgba(0,0,0,0)'); zrr(g, 1, 1, 358, 178, 18); g.fillStyle = bg; g.fill();
+      const fr = CAR.redline / 1000 / tachMax, sc = speedScale(200);
+      zPoly(g, Lp, 0, 1, 7, 'rgba(255,255,255,.12)'); zPoly(g, Rp, 0, 1, 7, 'rgba(255,255,255,.12)'); zPoly(g, Rp, fr, 1, 7, 'rgba(227,32,42,.5)');
+      for (let k = 0; k <= tachMax; k++) { const [x, y] = zPolyAt(Rp, k / tachMax), dx = 254 - x, dy = 90 - y, n = Math.hypot(dx, dy); zt(g, String(k), x + dx / n * 17, y + dy / n * 17, 12, k >= CAR.redline / 1000 ? '#ff4a40' : pal.num, { w: 600 }); }
+      for (let v = 0; v <= sc.max; v += sc.major * (sc.every || 1)) { const [x, y] = zPolyAt(Lp, v / sc.max), dx = 106 - x, dy = 90 - y, n = Math.hypot(dx, dy); zt(g, String(v), x + dx / n * 17, y + dy / n * 17, 9, 'rgba(233,237,242,.8)', { w: 500 }); }
+      mStripes(g, 150, 22, 10, 'M4 CSL', 13);
+      for (const x of [116, 244]) { zrr(g, x - 28, 76, 56, 30, 5); g.fillStyle = 'rgba(255,255,255,.05)'; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.22)'; g.stroke(); }
+      zLogo(g, 'bmw', 180, 150, 18, 18, { alpha: 0.9 });
+      zt(g, '1/min x1000', 244, 116, 7, 'rgba(255,255,255,.5)', { w: 500 });
     },
-    live(g, S, L) {
-      if (L.compact) return small.live(g, S, L);
-      const fr = CAR.redline / 1000 / tachMax;
-      g.save(); g.shadowColor = '#fff'; g.shadowBlur = 8; zPoly(g, pts, 0, Math.min(S.f, fr), 9, pal.fill); if (S.f > fr) zPoly(g, pts, fr, S.f, 9, RED); g.restore();
-      zt(g, String(S.spd), 112, 96, 50, '#fff', { w: 800 }); zt(g, S.unit, 112, 130, 11, 'rgba(255,255,255,.55)', { w: 600 });
-      zrr(g, 222, 92, 78, 56, 8); g.fillStyle = 'rgba(255,255,255,.05)'; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.16)'; g.stroke();
-      zt(g, S.gear, 261, 122, 44, S.gear === 'R' ? '#ffb238' : '#fff', { w: 800 });
+    live(g, S) {
+      const fr = CAR.redline / 1000 / tachMax, sc = speedScale(200);
+      g.save(); g.shadowColor = '#bcd8ff'; g.shadowBlur = 7; zPoly(g, Lp, 0, Math.min(1, S.spd / sc.max), 7, pal.fill); zPoly(g, Rp, 0, Math.min(S.f, fr), 7, pal.fill); if (S.f > fr) zPoly(g, Rp, fr, S.f, 7, '#ff3a30'); g.restore();
+      zt(g, String(S.spd), 116, 92, 24, '#fff', { w: 700 }); zt(g, S.unit, 116, 116, 7.5, 'rgba(255,255,255,.55)', { w: 500 });
+      zt(g, S.gear, 244, 92, 24, S.gear === 'R' ? '#ffb238' : '#fff', { w: 700 });
+      zt(g, `${Math.round(S.rpm / 10) * 10}`, 180, 58, 12, 'rgba(255,255,255,.75)', { w: 600 }); zt(g, 'rpm', 180, 70, 7, 'rgba(255,255,255,.45)', { w: 500 });
     },
-  };
+  });
 })();
-// ---- the M4 CSL: BMW M's display, two angular bands facing each other, speed in the left one and revs in the right
-const bmwMCluster = (() => {
-  const pal = { fill: '#f1f3f6', num: '#e9edf2', plate: 'rgba(5,6,9,.9)' }, small = ringCluster(pal);
-  const Lp = [[150, 156], [46, 156], [16, 90], [46, 24], [150, 24]], Rp = Lp.map(([x, y]) => [360 - x, y]);
-  return {
+// BMW M3 E92 (photos: E9x M3 clusters): two big dials in thick brushed rings, red needles on black caps. The M stripes
+// sit in the rev counter, whose last stretch is the yellow-then-red warning field; a small fuel gauge is let into the
+// foot of the speedometer and oil temperature into the rev counter's; between them the orange display.
+const E92_ST = { ...WHITE, needle: '#e3202a', needleW: 0.034, hubR: 0.17, face: ['#0b0b0d', '#202226'], weight: 600 };
+const e92 = dials({ mph: 200, st: E92_ST,
+  plate(g, L) { zPlate(g, L, '#060607'); zLcd(g, 180, 96, 44, 52, '#1a0703'); },
+  dials: [
+    { role: 'speed', cx: 88, cy: 88, r: 72, bezel: [0.12, 'alu'], labelY: -0.3, mark(g, d) { d.s = { cx: d.cx, cy: d.cy + d.r * 0.6, r: d.r * 0.24, a0: 205, sweep: 130 }; zScale(g, d.s, { ...smallScale(['0', '', '1/1']), numS: 0.34, numR: 0.5, tickL: 0.2 }, E92_ST); } },
+    { role: 'tach', cx: 272, cy: 88, r: 72, bezel: [0.12, 'alu'], label: '1/min x 1000', labelY: -0.5, sc: { warnBelow: 1 },
+      mark(g, d) { mStripes(g, d.cx - d.r * 0.2, d.cy - d.r * 0.33, d.r * 0.13, 'M', d.r * 0.2); d.s = { cx: d.cx, cy: d.cy + d.r * 0.6, r: d.r * 0.24, a0: 205, sweep: 130 }; zScale(g, d.s, { ...smallScale(['50', '', '150']), numS: 0.34, numR: 0.5, tickL: 0.2 }, E92_ST); zt(g, '°C', d.cx, d.cy + d.r * 0.84, d.r * 0.09, 'rgba(255,255,255,.55)', { fam: GZ.sans, w: 500 }); } },
+  ],
+  deco(g) { zLogo(g, 'bmw', 180, 150, 20, 20); },
+  live(g, S, L) {
+    for (const d of L.dials) if (d.s) zNeedle(g, d.s, d.role === 'tach' ? 0.5 : 0.7, { ...E92_ST, needleW: 0.07, hubR: 0.2 });
+    zt(g, S.gear, 180, 80, 20, '#ff5a1e', { glow: '#ff5a1e' }); zt(g, String(S.spd), 180, 100, 15, '#ff5a1e', { glow: '#ff5a1e' }); zt(g, S.unit, 180, 113, 7, '#ff5a1e', { w: 600 });
+  } });
+// BMW X5 (photos: F15 clusters): four white rings open at the foot, a small fuel ring, the speedometer, the rev counter
+// with the blue economy arc under it, a small temperature ring; orange-red needles; the orange display between.
+const X5_ST = { tick: '#f0f0f0', num: '#f0f0f0', needle: '#ff5a1e', needleGlow: 'rgba(255,90,30,.7)', needleW: 0.03, hubR: 0.12, weight: 500, faceFn: (g, d) => { zFace(g, d.cx, d.cy, d.r, '#050506', '#0e0e10'); zarc(g, d.cx, d.cy, d.r * 0.985, d.r > 40 ? 128 : 120, d.r > 40 ? 412 : 420, d.r > 40 ? 2.2 : 1.6, '#e8ecf0'); } };
+const x5 = dials({ mph: 160, st: X5_ST, badge: 'bmw',
+  plate(g, L) { zPlate(g, L, '#050506'); zLcd(g, 180, 150, 120, 22, '#170803'); },
+  dials: [
+    { role: 'fuel', cx: 30, cy: 110, r: 24, a0: 150, sweep: 240, sc: { numS: 0.3 }, label: false },
+    { role: 'speed', cx: 110, cy: 84, r: 62, a0: 130, sweep: 280, labelY: 0.34 },
+    { role: 'tach', cx: 250, cy: 84, r: 62, a0: 130, sweep: 250, labelY: -0.3, label: 'x1000', mark(g, d) { zarc(g, d.cx, d.cy, d.r * 0.8, 55, 122, 5, '#2b7fd6'); zt(g, 'EfficientDynamics', d.cx, d.cy + d.r * 0.56, 5.5, 'rgba(160,200,255,.8)', { fam: GZ.sans, w: 500 }); } },
+    { role: 'temp', cx: 330, cy: 110, r: 24, a0: 150, sweep: 240, sc: { numS: 0.3 }, label: false },
+  ],
+  deco(g) { zLogo(g, 'bmw', 180, 30, 20, 20); },
+  live(g, S) { zt(g, S.gear, 138, 151, 14, '#ff7a2e', { glow: '#ff7a2e' }); zt(g, String(S.spd), 196, 151, 15, '#ff7a2e', { a: 'right', glow: '#ff7a2e' }); zt(g, S.unit, 200, 153, 8, '#ff7a2e', { a: 'left', w: 600 }); } });
+// BMW i8 (photos: the Sport display): two thick glowing bands running red into orange, white numerals outside them,
+// the speed in the left one, SPORT in the right, a red road in perspective between them, the gear at the lower right.
+const i8 = (() => {
+  const pal = { fill: '#ff5a1a', num: '#ffe2d0', tick: 'rgba(255,170,130,.7)', track: 'rgba(255,90,26,.16)', plate: '#0a0403', hot: '#ffd23c', mark: (g, d) => zLogo(g, 'bmw', d.cx, d.cy - d.r * 0.55, 13, 13) };
+  const A = { cx: 84, cy: 92, r: 54, a0: 120, sweep: 250 }, B = { cx: 276, cy: 92, r: 54, a0: 170, sweep: 250 };
+  const ring = (g, d, f, on) => { const gr = g.createLinearGradient(d.cx - d.r, d.cy + d.r, d.cx + d.r, d.cy - d.r); gr.addColorStop(0, on ? '#c2161c' : 'rgba(194,22,28,.2)'); gr.addColorStop(1, on ? '#ff8a2a' : 'rgba(255,138,42,.2)'); zarc(g, d.cx, d.cy, d.r, d.a0, d.a0 + d.sweep * f, 13, gr); };
+  return screenCluster(pal, {
     face(g, L) {
-      if (L.compact) return small.face(g, L);
-      zPanel(g, L, pal.plate); const fr = CAR.redline / 1000 / tachMax;
-      zPoly(g, Lp, 0, 1, 10, 'rgba(255,255,255,.1)'); zPoly(g, Rp, 0, 1, 10, 'rgba(255,255,255,.1)'); zPoly(g, Rp, fr, 1, 10, 'rgba(227,32,42,.42)');
-      for (let k = 0; k <= tachMax; k++) { const [x, y] = zPolyAt(Rp, k / tachMax), dx = 262 - x, dy = 90 - y, n = Math.hypot(dx, dy); zt(g, String(k), x + dx / n * 18, y + dy / n * 18, 12.5, k >= CAR.redline / 1000 ? RED : pal.num, { i: true, w: 700 }); }
-      const sc = zSpeedScale(200); for (let v = 0; v <= sc.max; v += sc.major * 2) { const [x, y] = zPolyAt(Lp, v / sc.max), dx = 98 - x, dy = 90 - y, n = Math.hypot(dx, dy); zt(g, String(v), x + dx / n * 18, y + dy / n * 18, 9.5, 'rgba(233,237,242,.75)', { i: true, w: 600 }); }
-      // the three M stripes
-      [['#2b9ad6', 0], ['#1e3f8f', 5], [RED, 10]].forEach(([c, dx]) => { g.beginPath(); g.moveTo(168 + dx, 150); g.lineTo(173 + dx, 150); g.lineTo(179 + dx, 138); g.lineTo(174 + dx, 138); g.closePath(); g.fillStyle = c; g.fill(); });
+      zPlate(g, L, pal.plate);
+      const glow = g.createRadialGradient(180, 120, 4, 180, 120, 150); glow.addColorStop(0, 'rgba(255,60,20,.45)'); glow.addColorStop(1, 'rgba(0,0,0,0)'); zrr(g, 1, 1, 358, 178, 18); g.fillStyle = glow; g.fill();
+      g.strokeStyle = 'rgba(255,120,70,.5)'; g.lineWidth = 1; for (const k of [-3, -2, -1, 1, 2, 3]) { g.beginPath(); g.moveTo(180 + k * 5, 96); g.lineTo(180 + k * 38, 150); g.stroke(); } g.beginPath(); g.moveTo(130, 96); g.lineTo(230, 96); g.stroke();
+      ring(g, A, 1, false); ring(g, B, 1, false);
+      const sc = speedScale(180), stA = { tick: pal.tick, num: pal.num, weight: 500 };
+      zScale(g, { ...A, r: 74 }, { ...sc, numR: 1.0, tickR: 0.86, tickL: 0.05, numS: 0.11 }, stA);
+      zScale(g, { ...B, r: 74 }, tachScale({ numR: 1.0, tickR: 0.86, tickL: 0.05, numS: 0.13 }), { ...stA, redNums: true, red: '#ffd23c' });
+      zLogo(g, 'bmw', 180, 30, 18, 18);
+      zt(g, 'SPORT', B.cx, B.cy, 12, '#ffd9c4', { w: 700 });
     },
-    live(g, S, L) {
-      if (L.compact) return small.live(g, S, L);
-      const fr = CAR.redline / 1000 / tachMax, sc = zSpeedScale(200);
-      g.save(); g.shadowColor = '#cfe6ff'; g.shadowBlur = 8; zPoly(g, Lp, 0, Math.min(1, S.spd / sc.max), 10, pal.fill); zPoly(g, Rp, 0, Math.min(S.f, fr), 10, pal.fill); if (S.f > fr) zPoly(g, Rp, fr, S.f, 10, RED); g.restore();
-      zt(g, String(S.spd), 104, 86, 48, '#fff', { i: true, w: 800 }); zt(g, S.unit, 104, 120, 11, 'rgba(255,255,255,.55)', { w: 600 });
-      zt(g, S.gear, 258, 86, 48, S.gear === 'R' ? '#ffb238' : '#fff', { i: true, w: 800 }); zt(g, 'x1000 rpm', 258, 120, 9, 'rgba(255,255,255,.5)', { w: 600 });
+    live(g, S) {
+      const sc = speedScale(180);
+      g.save(); g.shadowColor = '#ff5a1a'; g.shadowBlur = 10; ring(g, A, Math.min(1, S.spd / sc.max), true); ring(g, B, S.f, true); g.restore();
+      zt(g, String(S.spd), A.cx, A.cy - 2, 34, '#fff', { w: 700 }); zt(g, S.unit, A.cx, A.cy + 22, 9, 'rgba(255,255,255,.6)', { w: 500 });
+      zt(g, `S${S.gear}`, 344, 166, 13, '#fff', { a: 'right', w: 700 }); zt(g, `${Math.round(S.rpm / 10) * 10}`, B.cx, B.cy + 18, 9, 'rgba(255,255,255,.6)', { w: 500 });
     },
-  };
+  });
 })();
-// ---- the Aventador SVJ (the owner's picture): an arch of revs from 0 to 10, yellow running into red, over a big gear
-// letter on a field of hexagons, the speed at the lower right
-const svjCluster = (() => {
-  const pal = { fill: '#f5d21f', num: '#f3ecc6', plate: 'rgba(8,8,7,.92)', gear: '#ff3b30', italic: true }, small = ringCluster(pal), C = [180, 226, 188], A0 = 207, A1 = 333, N = 64;
-  const seg = (g, k, color) => { const a = A0 + (A1 - A0) * k / N; zarc(g, C[0], C[1], C[2], a + 0.25, a + (A1 - A0) / N - 0.25, 12, color); };
-  const col = (k, on) => { const f = k / N, fr = CAR.redline / 1000 / tachMax; return f >= fr ? (on ? '#ff2a1f' : 'rgba(255,42,31,.3)') : f > fr - 0.14 ? (on ? '#ff9a1f' : 'rgba(255,154,31,.2)') : (on ? '#f5d21f' : 'rgba(245,210,31,.14)'); };
-  return {
+// Corvette (the owner: "for a c8 but use it for the c7"; photos: C8 Z06 display): a deep red screen, one round rev
+// counter in the middle with the crossed flags at its top, the gear and speed inside, a red needle, amber then red
+// on its last numbers; oil pressure and temperature tiles to the left, the performance ring to the right.
+const c7 = (() => {
+  const pal = { fill: '#f4f4f4', num: '#f1f3f5', plate: '#12060a', italic: false, mark: (g, d) => crossedFlags(g, d.cx, d.cy - d.r * 0.56, 9) };
+  const D = { cx: 180, cy: 92, r: 76, a0: 130, sweep: 280 };
+  return screenCluster(pal, {
     face(g, L) {
-      if (L.compact) return small.face(g, L);
-      zPanel(g, L, pal.plate);
-      g.save(); zrr(g, 1, 1, L.W - 2, L.H - 2, 18); g.clip(); g.strokeStyle = 'rgba(255,255,255,.05)'; g.lineWidth = 1;
-      for (let row = 0; row < 7; row++) for (let c = 0; c < 12; c++) { const x = 60 + c * 22 + (row % 2) * 11, y = 78 + row * 19; g.beginPath(); for (let k = 0; k < 6; k++) { const a = (60 * k + 30) * D2R; g[k ? 'lineTo' : 'moveTo'](x + Math.cos(a) * 12, y + Math.sin(a) * 12); } g.closePath(); g.stroke(); }
+      zPlate(g, L, '#0a0305');
+      const bg = g.createLinearGradient(0, 0, 0, 180); bg.addColorStop(0, 'rgba(150,20,30,.55)'); bg.addColorStop(1, 'rgba(60,6,12,.25)'); zrr(g, 1, 1, 358, 178, 18); g.fillStyle = bg; g.fill();
+      zBezel(g, D.cx, D.cy, D.r, 5, 'gun'); zFace(g, D.cx, D.cy, D.r, '#060607', '#1a1b1f');
+      const red = CAR.redline / 1000; zarc(g, D.cx, D.cy, D.r * 0.955, D.a0 + D.sweep * (red - 1) / tachMax, D.a0 + D.sweep * red / tachMax, 4, '#f2c21a'); zarc(g, D.cx, D.cy, D.r * 0.955, D.a0 + D.sweep * red / tachMax, D.a0 + D.sweep, 4, RED);
+      zScale(g, D, tachScale({ numR: 0.74, numS: 0.17, tickR: 0.92, tickL: 0.09, skip0: true, red: null }), { tick: '#e9edf2', num: '#f4f4f4', weight: 600 });
+      crossedFlags(g, D.cx, D.cy - D.r * 0.5, 11);
+      for (const [y, t] of [[52, 'Oil Pressure'], [108, 'Oil Temperature']]) { zrr(g, 14, y - 16, 80, 38, 4); g.fillStyle = 'rgba(0,0,0,.35)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1; g.stroke(); zt(g, t, 54, y - 8, 7.5, 'rgba(255,255,255,.7)', { w: 500 }); g.fillStyle = 'rgba(255,255,255,.15)'; g.fillRect(22, y + 12, 64, 3); g.fillStyle = '#f4f4f4'; g.fillRect(22, y + 12, y < 80 ? 30 : 40, 3); }
+      zt(g, '28', 54, 57, 13, '#fff', { w: 600 }); zt(g, 'psi', 72, 59, 7, 'rgba(255,255,255,.6)', { w: 500 }); zt(g, '190', 52, 113, 13, '#fff', { w: 600 }); zt(g, '°F', 74, 115, 7, 'rgba(255,255,255,.6)', { w: 500 });
+      zrr(g, 266, 36, 80, 110, 4); g.fillStyle = 'rgba(0,0,0,.35)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.14)'; g.stroke(); zt(g, 'Performance', 306, 48, 7.5, 'rgba(255,255,255,.7)', { w: 500 });
+      for (const r of [12, 24, 36]) zarc(g, 306, 98, r, 0, 360, 0.8, 'rgba(255,255,255,.3)'); g.strokeStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.moveTo(266, 98); g.lineTo(346, 98); g.moveTo(306, 60); g.lineTo(306, 136); g.stroke();
+      zt(g, 'Z06', 306, 160, 11, '#f4f4f4', { i: true, w: 800 });
+    },
+    live(g, S) {
+      zt(g, S.gear, D.cx, D.cy - 4, 40, S.gear === 'R' ? '#ffb238' : '#fff', { w: 700 }); zt(g, String(S.spd), D.cx, D.cy + 38, 20, '#fff', { w: 600 }); zt(g, S.unit.toUpperCase(), D.cx, D.cy + 54, 7.5, 'rgba(255,255,255,.65)', { w: 500 });
+      zNeedle(g, D, S.f, { needle: '#e3202a', needleGlow: 'rgba(255,40,40,.6)', needleW: 0.022, needleL: 0.97, tail: -0.62, hubR: 0.001, noShine: true });
+      zcirc(g, 306 + clamp(car.latAcc || 0, -12, 12) * 2.6, 98 - clamp(car.lonAcc || 0, -12, 12) * 2.6, 3.2); g.fillStyle = '#ffd21a'; g.fill();
+      zGlass(g, D.cx, D.cy, D.r);
+    },
+  });
+})();
+// Camaro ZL1 (photos: 2018 ZL1): rev counter on the left, speedometer on the right, each in a chrome ring with a
+// cold blue light behind it, red needles; between them the screen with its row of four small gauges and the speed.
+const ZL1_ST = { ...WHITE, needle: '#ff2a22', needleGlow: 'rgba(255,40,30,.6)', needleW: 0.03, hubR: 0.15, weight: 600, redNums: true };
+const zl1 = dials({ mph: 200, st: ZL1_ST, badge: 'chevrolet',
+  plate(g, L) { zPlate(g, L, '#050608'); for (const x of [78, 282]) { g.save(); g.shadowColor = '#3aa0ff'; g.shadowBlur = 14; zarc(g, x, 92, 71, 0, 360, 2, 'rgba(70,160,255,.75)'); g.restore(); } zrr(g, 140, 30, 80, 124, 5); g.fillStyle = '#0a0b0e'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1; g.stroke(); },
+  dials: [
+    { role: 'tach', cx: 78, cy: 92, r: 66, bezel: [0.05, 'chrome'], label: 'RPM x1000', labelY: 0.34 },
+    { role: 'speed', cx: 282, cy: 92, r: 66, bezel: [0.05, 'chrome'], label: 'MPH', labelY: 0.34 },
+  ],
+  deco(g) {
+    [152, 171, 190, 209].forEach((x, k) => { const d = { cx: x, cy: 46, r: 8.5, a0: 150, sweep: 240 }; zFace(g, x, 46, 8.5, '#050506', '#15161a'); zarc(g, x, 46, 8.5, 0, 360, 0.8, 'rgba(255,255,255,.35)'); zScale(g, d, { max: 4, major: 1, minor: 1, fmt: () => '', tickL: 0.3 }, { tick: '#ddd', num: '#ddd' }); zNeedle(g, d, [0.5, 0.45, 0.6, 0.35][k], { needle: '#ff2a22', needleW: 0.09, hubR: 0.2 }); });
+    zLogo(g, 'chevrolet', 180, 136, 30, 30, { alpha: 0.9 }); zt(g, 'ZL1', 180, 118, 10, '#e3202a', { i: true, w: 800 });
+  },
+  live(g, S) { zt(g, String(S.spd), 180, 78, 26, '#fff', { w: 600 }); zt(g, S.unit, 180, 96, 8, 'rgba(255,255,255,.6)', { w: 500 }); zrr(g, 204, 100, 12, 14, 2); g.fillStyle = 'rgba(255,255,255,.08)'; g.fill(); zt(g, S.gear, 210, 107, 11, S.gear === 'R' ? '#ffb238' : '#fff', { w: 700 }); } });
+// Challenger Hellcat (photos: Hellcat clusters, and the carbon surround the owner sent): two dials whose faces are a
+// red band carrying the numerals round a dark perforated centre, the rev counter on the left; the screen between
+// them with the speed; the whole set in carbon fibre.
+const hcFace = (g, d) => { zFace(g, d.cx, d.cy, d.r, '#0a0a0b', '#111'); const gr = g.createRadialGradient(d.cx, d.cy, d.r * 0.5, d.cx, d.cy, d.r); gr.addColorStop(0, '#5a070c'); gr.addColorStop(0.5, '#b01219'); gr.addColorStop(1, '#6a0a10'); zarc(g, d.cx, d.cy, d.r * 0.76, 0, 360, d.r * 0.44, gr); zcirc(g, d.cx, d.cy, d.r * 0.5); zFill(g, 'mesh', 0.15); zarc(g, d.cx, d.cy, d.r * 0.5, 0, 360, 1.4, 'rgba(0,0,0,.8)'); };
+const hc = dials({ mph: 200, badge: 'dodge', badgeW: 0.5, st: { tick: '#fff', num: '#fff', needle: '#f4f4f4', needleW: 0.03, hubR: 0.2, hub: '#0a0a0b', hub2: '#2a2b2e', italic: true, weight: 800, faceFn: hcFace, redNums: false, red: '#ffd21a' },
+  plate(g, L) { zrr(g, 1, 1, 358, 178, 18); zFill(g, 'carbon', 0.25); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.12)'; g.stroke(); zrr(g, 140, 34, 80, 112, 5); g.fillStyle = '#08090b'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.14)'; g.stroke(); },
+  dials: [
+    { role: 'tach', cx: 76, cy: 92, r: 66, bezel: [0.07, 'gun'], label: 'RPM x1000', labelY: 0.3, sc: { numR: 0.76, numS: 0.2, tickR: 0.98, tickL: 0.1 } },
+    { role: 'speed', cx: 284, cy: 92, r: 66, bezel: [0.07, 'gun'], label: 'MPH', labelY: 0.3, sc: { numR: 0.76, numS: 0.125, tickR: 0.98, tickL: 0.1 } },
+  ],
+  deco(g) { zLogo(g, 'dodge', 180, 126, 62, 62, { alpha: 0.95 }); zt(g, 'SRT', 180, 50, 13, '#e3202a', { i: true, w: 800 }); },
+  live(g, S) { zt(g, String(S.spd), 180, 80, 28, '#fff', { i: true, w: 700 }); zt(g, S.unit.toUpperCase(), 180, 98, 7.5, 'rgba(255,255,255,.6)', { w: 500 }); zt(g, S.gear, 208, 52, 12, S.gear === 'R' ? '#ffb238' : '#fff', { w: 700 }); } });
+// Viper ACR (photos: 2016 Viper cluster): a big rev counter glowing red in a bright ring in the middle, the speed
+// shown in it; an analog speedometer to its left; two small gauges to its right.
+const viperFace = (g, d) => { const gr = g.createRadialGradient(d.cx, d.cy, d.r * 0.1, d.cx, d.cy, d.r); gr.addColorStop(0, '#ff3a36'); gr.addColorStop(0.55, '#a30f16'); gr.addColorStop(1, '#3a0508'); zcirc(g, d.cx, d.cy, d.r); g.fillStyle = gr; g.fill(); };
+const viper = dials({ mph: 220, st: { ...WHITE, needle: '#f4f4f4', needleW: 0.026, hubR: 0.1, italic: true, weight: 700 },
+  plate(g, L) { zPlate(g, L, '#060607'); },
+  dials: [
+    { role: 'speed', cx: 62, cy: 100, r: 54, bezel: [0.04, 'black'], labelY: 0.4 },
+    { role: 'tach', cx: 184, cy: 90, r: 78, bezel: [0.09, 'chrome'], st: { faceFn: viperFace, num: '#fff', tick: '#fff' }, label: false, sc: { numR: 0.72 },
+      mark(g, d) { zLogo(g, 'dodge', d.cx, d.cy - d.r * 0.16, d.r * 0.74, d.r * 0.74, { alpha: 0.9 }); zt(g, 'ACR', d.cx, d.cy + d.r * 0.22, d.r * 0.16, 'rgba(0,0,0,.6)', { i: true, w: 800 }); },
+      lcd: { dx: 0, dy: 0.68, w: 0.64, h: 0.25, show: 'both', bg: 'rgba(20,2,3,.8)', ink: '#fff' } },
+    { role: 'temp', cx: 304, cy: 66, r: 28, a0: 150, sweep: 240, bezel: [0.07, 'black'], label: false },
+    { role: 'fuel', cx: 304, cy: 128, r: 28, a0: 150, sweep: 240, bezel: [0.07, 'black'], label: false },
+  ],
+});
+// Nissan GT-R R35 (photos: R35 meter assemblies): the speedometer on a carbon weave at the left, the big rev counter
+// in the middle with the GT-R mark and a display in its foot, the gear in its own round window at the upper right, a
+// small boost gauge under that; red needles, satin rings.
+const GTR_ST = { ...WHITE, needle: '#ff2a1c', needleGlow: 'rgba(255,40,20,.5)', needleW: 0.03, hubR: 0.16, hub2: '#55585e', weight: 600, redNums: true };
+const gtrMark = (g, x, y, s, ink = '#e9edf2') => { zt(g, 'GT-', x - s * 0.3, y, s, ink, { i: true, w: 800, fam: GZ.sans }); zt(g, 'R', x + s * 0.75, y, s, '#e3202a', { i: true, w: 800, fam: GZ.sans }); };
+const gtr = dials({ mph: 220, st: GTR_ST,
+  plate(g, L) { zPlate(g, L, '#060607'); },
+  dials: [
+    { role: 'speed', cx: 66, cy: 102, r: 58, a0: 120, sweep: 285, bezel: [0.06, 'gun'], st: { faceFn: (g, d) => { zcirc(g, d.cx, d.cy, d.r); zFill(g, 'carbon', 0.35); } }, labelY: 0.36 },
+    { role: 'tach', cx: 190, cy: 90, r: 80, bezel: [0.08, 'alu'], labelY: -0.36, mark: (g, d) => gtrMark(g, d.cx, d.cy + d.r * 0.34, d.r * 0.17), lcd: { dx: 0, dy: 0.64, w: 0.7, h: 0.24, show: 'speed', bg: '#04101c', ink: '#9fd0ff' } },
+    { role: 'boost', cx: 316, cy: 134, r: 30, a0: 150, sweep: 240, bezel: [0.08, 'gun'], label: false },
+  ],
+  deco(g) { zBezel(g, 312, 58, 32, 3, 'gun'); zFace(g, 312, 58, 32, '#04101c', '#0d2a48'); zLogo(g, 'nissan', 250, 164, 24, 24, { alpha: 0.6 }); },
+  live(g, S) { zt(g, S.gear, 312, 60, 34, S.gear === 'R' ? '#ffd27a' : '#dff0ff', { w: 700, glow: '#6ab8ff' }); zGlass(g, 312, 58, 32); } });
+// Skyline R34 (photos: R34 GT-R clusters; this car is a Nismo Z-tune, which wears Nismo's white dials): a brushed
+// aluminium plate with four dials sunk into it, a small one, the rev counter to 10,000, the speedometer with the
+// GT-R mark and its display, a small one; red needles.
+const r34Plate = (g, L) => { zPlate(g, L, '#060607'); g.beginPath(); g.moveTo(10, 150); g.lineTo(10, 86); g.quadraticCurveTo(60, 40, 180, 24); g.quadraticCurveTo(300, 40, 350, 86); g.lineTo(350, 150); g.quadraticCurveTo(180, 172, 10, 150); g.closePath(); zFill(g, 'brushed'); const sh = g.createLinearGradient(0, 20, 0, 170); sh.addColorStop(0, 'rgba(255,255,255,.12)'); sh.addColorStop(1, 'rgba(0,0,0,.4)'); g.fillStyle = sh; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.3)'; g.stroke(); };
+const r34Dials = (st, face, ink) => [
+  { role: 'boost', cx: 44, cy: 112, r: 26, a0: 150, sweep: 240, bezel: [0.1, 'black'], face, label: false },
+  { role: 'tach', cx: 126, cy: 94, r: 58, bezel: [0.06, 'black'], face, labelY: 0.4, lcd: { dx: 0, dy: 0.68, w: 0.4, h: 0.24, show: 'gear', bg: '#1a0603', ink: '#ff5a2e' } },
+  { role: 'speed', cx: 244, cy: 94, r: 58, bezel: [0.06, 'black'], face, labelY: 0.3, mark: (g, d) => gtrMark(g, d.cx, d.cy - d.r * 0.34, d.r * 0.17, ink), lcd: { dx: 0, dy: 0.64, w: 0.84, h: 0.26, show: 'speed', bg: '#1a0603', ink: '#ff5a2e' } },
+  { role: 'fuel', cx: 320, cy: 112, r: 26, a0: 150, sweep: 240, bezel: [0.1, 'black'], face, label: false },
+];
+const R34_WHITE = { tick: '#111', num: '#111', dim: 'rgba(0,0,0,.6)', needle: '#e3202a', needleW: 0.03, hubR: 0.14, hub: '#111', hub2: '#444', weight: 700, redNums: true };
+const r34 = dials({ mph: 200, badge: 'nissan', st: R34_WHITE, plate: r34Plate, dials: r34Dials(R34_WHITE, ['#d9d9d4', '#fbfbf8'], '#17181a'), deco: (g) => zLogo(g, 'nissan', 185, 158, 20, 20, { alpha: 0.75 }) });
+// the Fast and Furious Skyline (photos of the film car's cabin): the stock black dials, the whole dash washed in blue light
+const R34_BLACK = { ...WHITE, needle: '#ff3a1f', needleW: 0.03, hubR: 0.14, weight: 600, redNums: true, glow: 'rgba(90,150,255,.9)' };
+const r34ff = dials({ mph: 200, badge: 'nissan', st: R34_BLACK, plate(g, L) { r34Plate(g, L); const gl = g.createRadialGradient(180, 150, 10, 180, 100, 220); gl.addColorStop(0, 'rgba(40,110,255,.5)'); gl.addColorStop(1, 'rgba(10,30,120,.12)'); zrr(g, 1, 1, 358, 178, 18); g.fillStyle = gl; g.fill(); },
+  dials: r34Dials(R34_BLACK, ['#05070c', '#101a30']).map((d) => (d.lcd ? { ...d, lcd: { ...d.lcd, bg: '#030a1c', ink: '#7db4ff' } } : d)), deco: (g) => zLogo(g, 'nissan', 185, 158, 20, 20, { alpha: 0.75 }) });
+// ---- race cars (photos: the 2009 R8 LMS's cockpit): no dials at all, a grey racing display behind the wheel with a
+// bar of revs across its top, a row of shift zLampsG above it, the gear large in the middle
+const raceDash = (o) => screenCluster({ fill: o.cfill || '#dfe6ea', num: '#e9edf2', plate: '#08090a', gear: '#fff', ink: '#fff', track: 'rgba(255,255,255,.1)', mark: (g, d) => zLogo(g, o.logo, d.cx, d.cy - d.r * 0.56, 22, 22, { alpha: 0.8 }) }, {
+  face(g, L) {
+    zrr(g, 1, 1, 358, 178, 14); zFill(g, 'carbon', 0.3); g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1; g.stroke();
+    zrr(g, 40, 14, 280, 152, 10); g.fillStyle = '#17181b'; g.fill(); g.strokeStyle = '#3a3c40'; g.lineWidth = 2; g.stroke();
+    zrr(g, 56, 40, 248, 112, 4); const lg = g.createLinearGradient(0, 40, 0, 152); lg.addColorStop(0, o.lcd[0]); lg.addColorStop(1, o.lcd[1]); g.fillStyle = lg; g.fill();
+    for (let k = 0; k <= tachMax; k++) zt(g, String(k), 66 + 228 * k / tachMax, 68, 8, o.ink, { fam: GZ.sans, w: 700 });
+    for (const [x, t] of [[96, 'SPEED'], [264, 'RPM']]) zt(g, t, x, 86, 7, o.dim, { fam: GZ.sans, w: 700 });
+    zrr(g, 152, 76, 56, 62, 4); g.strokeStyle = o.dim; g.lineWidth = 1.2; g.stroke();
+    zt(g, 'OIL 98°C', 96, 138, 7.5, o.ink, { fam: GZ.sans, w: 700 }); zt(g, 'H2O 84°C', 264, 138, 7.5, o.ink, { fam: GZ.sans, w: 700 });
+    zLogo(g, o.logo, 300, 26, 28, 28, { tint: '#c9cdd2' }); if (o.name) zt(g, o.name, 62, 27, 9, '#c9cdd2', { a: 'left', i: true, w: 800 });
+  },
+  live(g, S) {
+    const fr = CAR.redline / 1000 / tachMax, N = 46, lit = Math.round(S.f * N);
+    for (let k = 0; k < N; k++) { g.fillStyle = k < lit ? o.ink : o.off; g.fillRect(62 + k * 5.12, 46, 3.9, 12 + (k / N > fr ? 3 : 0)); }
+    const leds = 12, on = Math.round(clamp((S.f - fr + 0.3) / 0.3, 0, 1) * leds);
+    for (let k = 0; k < leds; k++) { const c = k < 4 ? '#3dff6a' : k < 8 ? '#ffd21a' : '#ff2a22'; g.save(); if (k < on) { g.shadowColor = c; g.shadowBlur = 6; } zcirc(g, 114 + k * 12, 27, 3.4); g.fillStyle = k < on ? c : 'rgba(255,255,255,.1)'; g.fill(); g.restore(); }
+    zt(g, S.gear, 180, 110, 50, o.ink, { fam: GZ.sans, w: 800 });
+    zt(g, String(S.spd), 96, 108, 24, o.ink, { fam: GZ.sans, w: 800 }); zt(g, S.unit, 96, 124, 7, o.dim, { fam: GZ.sans, w: 700 });
+    zt(g, String(Math.round(S.rpm / 10) * 10), 264, 108, 20, o.ink, { fam: GZ.sans, w: 800 });
+  },
+});
+const r8lms = raceDash({ logo: 'audi', name: 'R8 LMS', lcd: ['#b9c9d2', '#93a8b4'], ink: '#10161a', dim: 'rgba(16,22,26,.6)', off: 'rgba(16,22,26,.13)' });
+const r34r3 = raceDash({ logo: 'nissan', name: 'R3', cfill: '#7dffa0', lcd: ['#0b1a12', '#061009'], ink: '#7dffa0', dim: 'rgba(125,255,160,.6)', off: 'rgba(125,255,160,.12)' });
+// Carrera GT (photos: Carrera GT clusters): five dials in bright rings against carbon, overlapping, the rev counter in
+// the middle the largest and the only one with a silver face; yellow-orange needles; amber displays in their feet.
+const CGT_ST = { ...WHITE, needle: '#ffae1a', needleGlow: 'rgba(255,170,30,.5)', needleW: 0.03, hubR: 0.13, weight: 500, lcd: '#ffae1a' };
+const cgt = dials({ mph: 220, st: CGT_ST,
+  plate(g, L) { zrr(g, 1, 1, 358, 178, 18); zFill(g, 'carbon', 0.3); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.12)'; g.stroke(); },
+  dials: [
+    { role: 'temp', cx: 26, cy: 104, r: 30, a0: 150, sweep: 240, bezel: [0.1, 'chrome'], label: false },
+    { role: 'fuel', cx: 334, cy: 104, r: 30, a0: 150, sweep: 240, bezel: [0.1, 'chrome'], label: false },
+    { role: 'speed', cx: 92, cy: 98, r: 52, bezel: [0.08, 'chrome'], labelY: -0.34, lcd: { dx: 0, dy: 0.6, w: 0.8, h: 0.27, show: 'speed', bg: '#140a02' } },
+    { role: 'boost', cx: 268, cy: 98, r: 52, bezel: [0.08, 'chrome'], sc: { max: 4, major: 1, minor: 2, fmt: (v) => ['0', '', '1/2', '', '4/4'][v], numS: 0.15, numR: 0.66 }, label: false, lcd: { dx: 0, dy: 0.6, w: 0.5, h: 0.27, show: 'gear', bg: '#140a02' } },
+    { role: 'tach', cx: 180, cy: 86, r: 70, bezel: [0.09, 'chrome'], st: { face: ['#aeb2b7', '#e6e8ea'], tick: '#17181a', num: '#17181a', dim: 'rgba(0,0,0,.6)', weight: 600 }, label: 'x1000 1/min', labelY: -0.38, logo: { file: 'porsche', w: 0.3, h: 0.3, dy: 0.34 } },
+  ] });
+// 911 GT3 RS (photos: 992 GT3 RS clusters): one real dial, the rev counter to 10,000 with GT3 RS written across it, a
+// yellow needle, the speed shown in its foot; a dark screen either side with two small rings each (the chassis settings).
+const gt3 = dials({ mph: 220, st: { ...WHITE, needle: '#e8e21a', needleGlow: 'rgba(232,226,26,.6)', needleW: 0.026, hubR: 0.12, weight: 500, redNums: true },
+  plate(g, L) {
+    zPlate(g, L, '#050506');
+    for (const [x, t, v] of [[58, 'Compression', ['+2', '+4']], [302, 'Rebound', ['+2', '+4']]]) {
+      zrr(g, x - 48, 28, 96, 124, 6); const gr = g.createLinearGradient(0, 28, 0, 152); gr.addColorStop(0, '#0b1626'); gr.addColorStop(1, '#060a12'); g.fillStyle = gr; g.fill(); g.strokeStyle = 'rgba(255,255,255,.1)'; g.lineWidth = 1; g.stroke();
+      zt(g, t, x, 42, 8, 'rgba(255,255,255,.8)', { w: 600 });
+      [[72, 'Front', '#ff4a40'], [116, 'Rear', '#3a9bff']].forEach(([y, lab, c], k) => { zarc(g, x - 8, y, 15, 0, 360, 3, 'rgba(255,255,255,.12)'); zarc(g, x - 8, y, 15, -90, 130, 3, c); zt(g, v[k], x - 8, y, 11, '#fff', { w: 700 }); zt(g, lab, x + 26, y, 7, 'rgba(255,255,255,.6)', { w: 500 }); });
+    }
+    zLogo(g, 'porsche', 302, 144, 12, 12, { alpha: 0.9 }); zt(g, 'TRACK', 58, 144, 7, 'rgba(255,255,255,.6)', { w: 600 });
+  },
+  dials: [{ role: 'tach', cx: 180, cy: 90, r: 78, bezel: [0.08, 'gun'], label: false, mark(g, d) { zt(g, 'GT3', d.cx - d.r * 0.17, d.cy - d.r * 0.3, d.r * 0.2, '#c9cdd2', { i: true, w: 800, fam: GZ.sans }); zt(g, 'RS', d.cx + d.r * 0.26, d.cy - d.r * 0.3, d.r * 0.2, '#e3202a', { i: true, w: 800, fam: GZ.sans }); }, lcd: { dx: 0, dy: 0.62, w: 0.7, h: 0.26, show: 'both', bg: '#050608', ink: '#fff' } }] });
+// McLaren 720S (photos: the 720S's folding display): a fan of fine lines for the revs round a rounded box with the
+// speed in it, the gear in orange below, 720S at the top right, two green rings (temperatures) at the right.
+const mcl = (() => {
+  const pal = { fill: '#f3f5f7', num: '#eef3f7', plate: '#050607', gear: '#ff8a1f', w: 5, mark: (g, d) => zt(g, '720S', d.cx, d.cy - d.r * 0.6, 9, '#ff5a2e', { i: true, w: 800 }) };
+  const D = { cx: 176, cy: 96, r: 62, a0: 150, sweep: 235 };
+  return screenCluster(pal, {
+    face(g, L) {
+      zPlate(g, L, pal.plate);
+      const red = CAR.redline / 1000;
+      for (let k = 0; k <= tachMax * 10; k++) { const v = k / 10, a = (D.a0 + D.sweep * v / tachMax) * D2R, major = k % 10 === 0, r0 = D.r + (major ? -3 : 3), r1 = D.r + 13; g.beginPath(); g.moveTo(D.cx + Math.cos(a) * r0, D.cy + Math.sin(a) * r0); g.lineTo(D.cx + Math.cos(a) * r1, D.cy + Math.sin(a) * r1); g.lineWidth = major ? 1.4 : 0.7; g.strokeStyle = v >= red ? 'rgba(255,60,50,.6)' : 'rgba(255,255,255,.28)'; g.stroke(); if (major) zt(g, String(v), D.cx + Math.cos(a) * (D.r - 12), D.cy + Math.sin(a) * (D.r - 12), 10, v >= red ? '#ff4a40' : pal.num, { w: 500 }); }
+      zrr(g, D.cx - 24, D.cy - 22, 48, 44, 9); g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 1.6; g.stroke();
+      zt(g, '720S', 318, 30, 13, '#ff5a2e', { i: true, w: 800 }); zLogo(g, 'mclaren', 286, 30, 22, 22, { alpha: 0.9 });
+      for (const x of [282, 322]) { zarc(g, x, 96, 15, 140, 400, 2.4, 'rgba(255,255,255,.14)'); zarc(g, x, 96, 15, 140, 300, 2.4, '#3ddc6a'); zt(g, x < 300 ? '91°' : '92°', x, 96, 9, '#e9edf2', { w: 600 }); }
+      zt(g, 'Vehicle info', 22, 40, 8, 'rgba(255,255,255,.75)', { a: 'left', w: 500 }); zt(g, 'No messages', 22, 54, 8, 'rgba(255,255,255,.5)', { a: 'left', w: 500 }); zt(g, 'COMFORT · ACTIVE', 302, 140, 7, 'rgba(255,255,255,.55)', { w: 600 });
+      g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1; g.beginPath(); g.moveTo(20, 64); g.lineTo(92, 64); g.stroke();
+    },
+    live(g, S) {
+      const red = CAR.redline / 1000, n = Math.round(S.f * tachMax * 10);
+      g.save(); g.shadowColor = '#fff'; g.shadowBlur = 4;
+      for (let k = 0; k <= n; k++) { const v = k / 10, a = (D.a0 + D.sweep * v / tachMax) * D2R; g.beginPath(); g.moveTo(D.cx + Math.cos(a) * (D.r + 3), D.cy + Math.sin(a) * (D.r + 3)); g.lineTo(D.cx + Math.cos(a) * (D.r + 13), D.cy + Math.sin(a) * (D.r + 13)); g.lineWidth = 1.5; g.strokeStyle = v >= red ? '#ff3a30' : '#fff'; g.stroke(); }
       g.restore();
-      for (let k = 0; k < N; k++) seg(g, k, col(k, false));
-      for (let k = 0; k <= tachMax; k++) { const a = (A0 + (A1 - A0) * k / tachMax) * D2R; zt(g, String(k), C[0] + Math.cos(a) * (C[2] - 19), C[1] + Math.sin(a) * (C[2] - 19), 13, k >= CAR.redline / 1000 ? '#ff5a4f' : pal.num, { i: true, w: 700 }); }
-      zt(g, 'CORSA', 116, 104, 10, '#ff3b30', { i: true, w: 700 });
+      zt(g, String(S.spd), D.cx, D.cy - 4, 24, '#fff', { w: 600 }); zt(g, S.unit.toUpperCase(), D.cx, D.cy + 13, 6.5, 'rgba(255,255,255,.7)', { w: 500 });
+      zt(g, S.gear, D.cx + 30, D.cy + 46, 26, S.gear === 'R' ? '#ffd27a' : '#ff8a1f', { w: 600 });
+      zt(g, `${Math.round(S.rpm / 10) * 10} rpm`, 22, 78, 9, 'rgba(255,255,255,.7)', { a: 'left', w: 500 });
     },
-    live(g, S, L) {
-      if (L.compact) return small.live(g, S, L);
-      g.save(); g.shadowColor = '#f5d21f'; g.shadowBlur = 6; for (let k = 0; k < Math.round(S.f * N); k++) seg(g, k, col(k, true)); g.restore();
-      zt(g, S.gear, 180, 112, 62, S.gear === 'R' ? '#ffb238' : '#ff3b30', { i: true, w: 800 });
-      zt(g, String(S.spd), 286, 160, 28, '#fff', { a: 'right', i: true, w: 800 }); zt(g, S.unit, 290, 166, 10, 'rgba(255,255,255,.6)', { a: 'left', w: 600 });
-      zt(g, `${Math.round(S.rpm / 10) * 10} rpm`, 64, 164, 10, 'rgba(255,255,255,.5)', { a: 'left', w: 600 });
-    },
-  };
+  });
 })();
-// ---- the S2000: an arc of orange bars for the revs over a big orange digital speed
-const s2kCluster = (() => {
-  const OR = '#ff7a14', pal = { fill: OR, num: '#ffb066', plate: 'rgba(6,5,4,.92)', ink: OR, gear: OR }, small = ringCluster(pal), C = [180, 198, 162], A0 = 211, A1 = 329, N = 54;
-  const seg = (g, k, color) => { const a = A0 + (A1 - A0) * k / N; zarc(g, C[0], C[1], C[2], a + 0.22, a + (A1 - A0) / N - 0.22, 15, color); };
-  return {
+// Ferrari 812 (photos: 812 Superfast clusters, and the F430 dial the owner sent): the yellow rev counter in a deep black
+// hood, the black horse on it, a dark window at its lower right with the gear; a screen either side, the speed on
+// the left one.
+const f812Face = (g, d) => { const gr = g.createRadialGradient(d.cx, d.cy - d.r * 0.2, d.r * 0.1, d.cx, d.cy, d.r); gr.addColorStop(0, '#ffe14a'); gr.addColorStop(0.7, '#f2c200'); gr.addColorStop(1, '#b88f00'); zcirc(g, d.cx, d.cy, d.r); g.fillStyle = gr; g.fill(); };
+const f812 = dials({ mph: 220, st: { tick: '#1a1a1a', num: '#1a1a1a', dim: 'rgba(0,0,0,.65)', needle: '#f4f4f4', needleW: 0.024, hubR: 0.1, hub: '#0a0a0a', hub2: '#3a3a3a', faceFn: f812Face, italic: true, weight: 700, red: '#d2161f', redNums: true, bandIn: true },
+  plate(g, L) {
+    zPlate(g, L, '#050506');
+    zrr(g, 12, 44, 84, 96, 6); g.fillStyle = '#0a0b0e'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1; g.stroke();
+    zrr(g, 264, 44, 84, 96, 6); const gr = g.createLinearGradient(0, 44, 0, 140); gr.addColorStop(0, '#0d2a52'); gr.addColorStop(1, '#07142a'); g.fillStyle = gr; g.fill(); g.strokeStyle = 'rgba(255,255,255,.12)'; g.stroke();
+    zt(g, 'SPORT', 306, 56, 9, '#fff', { i: true, w: 800 });
+    for (const x of [286, 326]) { zarc(g, x, 96, 14, 140, 400, 2.4, 'rgba(255,255,255,.18)'); zarc(g, x, 96, 14, 140, 290, 2.4, '#6ab8ff'); zt(g, x < 300 ? '52' : '42', x, 96, 9, '#fff', { w: 600 }); zt(g, x < 300 ? '°C' : 'bar', x, 120, 6.5, 'rgba(255,255,255,.6)', { w: 500 }); }
+  },
+  dials: [{ role: 'tach', cx: 180, cy: 90, r: 76, a0: 118, sweep: 252, bezel: [0.16, 'black'], label: 'RPM x1000', labelY: -0.36, sc: { numR: 0.7, tickR: 0.97, tickL: 0.1 },
+    mark(g, d, compact) { zLogo(g, 'ferrarikey', d.cx - d.r * 0.36, d.cy + d.r * 0.04, d.r * 0.36, d.r * 0.44, { cut: true, src: [24, 96, 272, 334] }); if (compact) return; zrr(g, d.cx + d.r * 0.14, d.cy + d.r * 0.3, d.r * 0.5, d.r * 0.4, d.r * 0.08); g.fillStyle = '#2a0c08'; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(0,0,0,.6)'; g.stroke(); } }],
+  live(g, S, L) {
+    const d = L.dials[0]; zt(g, S.gear, d.cx + d.r * 0.39, d.cy + d.r * 0.51, d.r * 0.34, S.gear === 'R' ? '#ffd27a' : '#ff7a1e', { w: 700, glow: '#ff7a1e', blur: 6 });
+    zt(g, S.unit, 54, 62, 9, 'rgba(255,255,255,.7)', { w: 500 }); zrr(g, 28, 72, 52, 44, 8); g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1.6; g.stroke(); zt(g, String(S.spd), 54, 95, 26, '#fff', { w: 500 });
+  } });
+// in compact form the horse and the gear window still belong on the dial; the engine above already carries them over
+// Aventador SVJ (the owner's photo, and photos of the car's display): an arch of yellow bars turning red, numbered 0
+// to 10 underneath, over a field of hexagons with the gear large in the middle and the car's name under it, the
+// speed at the lower right; the angular side panels.
+const svj = (() => {
+  const pal = { fill: '#f5d21f', num: '#f3ecc6', plate: '#070706', gear: '#ff3b30', italic: true, mark: (g, d) => zLogo(g, 'lamborghini', d.cx, d.cy - d.r * 0.58, 16, 16) };
+  const pts = arcPts(180, 222, 184, 208, 332, 60), N = 62;
+  const col = (f, on) => { const fr = CAR.redline / 1000 / tachMax; return f >= fr ? (on ? '#ff2a1f' : 'rgba(255,42,31,.28)') : f > fr - 0.13 ? (on ? '#ff9a1f' : 'rgba(255,154,31,.2)') : (on ? '#f5d21f' : 'rgba(245,210,31,.13)'); };
+  return screenCluster(pal, {
     face(g, L) {
-      if (L.compact) return small.face(g, L);
-      zPanel(g, L, pal.plate); const fr = CAR.redline / 1000 / tachMax;
-      for (let k = 0; k < N; k++) seg(g, k, k / N >= fr ? 'rgba(255,40,30,.22)' : 'rgba(255,122,20,.12)');
-      for (let k = 0; k <= tachMax; k++) { const a = (A0 + (A1 - A0) * k / tachMax) * D2R; zt(g, String(k), C[0] + Math.cos(a) * (C[2] - 20), C[1] + Math.sin(a) * (C[2] - 20), 12, k >= CAR.redline / 1000 ? '#ff4a3d' : pal.num, { w: 700 }); }
-      // fuel and temperature: the two short bar scales in the lower corners
-      for (const [x, n, t] of [[26, 6, 'E     F'], [274, 4, 'C     H']]) { for (let k = 0; k < 8; k++) { g.fillStyle = k < n ? 'rgba(255,122,20,.8)' : 'rgba(255,122,20,.14)'; g.fillRect(x + k * 7.5, 150, 5.5, 9); } zt(g, t, x + 29, 167, 8, 'rgba(255,176,102,.7)', { w: 600 }); }
+      zPlate(g, L, pal.plate);
+      g.save(); zrr(g, 1, 1, 358, 178, 18); g.clip(); g.strokeStyle = 'rgba(255,255,255,.055)'; g.lineWidth = 1;
+      for (let row = 0; row < 7; row++) for (let c = 0; c < 12; c++) { const x = 62 + c * 22 + (row % 2) * 11, y = 74 + row * 19; g.beginPath(); for (let k = 0; k < 6; k++) { const a = (60 * k + 30) * D2R; g[k ? 'lineTo' : 'moveTo'](x + Math.cos(a) * 12, y + Math.sin(a) * 12); } g.closePath(); g.stroke(); }
+      for (const sx of [-1, 1]) { g.beginPath(); g.moveTo(180 + sx * 176, 104); g.lineTo(180 + sx * 146, 112); g.lineTo(180 + sx * 136, 152); g.lineTo(180 + sx * 176, 166); g.closePath(); g.fillStyle = 'rgba(255,255,255,.035)'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.14)'; g.stroke(); }
+      g.restore();
+      zBars(g, pts, N, 0, 1, 13, (f) => col(f, false));
+      for (let k = 0; k <= tachMax; k++) { const [x, y, a] = zPolyAt(pts, k / tachMax); zt(g, String(k), x - Math.sin(a) * 19, y + Math.cos(a) * 19, 12, k >= CAR.redline / 1000 ? '#ff5a4f' : pal.num, { i: true, w: 700 }); }
+      zt(g, 'CORSA', 118, 100, 9, '#ff3b30', { i: true, w: 800 });
+      zt(g, 'AVENTADOR', 168, 150, 9, '#d9dde1', { i: true, w: 800 }); zt(g, 'SVJ', 214, 150, 12, '#ff3b30', { i: true, w: 800 });
+      zLogo(g, 'lamborghini', 180, 166, 13, 13, { alpha: 0.9 });
+      for (let k = 0; k < 5; k++) { g.fillStyle = 'rgba(255,255,255,.3)'; g.fillRect(12 + k * 5, 148 - k * 4, 3, 8 + k * 4); }
+      zrr(g, 330, 122, 14, 26, 3); g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1; g.stroke();
     },
-    live(g, S, L) {
-      if (L.compact) return small.live(g, S, L);
-      const fr = CAR.redline / 1000 / tachMax;
-      g.save(); g.shadowColor = OR; g.shadowBlur = 7; for (let k = 0; k < Math.round(S.f * N); k++) seg(g, k, k / N >= fr ? '#ff3a2a' : OR); g.restore();
-      g.save(); g.shadowColor = OR; g.shadowBlur = 10; zt(g, String(S.spd), 196, 116, 64, OR, { a: 'right', i: true, w: 800 }); g.restore();
-      zt(g, S.unit, 202, 134, 12, '#ffb066', { a: 'left', w: 600 });
-      zt(g, S.gear, 256, 142, 22, S.gear === 'R' ? '#ffd27a' : '#ffb066', { w: 800 });
+    live(g, S) {
+      g.save(); g.shadowColor = '#f5d21f'; g.shadowBlur = 6; zBars(g, pts, N, 0, S.f, 13, (f) => col(f, true)); g.restore();
+      zt(g, S.gear, 180, 106, 58, S.gear === 'R' ? '#ffb238' : '#ff3b30', { i: true, w: 800, glow: 'rgba(255,60,48,.6)', blur: 10 });
+      zt(g, String(S.spd), 276, 152, 24, '#fff', { a: 'right', i: true, w: 800 }); zt(g, S.unit, 279, 157, 8, 'rgba(255,255,255,.6)', { a: 'left', w: 600 });
+      zt(g, `${Math.round(S.rpm / 10) * 10}`, 66, 150, 11, 'rgba(255,255,255,.75)', { i: true, w: 700 }); zt(g, 'rpm', 66, 161, 6.5, 'rgba(255,255,255,.45)', { w: 600 });
     },
-  };
+  });
 })();
-// ---- the faces and needles of the analog cars
-const twin = (l, r) => [{ role: l, cx: 90, cy: 86, r: 78 }, { role: r, cx: 270, cy: 86, r: 78 }];
-const three = (l, r, rs = 52) => [{ role: l, cx: 54, cy: 106, r: rs }, { role: 'tach', cx: 180, cy: 90, r: 84 }, { role: r, cx: 306, cy: 106, r: rs }];
-const RO_TWIN = { x: 180, y: 160, w: 96, h: 30 }, RO_MID = { x: 180, y: 152, w: 64, h: 24 };
-const WHITE = { face: '#0a0a0b', face2: '#17181b', tick: '#f2f2f2', num: '#f2f2f2' };
-let carbonPat = null;
-const carbonFace = (g, d) => {   // a carbon-fibre weave under the dial (the Challenger insert the owner sent)
-  if (!carbonPat) { const c = document.createElement('canvas'); c.width = c.height = 8; const q = c.getContext('2d'); q.fillStyle = '#0b0b0c'; q.fillRect(0, 0, 8, 8); q.fillStyle = '#232427'; q.fillRect(0, 0, 4, 4); q.fillRect(4, 4, 4, 4); q.fillStyle = '#17181a'; q.fillRect(1, 1, 2, 2); q.fillRect(5, 5, 2, 2); carbonPat = g.createPattern(c, 'repeat'); }
-  g.save(); g.fillStyle = carbonPat; g.transform(0.7, 0.7, -0.7, 0.7, d.cx, d.cy); g.fill(); g.restore();
-  const gr = g.createRadialGradient(d.cx, d.cy, d.r * 0.3, d.cx, d.cy, d.r); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.55)'); g.beginPath(); g.arc(d.cx, d.cy, d.r, 0, 7); g.fillStyle = gr; g.fill();
-};
-const GAUGES = {
-  supra: analogCluster({ mph: 180, dials: three('boost', 'speed', 54), readout: RO_MID, style: { ...WHITE, needle: '#ff5a1f', ring: 'rgba(255,255,255,.12)' } }),
-  a90: a90Cluster,
-  csl: bmwMCluster,
-  e92: analogCluster({ mph: 200, dials: twin('speed', 'tach'), readout: RO_TWIN, warn: 1.5, style: { face: '#101114', face2: '#23252a', tick: '#f4f4f4', num: '#f4f4f4', needle: '#e3202a', bezel: ['#8b8f96', '#2a2c30'] } }),
-  x5: analogCluster({ mph: 160, dials: twin('speed', 'tach'), readout: RO_TWIN, style: { face: '#060607', face2: '#101011', tick: '#f0f0f0', num: '#f0f0f0', needle: '#ff6a14', ring: '#ff6a14', glow: 'rgba(255,106,20,.7)' }, read: { ink: '#ffb27a', gear: '#ffb27a' } }),
-  i8: twinRings({ mph: 180, fill: '#ff5a1a', num: '#ffd0b0', tick: 'rgba(255,140,90,.7)', track: 'rgba(255,90,26,.14)', plate: 'rgba(8,5,4,.92)', ink: '#fff', gear: '#fff' }),
-  // the owner: "for a c8 but use it for the c7": the C8 Z06's centre ring, white running into yellow, the gear and speed inside it
-  c7: ringCluster({ fill: '#ffd21a', num: '#f1f3f5', plate: 'rgba(6,7,9,.92)', italic: true, w: 9,
-    sides(g) { zt(g, 'TRACK', 56, 60, 12, '#ffd21a', { i: true, w: 800 }); zt(g, 'RPM', 56, 108, 9, 'rgba(255,255,255,.5)', { w: 600 }); zt(g, 'BOOST', 304, 108, 9, 'rgba(255,255,255,.5)', { w: 600 }); zt(g, 'Z06', 304, 60, 14, '#f1f3f5', { i: true, w: 800 }); },
-    sidesLive(g, S) { zt(g, String(Math.round(S.rpm / 10) * 10), 56, 90, 20, '#fff', { i: true }); g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(276, 86, 56, 7); g.fillStyle = '#ffd21a'; g.fillRect(276, 86, 56 * S.boost, 7); } }),
-  zl1: analogCluster({ mph: 220, dials: [{ role: 'speed', cx: 88, cy: 84, r: 70 }, { role: 'tach', cx: 272, cy: 84, r: 70 }], hoods: true, readout: { x: 180, y: 158, w: 96, h: 32 }, style: { ...WHITE, needle: '#e3202a', italic: true, redNums: true } }),
-  hc: analogCluster({ mph: 200, dials: twin('tach', 'speed'), readout: RO_TWIN, style: { faceFn: carbonFace, tick: '#fafafa', num: '#fafafa', needle: '#e3202a', ring: '#b5121b', italic: true, weight: 800, redNums: true }, read: { gear: '#ff4a4a' } }),
-  viper: analogCluster({ mph: 220, dials: [{ role: 'aux', cx: 52, cy: 108, r: 44, label: 'oil' }, { role: 'tach', cx: 180, cy: 90, r: 84 }, { role: 'speed', cx: 308, cy: 108, r: 50 }], readout: RO_MID, style: { ...WHITE, needle: '#e3202a', ring: '#b5121b', italic: true, redNums: true }, read: { gear: '#ff4a4a' } }),
-  gtr: analogCluster({ mph: 220, dials: [{ role: 'speed', cx: 60, cy: 104, r: 56 }, { role: 'tach', cx: 186, cy: 90, r: 84 }, { role: 'boost', cx: 312, cy: 112, r: 42 }], readout: { x: 186, y: 152, w: 64, h: 24 }, style: { ...WHITE, needle: '#e3202a', bezel: ['#a9adb3', '#3a3d42'] } }),
-  r34: analogCluster({ mph: 200, dials: three('boost', 'speed', 54), readout: RO_MID, style: { face: '#0b0808', face2: '#1d1213', tick: '#f2f2f2', num: '#f2f2f2', needle: '#ff3a1f', redNums: true } }),
-  cgt: analogCluster({ mph: 220, dials: three('speed', 'aux', 54), readout: RO_MID, style: { ...WHITE, needle: '#ff4a1f', bezel: ['#c9cdd2', '#565a60'] } }),
-  gt3: analogCluster({ mph: 220, dials: three('speed', 'aux', 54), readout: RO_MID, style: { ...WHITE, needle: '#ffd400', glow: 'rgba(255,212,0,.6)', bezel: ['#3a3c40', '#131416'], redNums: true }, read: { gear: '#ffd400' } }),
-  mcl: ringCluster({ fill: '#eef3f7', num: '#eef3f7', plate: 'rgba(6,7,9,.92)', gear: '#ff8a1f', w: 6,
-    sides(g) { zt(g, 'TRACK', 56, 62, 11, '#ff8a1f', { w: 800 }); zt(g, 'RPM', 56, 108, 9, 'rgba(255,255,255,.5)', { w: 600 }); zt(g, 'ACTIVE', 304, 62, 11, 'rgba(255,255,255,.7)', { w: 800 }); },
-    sidesLive(g, S) { zt(g, String(Math.round(S.rpm / 10) * 10), 56, 90, 20, '#fff'); } }),
-  // Ferrari: the yellow rev counter with black numerals (the owner's F430 cluster picture), the speed on a panel beside it
-  f812: analogCluster({ mph: 220, dials: [{ role: 'aux', cx: 52, cy: 108, r: 44, label: 'oil', style: { face: '#0a0a0b', face2: '#17181b', tick: '#f2f2f2', num: '#f2f2f2', dim: 'rgba(255,255,255,.5)' } }, { role: 'tach', cx: 180, cy: 90, r: 84 }, { role: 'speed', cx: 308, cy: 108, r: 50, style: { face: '#0a0a0b', face2: '#17181b', tick: '#f2f2f2', num: '#f2f2f2', dim: 'rgba(255,255,255,.5)' } }], readout: RO_MID,
-    style: { face: '#f2c200', face2: '#ffdd3c', tick: '#111', num: '#111', dim: 'rgba(0,0,0,.6)', needle: '#d2161f', hub: '#111', red: '#c8102e', bezel: ['#bfc3c8', '#4a4d52'], italic: true, weight: 800 } }),
-  svj: svjCluster,
-  r8: analogCluster({ mph: 200, dials: twin('tach', 'speed'), readout: RO_TWIN, style: { ...WHITE, needle: '#e3202a', bezel: ['#d5d8dc', '#6b6f75'] }, read: { ink: '#ff5a4a', gear: '#ff5a4a', dim: 'rgba(255,90,74,.7)' } }),
-  nsx: analogCluster({ mph: 180, dials: twin('tach', 'speed'), readout: RO_TWIN, style: { ...WHITE, needle: '#ff7a14', glow: 'rgba(255,122,20,.5)' } }),
-  s2k: s2kCluster,
-  fl5: twinRings({ mph: 180, tachLeft: true, fill: '#f3f5f7', num: '#eef1f4', plate: 'rgba(6,7,9,.92)', gear: '#ff3030' }),
-  miata: analogCluster({ mph: 160, dials: three('aux', 'speed', 54), readout: RO_MID, style: { ...WHITE, needle: '#f4f4f4', hub: '#1b1c1f', redNums: true } }),
-  eclipse: analogCluster({ mph: 160, dials: [{ role: 'boost', cx: 50, cy: 110, r: 42 }, { role: 'speed', cx: 160, cy: 90, r: 80 }, { role: 'tach', cx: 296, cy: 100, r: 60 }], readout: { x: 160, y: 150, w: 64, h: 24 }, style: { ...WHITE, needle: '#ff6a14' } }),
-};
-GAUGES.default = GAUGES.gtr;
-const gaugeFor = (id) => GAUGES[id] || GAUGES[baseOf(id)] || GAUGES[CAR_DEFS[id]?.variantOf] || GAUGES.default;
+// Audi R8 (photos: 2008 R8 clusters): two grey dials in one long bright rim, a small gauge at the outer side of each,
+// R8 in red on the rev counter, red needles, the red display between them.
+const R8_ST = { tick: '#f4f4f4', num: '#f4f4f4', needle: '#ff2a1c', needleGlow: 'rgba(255,40,20,.45)', needleW: 0.028, hubR: 0.15, hub: '#1a1b1e', hub2: '#6a6e75', face: ['#2a2c30', '#585c63'], weight: 500 };
+const r8 = dials({ mph: 200, st: R8_ST,
+  plate(g, L) {
+    zPlate(g, L, '#050506');
+    for (const sx of [-1, 1]) { const x = 180 + sx * 82; g.save(); g.beginPath(); g.ellipse(x + sx * 10, 92, 82, 68, 0, 0, 6.2832); g.lineWidth = 6; let gr; if (g.createConicGradient) { gr = g.createConicGradient(-2, x, 92); ['#f1f3f5', '#7d8289', '#e4e7ea', '#5b6067', '#d2d6da', '#f1f3f5'].forEach((c, k) => gr.addColorStop(k / 5, c)); } g.strokeStyle = gr || '#c9cdd2'; g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = 8; g.stroke(); g.restore(); g.beginPath(); g.ellipse(x + sx * 10, 92, 79, 65, 0, 0, 6.2832); g.fillStyle = '#0c0d0f'; g.fill(); }
+    zLcd(g, 180, 96, 40, 62, '#1a0403');
+  },
+  dials: [
+    { role: 'temp', cx: 34, cy: 100, r: 19, a0: 160, sweep: 220, label: false, sc: { numS: 0.3 } },
+    { role: 'tach', cx: 104, cy: 92, r: 60, bezel: [0.04, 'alu'], label: '1/min x 1000', labelY: -0.36, mark: (g, d) => zt(g, 'R8', d.cx, d.cy + d.r * 0.42, d.r * 0.24, '#e3202a', { i: true, w: 800, fam: GZ.sans }) },
+    { role: 'speed', cx: 256, cy: 92, r: 60, bezel: [0.04, 'alu'], labelY: 0.4 },
+    { role: 'fuel', cx: 326, cy: 100, r: 19, a0: 160, sweep: 220, label: false, sc: { numS: 0.3 } },
+  ],
+  deco(g) { zLogo(g, 'audi', 180, 150, 40, 40, { tint: '#d9dde1' }); },
+  live(g, S) { zt(g, S.gear, 180, 82, 22, '#ff3a2a', { glow: '#ff3a2a' }); zt(g, String(S.spd), 180, 104, 14, '#ff3a2a', { glow: '#ff3a2a' }); zt(g, S.unit, 180, 117, 6.5, '#ff3a2a', { w: 600 }); } });
+// Honda NSX (photos: NA1 NSX clusters): a dark brushed-metal plate, two big black dials, two small gauges stacked at
+// each side, thick red needles on red caps, the display under the rev counter.
+const NSX_ST = { ...WHITE, needle: '#ff2a1c', needleGlow: 'rgba(255,50,30,.45)', needleW: 0.05, hubR: 0.14, hub: '#b01219', hub2: '#ff5a4a', weight: 500, bandIn: true, lcd: '#ff7a3a' };
+const nsx = dials({ mph: 180, badge: 'honda', st: NSX_ST,
+  plate(g, L) { zPlate(g, L, '#050506'); zrr(g, 8, 20, 344, 148, 26); zFill(g, 'brushed', 0.62); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.14)'; g.stroke(); },
+  dials: [
+    { role: 'temp', cx: 34, cy: 70, r: 20, a0: 160, sweep: 220, bezel: [0.08, 'black'], label: false, sc: { numS: 0.32 } },
+    { role: 'boost', cx: 34, cy: 122, r: 20, a0: 160, sweep: 220, bezel: [0.08, 'black'], label: false, sc: { fmt: () => '', numS: 0.3 } },
+    { role: 'tach', cx: 118, cy: 94, r: 62, bezel: [0.04, 'black'], labelY: 0.3, lcd: { dx: 0, dy: 0.62, w: 0.44, h: 0.24, show: 'gear', bg: '#1a0603' } },
+    { role: 'speed', cx: 242, cy: 94, r: 62, bezel: [0.04, 'black'], labelY: 0.3, lcd: { dx: 0, dy: 0.62, w: 0.84, h: 0.26, show: 'speed', bg: '#1a0603' } },
+    { role: 'fuel', cx: 326, cy: 70, r: 20, a0: 160, sweep: 220, bezel: [0.08, 'black'], label: false, sc: { numS: 0.32 } },
+    { role: 'temp', cx: 326, cy: 122, r: 20, a0: 160, sweep: 220, bezel: [0.08, 'black'], label: false, sc: { fmt: () => '', numS: 0.3 } },
+  ],
+  deco(g) { zLogo(g, 'honda', 180, 36, 20, 20, { alpha: 0.85 }); } });
+// Honda S2000 (photos: AP1 clusters): all lit bars and digits in orange. The revs are a band of bars that climbs
+// from the lower left and levels off to the right, numbered above; the speed is in big digits under it; the fuel
+// gauge curls at the lower right and temperature is a short bar above it; a row of warning zLampsG along the foot.
+const s2k = (() => {
+  const OR = '#ff7a14', pal = { fill: OR, num: '#ffb066', plate: '#060403', ink: OR, gear: OR, mark: (g, d) => zLogo(g, 'honda', d.cx, d.cy - d.r * 0.58, 14, 14, { alpha: 0.8 }) };
+  const pts = quadPts([34, 104], [96, 30], [300, 38], 60), N = 58;
+  return screenCluster(pal, {
+    face(g, L) {
+      zPlate(g, L, pal.plate);
+      g.beginPath(); g.moveTo(14, 168); g.lineTo(14, 120); g.quadraticCurveTo(70, 14, 200, 12); g.lineTo(346, 12); g.lineTo(346, 168); g.closePath(); g.fillStyle = '#0b0705'; g.fill(); g.strokeStyle = 'rgba(255,255,255,.1)'; g.lineWidth = 1; g.stroke();
+      const fr = CAR.redline / 1000 / tachMax;
+      zBars(g, pts, N, 0, 1, 15, (f) => (f >= fr ? 'rgba(255,40,30,.24)' : 'rgba(255,122,20,.13)'));
+      for (let k = 0; k <= tachMax; k++) { const [x, y, a] = zPolyAt(pts, k / tachMax); zt(g, String(k), x + Math.sin(a) * 16, y - Math.cos(a) * 16 + (k === 0 ? 4 : 0), 11, k >= CAR.redline / 1000 ? '#ff4a3d' : pal.num, { w: 700 }); }
+      zt(g, 'x1000r/min', 70, 120, 6.5, 'rgba(255,176,102,.7)', { w: 600 });
+      zLcd(g, 182, 132, 104, 15, '#150a04'); zt(g, '000041', 150, 133, 9, 'rgba(255,122,20,.75)', { w: 600 }); zt(g, 'A  47.8', 204, 133, 9, 'rgba(255,122,20,.75)', { w: 600 });
+      zarc(g, 300, 118, 26, 20, 150, 7, 'rgba(255,122,20,.14)'); zarc(g, 300, 118, 26, 60, 150, 7, 'rgba(255,122,20,.85)'); zt(g, 'E', 276, 138, 8, '#ffb066', { w: 700 }); zt(g, 'F', 330, 128, 8, '#ffb066', { w: 700 });
+      for (let k = 0; k < 7; k++) { g.fillStyle = k < 3 ? 'rgba(255,122,20,.85)' : 'rgba(255,122,20,.14)'; g.fillRect(282 + k * 7, 72, 5, 8); } zt(g, 'C', 277, 76, 7, '#ffb066', { w: 700 }); zt(g, 'H', 336, 76, 7, '#ffb066', { w: 700 });
+      zLampsG(g, 60, 154, ['rgba(255,60,40,.5)', 'rgba(255,170,40,.4)', 'rgba(255,60,40,.5)', 'rgba(60,220,110,.4)', 'rgba(255,170,40,.4)'], 8, 14);
+      zLogo(g, 'honda', 196, 156, 14, 14, { alpha: 0.75 }); zt(g, 'mph·km/h', 316, 158, 6.5, 'rgba(255,255,255,.4)', { w: 600 });
+    },
+    live(g, S) {
+      const fr = CAR.redline / 1000 / tachMax;
+      g.save(); g.shadowColor = OR; g.shadowBlur = 6; zBars(g, pts, N, 0, S.f, 15, (f) => (f >= fr ? '#ff3a2a' : OR)); g.restore();
+      zt(g, String(S.spd), 226, 96, 50, OR, { a: 'right', i: true, w: 800, glow: OR, blur: 9 }); zt(g, S.unit, 232, 110, 10, '#ffb066', { a: 'left', w: 600 });
+      zt(g, S.gear, 130, 100, 20, S.gear === 'R' ? '#ffd27a' : '#ffb066', { w: 800 });
+    },
+  });
+})();
+// Civic Type R (photos: the FL5's +R display): the revs as a line that climbs at the left and runs flat across the
+// top, numbered, filling yellow then red, shift zLampsG above it; a red glow under the gear in the middle; the speed
+// and the red R at the top right; a stopwatch tile at the left and the g-meter at the right.
+const fl5 = (() => {
+  const pal = { fill: '#f3f5f7', num: '#eef1f4', plate: '#060607', gear: '#fff', hot: '#ff3030', mark: (g, d) => zt(g, 'R', d.cx, d.cy - d.r * 0.58, 15, '#e3202a', { i: true, w: 800 }) };
+  const pts = [[34, 74], [78, 36], [286, 36]];
+  return screenCluster(pal, {
+    face(g, L) {
+      zPlate(g, L, pal.plate);
+      const gl = g.createRadialGradient(180, 104, 4, 180, 104, 110); gl.addColorStop(0, 'rgba(255,60,20,.95)'); gl.addColorStop(0.4, 'rgba(200,20,10,.5)'); gl.addColorStop(1, 'rgba(0,0,0,0)');
+      g.save(); g.beginPath(); g.moveTo(60, 120); g.quadraticCurveTo(140, 110, 152, 74); g.lineTo(208, 74); g.quadraticCurveTo(220, 110, 300, 120); g.lineTo(300, 128); g.lineTo(60, 128); g.closePath(); g.fillStyle = gl; g.fill(); g.restore();
+      const fr = CAR.redline / 1000 / tachMax;
+      zPoly(g, pts, 0, 1, 8, 'rgba(255,255,255,.12)'); zPoly(g, pts, fr, 1, 8, 'rgba(255,48,48,.45)');
+      for (let k = 1; k <= tachMax; k++) { const [x, y] = zPolyAt(pts, k / tachMax); zt(g, String(k), x + (y > 38 ? 12 : 0), y + (y > 38 ? 8 : 13), 9.5, k >= CAR.redline / 1000 ? '#ff5a4f' : pal.num, { w: 600 }); }
+      zt(g, 'x1000r/min', 40, 88, 6, 'rgba(255,255,255,.5)', { a: 'left', w: 500 });
+      zt(g, 'R', 338, 34, 20, '#e3202a', { i: true, w: 800 }); zt(g, '+', 325, 28, 10, '#e3202a', { w: 800 });
+      zarc(g, 44, 124, 11, 0, 360, 1.4, 'rgba(255,255,255,.75)'); g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(42, 109, 4, 4); zt(g, 'Stopwatch', 44, 146, 7, 'rgba(255,255,255,.65)', { w: 500 });
+      for (const r of [8, 16]) zarc(g, 318, 124, r, 0, 360, 0.8, 'rgba(255,255,255,.4)'); g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(298, 124); g.lineTo(338, 124); g.moveTo(318, 104); g.lineTo(318, 144); g.stroke();
+      zLogo(g, 'honda', 180, 152, 16, 16, { alpha: 0.9 });
+      [[112, '183°F'], [150, '72°F'], [212, '181°F'], [250, '156°F']].forEach(([x, t]) => zt(g, t, x, 152, 7.5, 'rgba(255,255,255,.7)', { w: 500 }));
+    },
+    live(g, S) {
+      const fr = CAR.redline / 1000 / tachMax, on = Math.round(clamp((S.f - fr + 0.28) / 0.28, 0, 1) * 9);
+      g.save(); g.shadowColor = '#ffd21a'; g.shadowBlur = 6; zPoly(g, pts, 0, Math.min(S.f, fr), 8, S.f > fr - 0.12 ? '#ffd21a' : '#f3f5f7'); if (S.f > fr) zPoly(g, pts, fr, S.f, 8, '#ff3030'); g.restore();
+      for (let k = 0; k < 9; k++) { const c = k < 3 ? '#ffd21a' : k < 6 ? '#ff8a1f' : '#ff3030'; zrr(g, 120 + k * 14, 18, 10, 5, 1.5); g.fillStyle = k < on ? c : 'rgba(255,255,255,.1)'; g.fill(); }
+      zt(g, S.gear, 180, 100, 40, S.gear === 'R' ? '#ffe2a0' : '#fff', { w: 700 });
+      zt(g, String(S.spd), 304, 60, 20, '#fff', { a: 'right', w: 600 }); zt(g, S.unit, 307, 64, 7.5, 'rgba(255,255,255,.7)', { a: 'left', w: 500 });
+    },
+  });
+})();
+// Mazda MX-5 (photos: ND cluster): three rings; a round display on the left, the rev counter in the middle with a
+// white needle and the gear in a little window, the speedometer on the right.
+const MX5_ST = { ...WHITE, needle: '#f4f4f4', needleW: 0.028, hubR: 0.16, hub: '#141518', hub2: '#4a4d52', weight: 500, redNums: true };
+const miata = dials({ mph: 160, badge: 'mazda', st: MX5_ST,
+  plate(g, L) { zPlate(g, L, '#050506'); zBezel(g, 62, 100, 50, 3.5, 'chrome'); zFace(g, 62, 100, 50, '#06080c', '#0f1620'); zLogo(g, 'mazda', 62, 66, 20, 20, { alpha: 0.85 }); g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 1; g.beginPath(); g.moveTo(30, 82); g.lineTo(94, 82); g.moveTo(30, 122); g.lineTo(94, 122); g.stroke(); zt(g, 'TRIP A  41.6', 62, 132, 7, 'rgba(255,255,255,.6)', { w: 500 }); },
+  dials: [
+    { role: 'speed', cx: 300, cy: 100, r: 50, bezel: [0.07, 'chrome'], labelY: 0.34 },
+    { role: 'tach', cx: 182, cy: 88, r: 72, bezel: [0.06, 'chrome'], labelY: 0.3, lcd: { dx: 0.4, dy: 0.6, w: 0.3, h: 0.26, show: 'gear', bg: '#06080c', ink: '#fff' } },
+  ],
+  live(g, S) { zt(g, String(S.spd), 62, 100, 26, '#fff', { w: 500 }); zt(g, S.unit, 62, 115, 7, 'rgba(255,255,255,.6)', { w: 500 }); zGlass(g, 62, 100, 50); } });
+// Mitsubishi Eclipse (photos: 1995-99 Eclipse clusters): the rev counter on the left and the speedometer on the right
+// in one dark panel, a small temperature gauge under the first and a fuel gauge under the second, warning zLampsG down
+// each side, orange needles. The film car kept this cluster.
+const ECL_ST = { ...WHITE, needle: '#ff5a14', needleW: 0.03, hubR: 0.12, weight: 500, lcd: '#9fe0a0' };
+const eclipse = dials({ mph: 160, badge: 'mitsubishi', st: ECL_ST,
+  plate(g, L) { zPlate(g, L, '#050506'); g.beginPath(); g.moveTo(10, 156); g.quadraticCurveTo(4, 60, 60, 30); g.quadraticCurveTo(180, 4, 300, 30); g.quadraticCurveTo(356, 60, 350, 156); g.quadraticCurveTo(180, 176, 10, 156); g.closePath(); const gr = g.createLinearGradient(0, 10, 0, 170); gr.addColorStop(0, '#1c1d20'); gr.addColorStop(1, '#0c0c0e'); g.fillStyle = gr; g.fill(); g.strokeStyle = 'rgba(255,255,255,.1)'; g.lineWidth = 1; g.stroke();
+    for (const x of [24, 322]) zLampsG(g, x, 66, ['rgba(255,60,40,.5)'], 12, 0), zLampsG(g, x, 80, ['rgba(255,170,40,.45)'], 12, 0), zLampsG(g, x, 94, ['rgba(255,60,40,.5)'], 12, 0); },
+  dials: [
+    { role: 'tach', cx: 108, cy: 84, r: 60, a0: 140, sweep: 250, labelY: 0.42, lcd: { dx: 0.72, dy: 0.92, w: 0.34, h: 0.26, show: 'gear', bg: '#06140a' } },
+    { role: 'speed', cx: 252, cy: 84, r: 60, a0: 140, sweep: 250, labelY: 0.22, lcd: { dx: 0, dy: 0.5, w: 0.8, h: 0.24, show: 'speed', bg: '#06140a' } },
+    { role: 'temp', cx: 62, cy: 142, r: 18, a0: 200, sweep: 140, label: false, sc: { numS: 0.34 } },
+    { role: 'fuel', cx: 298, cy: 142, r: 18, a0: 200, sweep: 140, label: false, sc: { numS: 0.34 } },
+  ],
+  deco(g) { zLogo(g, 'mitsubishi', 180, 40, 24, 24, { alpha: 0.9 }); zt(g, 'UNLEADED FUEL ONLY', 252, 142, 5.5, 'rgba(255,255,255,.45)', { fam: GZ.sans, w: 500 }); } });
+// Toyota GR Supra (photos: A90 display): the rev counter is a red line that starts at the foot, climbs the left side
+// and over the top with big white numerals round it, then runs off to the right as a straight bar; the gear sits
+// inside it, the speed to its left; stacked bars for fuel and temperature at the two ends.
+const a90 = (() => {
+  const pal = { fill: '#ff3a30', num: '#f4f4f4', plate: '#050607', gear: '#fff', mark: (g, d) => zLogo(g, 'toyota', d.cx, d.cy - d.r * 0.58, 15, 15, { alpha: 0.8 }) };
+  const C = [176, 98, 52], pts = [...arcPts(C[0], C[1], C[2], 95, 300, 44), [C[0] + 40, C[1] - 46], [318, C[1] - 46]];
+  return screenCluster(pal, {
+    face(g, L) {
+      zPlate(g, L, pal.plate);
+      const bg = g.createRadialGradient(176, 98, 10, 176, 98, 160); bg.addColorStop(0, 'rgba(40,60,90,.3)'); bg.addColorStop(1, 'rgba(0,0,0,0)'); zrr(g, 1, 1, 358, 178, 18); g.fillStyle = bg; g.fill();
+      zPoly(g, pts, 0, 1, 2.4, 'rgba(255,58,48,.75)');
+      const nA = 7 / 8;   // the numerals sit round the arc; the last stretch of the scale is the straight bar
+      for (let k = 0; k <= tachMax; k++) { const f = k / tachMax, [x, y] = zPolyAt(pts, f), onArc = x < C[0] + 30 && y > C[1] - 60 && f < 0.72, dx = x - C[0], dy = y - C[1], n = Math.hypot(dx, dy) || 1; if (onArc) zt(g, String(k), x + dx / n * 15, y + dy / n * 15, 17, k >= CAR.redline / 1000 ? '#ff5a4f' : pal.num, { i: true, w: 700 }); else zt(g, String(k), x, y - 12, 12, k >= CAR.redline / 1000 ? '#ff5a4f' : pal.num, { i: true, w: 700 }); g.beginPath(); g.moveTo(x, y); g.lineTo(x - dx / n * (onArc ? 6 : 0), y + (onArc ? -dy / n * 6 : 6)); g.lineWidth = 1.6; g.strokeStyle = '#f4f4f4'; g.stroke(); }
+      void nA;
+      zt(g, 'x1000rpm', C[0] + 6, C[1] + C[2] + 12, 6.5, 'rgba(255,255,255,.55)', { a: 'left', w: 500 });
+      for (const sx of [-1, 1]) for (let k = 0; k < 7; k++) { g.save(); g.translate(180 + sx * 160, 150 - k * 8); g.transform(1, sx * -0.18, 0, 1, 0, 0); g.fillStyle = k < (sx < 0 ? 5 : 4) ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.16)'; g.fillRect(-12, 0, 24, 5); g.restore(); }
+      g.strokeStyle = 'rgba(255,58,48,.7)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(236, 132); g.lineTo(318, 132); g.stroke(); zt(g, '0   100   200   300', 277, 142, 6, 'rgba(255,255,255,.55)', { w: 500 });
+      zLogo(g, 'toyota', 277, 92, 22, 22, { alpha: 0.75 }); zt(g, 'GR SUPRA', 277, 112, 8, 'rgba(255,255,255,.7)', { i: true, w: 800 });
+    },
+    live(g, S) {
+      g.save(); g.shadowColor = '#ff3a30'; g.shadowBlur = 8; zPoly(g, pts, 0, S.f, 6, '#ff3a30'); g.restore();
+      const [x, y] = zPolyAt(pts, S.f); g.beginPath(); g.moveTo(C[0] + (x - C[0]) * 0.25, C[1] + (y - C[1]) * 0.25); g.lineTo(x, y); g.lineWidth = 2.6; g.lineCap = 'round'; g.strokeStyle = '#fff'; g.stroke();
+      zt(g, S.gear, C[0], C[1] + 2, 34, S.gear === 'R' ? '#ffd27a' : '#fff', { w: 600 });
+      zt(g, String(S.spd), 66, 92, 28, '#fff', { i: true, w: 600 }); zt(g, S.unit, 66, 112, 8, 'rgba(255,255,255,.65)', { w: 500 });
+    },
+  });
+})();
+const GAUGES = { supra, supraff: supraFF, a90, csl: bmwM, e92, x5, i8, c7, zl1, hc, chg: hc, viper, gtr, r34, r34ff, r34r3, cgt, gt3, mcl, f812, svj, r8, r8lms, nsx, s2k, fl5, miata, eclipse };
+GAUGES.default = gtr;
+const gaugeFor = (id) => GAUGES[id] || GAUGES[CAR_DEFS[id]?.variantOf] || GAUGES[baseOf(id)] || GAUGES.default;
 // the size of the picture: twice as wide as it is high on a computer, one square dial on a phone
 function gaugeLayout() {
   const cl = $('cluster'), d = parseFloat(getComputedStyle(cl).getPropertyValue('--d')) || 224, compact = isTouch || innerWidth < 1060;
-  const w = Math.round(compact ? d : d * 1.84), h = Math.round(compact ? d : d * 0.92), px = Math.min(2, devicePixelRatio || 1);
+  const w = Math.round(compact ? d : d * 1.84), h = Math.round(compact ? d : d * 0.92), px = Math.min(2.5, Math.max(1.5, devicePixelRatio || 1));
   const cv = GZ.cv ||= $('gauge'); GZ.g ||= cv.getContext('2d');
   if (cv.width !== Math.round(w * px) || cv.height !== Math.round(h * px)) { cv.width = Math.round(w * px); cv.height = Math.round(h * px); cv.style.width = w + 'px'; cv.style.height = h + 'px'; cl.style.width = w + 'px'; GZ.key = ''; }
   cl.classList.toggle('compact', compact);
@@ -7038,9 +7452,6 @@ function buildTach() {
   tachRed = clamp(CAR.redline / 1000 / tachMax, 0, 1);
   GZ.fam = getComputedStyle(document.documentElement).getPropertyValue('--f-display') || 'sans-serif';
   GZ.key = '';
-  // the maker's badge beside the gauge (the pictures on the garage's keys; Ferrari's is the owner's photo of the key)
-  const logo = $('gaugeLogo'), brand = rig ? brandOf(rig.def.id) : '', file = !brand ? null : brand === 'Ferrari' ? 'ferrarikey' : KEY_LOGO_FILES[brand];
-  logo.hidden = !file; if (file && logo.dataset.f !== file) { logo.dataset.f = file; logo.src = `keylogo-${file}.png`; logo.alt = brand; logo.classList.toggle('tall', brand === 'Ferrari'); }
   drawGauge();
 }
 function drawGauge() {
