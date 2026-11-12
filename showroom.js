@@ -21,7 +21,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { lodObject, LAMP_MAX } from './lod.js';
+import { lodObject, LAMP_MAX } from './lod.js?v=108';   // (the same address the page uses: one copy of it)
 
 const D2R = Math.PI / 180;
 export const TOWER = { Y0: 6.2, NF: 5, NB: 5, FH: 3.05, SLAB: 0.34, RI: 8.4, RC: 11.55, RO: 14.7, RH: 15.3, ALPHA: 22 * D2R, TUBE: 3.38, EDGE: 2.15 };   // EDGE: how far back from the slab's edge the fins start
@@ -476,7 +476,14 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     m.customProgramCacheKey = () => 'proxy lamp v108';
     return m;
   };
-  const lightsOf = (b) => (b.lm ||= { head: glowMat('proxy head ' + b.id), drl: glowMat('proxy drl ' + b.id), bulb: new THREE.MeshBasicMaterial({ name: 'proxy bulb ' + b.id, fog: false }) });
+  const lightsOf = (b) => {
+    if (!b.lm) {
+      b.lm = { head: glowMat('proxy head ' + b.id), drl: glowMat('proxy drl ' + b.id), bulb: new THREE.MeshBasicMaterial({ name: 'proxy bulb ' + b.id, fog: false }) };
+      // until a build is given: on, as a car comes
+      b.lm.head.userData.glow.value.setScalar(LAMP_MAX); b.lm.drl.userData.glow.value.setRGB(0.847, 0.922, 1).multiplyScalar(LAMP_MAX); b.lm.bulb.color.setRGB(2.6, 2.43, 2.07);
+    }
+    return b.lm;
+  };
   const glowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), lc = new THREE.Color();
   for (const b of bays) { b.holder = new THREE.Group(); b.holder.position.set(b.pos[0], b.y + 0.03, b.pos[2]); b.holder.rotation.y = b.yaw; cars.add(b.holder); }
   const paintOf = (b) => (b.paint ||= new THREE.MeshStandardMaterial({ name: 'proxy paint ' + b.id, vertexColors: true, color: 0xffffff, metalness: 0, roughness: 0.3, envMapIntensity: 1.15, envMap: envTex }));
