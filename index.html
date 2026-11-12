@@ -647,7 +647,8 @@ body.is-touch .attribution{bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 @media (max-width:560px){ .hwcard b{font-size:19px} .hwcard i{min-width:44px;height:34px;font-size:16px} }
 .roadfade{position:fixed;inset:0;z-index:30;background:#000;opacity:0;pointer-events:none}
 /* v103: the collection */
-.srfade{position:fixed;inset:0;z-index:29;background:#000;opacity:0;pointer-events:none}
+.srfade{position:fixed;inset:0;z-index:29;background:#000;opacity:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.srfade b{font-family:var(--f-display);font-weight:800;font-style:italic;font-size:clamp(26px,5vw,54px);letter-spacing:.14em;text-transform:uppercase;color:#fff;text-shadow:0 0 28px rgba(90,215,255,.55)}
 .sr{position:fixed;inset:0;z-index:15;pointer-events:none;color:#fff}
 .sr[hidden],.sr-card[hidden],.sr-tip[hidden]{display:none}
 .sr-top{position:absolute;left:max(18px,env(safe-area-inset-left,0px));top:calc(16px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:16px;pointer-events:auto;text-shadow:0 2px 10px rgba(0,0,0,.8)}
@@ -970,7 +971,7 @@ body.is-touch .cc{font-size:22px}
 </div>
 <div class="roadfade" id="roadFade"></div>
 <!-- v103: the collection (the car tower over the workshop) -->
-<div class="srfade" id="srFade"></div>
+<div class="srfade" id="srFade"><b>The Collection</b></div>
 <div class="sr" id="srUi" hidden>
   <div class="sr-top"><button type="button" class="sr-back" id="srBack">‹ Workshop</button><div class="sr-title"><b>The Collection</b><span id="srHint"></span></div></div>
   <div class="sr-card" id="srCard" hidden>
@@ -2032,11 +2033,18 @@ composer.addPass(new OutputPass());
 const fxaa = new ShaderPass(FXAAShader);
 fxaa.enabled = false;
 composer.addPass(fxaa);
+// How the workshop is drawn: multisamples (0 = FXAA), pixels at most, pixel ratio at most. (v104, the owner: "the game needs to run
+// at a higher frame rate". The workshop was the slowest screen in the game, about 50 frames a second on an M4 with real frames: it
+// was drawn at up to 3.2 million pixels with 4x multisampling. The same pixels with FXAA: 89 a second, and side by side the two
+// pictures could not be told apart at that resolution. Other settings timed: 2.2 MP with 4x, 75; 2.6 MP with FXAA, 100.)
+// The tower above is drawn with the same settings: changing resolution between the two re-made every render target, a quarter of a
+// second's freeze each time the lift landed. 2.8 million pixels for both (the workshop was 3.2, the tower 2.2 in the first go at this).
+const ROOMQ = { samples: 0, budget: isTouch ? 2.0e6 : 2.8e6, maxPR: 2 };
 function syncAA() {
   if (isTouch) return;
-  const msaa = roomUp();
-  if ((composer.renderTarget1.samples > 0) !== msaa) for (const rt of [composer.renderTarget1, composer.renderTarget2]) { rt.samples = msaa ? 4 : 0; rt.dispose(); }
-  fxaa.enabled = !msaa;
+  const n = roomUp() ? ROOMQ.samples : 0;
+  if (composer.renderTarget1.samples !== n) for (const rt of [composer.renderTarget1, composer.renderTarget2]) { rt.samples = n; rt.dispose(); }
+  fxaa.enabled = n === 0;
 }
 // The world: the endless highway at night (see world.js). It owns the sky, fog, moonlight, streetlights,
 // the wet-road and water reflections and the car's reflection probe.
@@ -2058,7 +2066,7 @@ mirror.on = store.get('mirror', true);
 const probeWarm = { scene: new THREE.Scene(), cam: new THREE.PerspectiveCamera(50, 1, 0.1, 10), rt: new THREE.WebGLRenderTarget(2, 2), mat: new THREE.MeshStandardMaterial({ name: 'probe warm-up' }) };
 { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), probeWarm.mat); m.position.z = -1; m.frustumCulled = false; probeWarm.scene.add(m); }
 world.onProbeSwap = (tex) => {
-  if (state.garage) showroom.setEnv(tex);   // (v103) the tower, its cars and the lift mirror the same cube
+  SR.envTex = tex; if (state.garage) showroom.setEnv(tex);   // (v103) the tower, its cars and the lift mirror the same cube
   probeWarm.mat.envMap = tex; const prev = renderer.getRenderTarget(); renderer.setRenderTarget(probeWarm.rt); renderer.render(probeWarm.scene, probeWarm.cam); renderer.setRenderTarget(prev);
   carRoot.traverse((o) => { const m = o.material; if (m && !Array.isArray(m) && 'envMap' in m && !m.isMeshBasicMaterial && m.envMap !== tex) m.envMap = tex; });
 };
@@ -6751,7 +6759,7 @@ function watchPerf(dt) {
 // still scene and the key wall smaller still, so they are drawn sharp, up to the screen's own resolution.
 function renderScale() {
   const q = state.gfx, dpr = devicePixelRatio || 1, css = Math.max(1, innerWidth * innerHeight);
-  if (state.garage) { const wall = gcam.focus === 'keys', budget = isTouch ? (wall ? 3.2e6 : 2.2e6) : (wall ? 7e6 : 3.2e6); return Math.min(dpr, wall ? 2.5 : 2, Math.sqrt(budget / css)); }
+  if (state.garage) return Math.min(dpr, ROOMQ.maxPR, Math.sqrt(ROOMQ.budget / css));
   // (v93: on computers the lowest step is 1.6 MP at up to 1.25x, was 1.0 MP at 1x: without the multisampling a
   // pixel costs much less, and FXAA needs pixels to work with)
   const budget = q >= 2 ? 2.2e6 : q === 1 || !isTouch ? 1.6e6 : 1.0e6;
@@ -8589,7 +8597,7 @@ function openGarage() {
   rebase();
   garage.place(car.x, roadY, car.z, car.yaw);
   // the car's reflections come from the room from now on (a full capture now, then live)
-  const roomIn = () => { garage.show(true); world.forceRefl = true; world.updateProbe(car.x, roadY, car.z, true); };
+  const roomIn = () => { garage.show(true); world.forceRefl = true; world.updateProbe(car.x, roadY, car.z, true); setTimeout(srPreload, 700); };   // (v104: the tower upstairs is built and its cars fetched, if they have not been yet)
   if (garage.ready) roomIn();
   else if (!garage.failed) { toast('Loading the garage…', 1800); garage.load().then(() => { if (state.garage) { garage.place(car.x, roadY, car.z, car.yaw); roomIn(); } }); }
   // start the orbit from wherever the chase camera is now
@@ -9943,7 +9951,10 @@ const SR_ROWS = [
   { name: 'Exotics', sub: 'Porsche · Ferrari · Lamborghini · McLaren', cars: ['cgt', 'gt3', 'f812', 'svj', 'mcl'] },
 ];
 const showroom = createShowroom({ parent: garage.group, rows: SR_ROWS, defs: Object.fromEntries(CAR_IDS.map((id) => [id, CAR_DEFS[id]])), displayFont: '"Saira Condensed","Arial Narrow",Arial,sans-serif' });
-const SR = { on: false, mode: 'off', bay: null, home: null, pos: new THREE.Vector3(), tgt: new THREE.Vector3(), fov: 46, pan: 0, tilt: 0, hover: null, ride: null, pose: null, locks: '', t: 0, wantSel: false, loadP: 0, loadFail: false, key: null, keySwing: 0, snap: false, envAt: 0, hinted: false };
+const SR = { on: false, mode: 'off', bay: null, home: null, pos: new THREE.Vector3(), tgt: new THREE.Vector3(), fov: 46, pan: 0, tilt: 0, hover: null, ride: null, pose: null, locks: '', t: 0, wantSel: false, loadP: 0, loadFail: false, key: null, keySwing: 0, snap: false, envAt: 0, hinted: false, warm: 0, hoverT: 0, hoverId: null, mirrorOnce: 0 };
+// (v104, the owner: "the collection is laggy and loads to slow". Timed: the tower was drawn like the workshop, at up to 3.2 million
+// pixels with 4x multisampling, about 50 frames a second with real frames; the multisampling alone was half the cost. It is now drawn
+// with FXAA, like the workshop (ROOMQ): about 120 a second.)
 const srV = new THREE.Vector3(), srV2 = new THREE.Vector3(), srRay = new THREE.Raycaster(), srNdc = new THREE.Vector2();
 const srLight = new THREE.DirectionalLight(0xfff1e0, 0); scene.add(srLight, srLight.target);
 function srPrepare() {
@@ -9954,6 +9965,29 @@ function srPrepare() {
   // each copy wears its owner's paint
   for (const id of CAR_IDS) { const m = loadMods(id); showroom.setPaint(id, m.paint || CAR_DEFS[id].stock.paint, FINISHES[m.finish] || FINISHES.gloss); showroom.hideCar(id, false); }
 }
+// (v104) Getting the tower ready ahead of time. srPreload: as soon as the game is up, the tower is built and the cars' copies fetched
+// and unpacked, so they are there when you go up (they used to start downloading when you did). srWarm: the first time the tower is
+// drawn its shaders are compiled and its meshes and pictures sent to the graphics card: a freeze of 0.8 s measured on an M4 (most of
+// it one shader, the copies' clear-coated paint, since replaced), longer on a slower machine. It is now done behind the fade to black
+// on the way up, by drawing everything once into a 4-pixel target, a key included, so the first picture of the tower moves at once.
+// (Tried and dropped: doing it a few meshes a frame while the workshop is open, which stuttered there; compiling ahead in the
+// background with compileAsync, which did not save the first draw its wait.)
+const srWarmRT = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType });
+function srPreload() { try { srPrepare(); } catch (e) { console.warn('collection preload', e); } }
+function srWarm() {
+  if (SR.warm >= 2 || !showroom.ready || !garage.ready || !state.garage) return;
+  const t0 = performance.now(), env = SR.envTex || rig?.mats.paint?.envMap; if (env) showroom.setEnv(env);
+  const bay = showroom.bays.find((b) => b.id); if (bay) srHangKey(bay);
+  const meshes = []; showroom.group.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; meshes.push(o); } });
+  const lift = showroom.liftGroup.visible; showroom.liftGroup.visible = true; showroom.liftGroup.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; meshes.push(o); } });
+  const was = showroom.group.visible, prev = renderer.getRenderTarget(), auto = renderer.shadowMap.autoUpdate, cam = srWarm.cam ||= new THREE.PerspectiveCamera(60, 1, 0.1, 200);
+  const v = showroom.overview(); garage.toWorld(v.pos, cam.position); cam.lookAt(garage.toWorld(v.tgt, srV2)); cam.updateMatrixWorld();
+  showroom.group.visible = true;
+  renderer.shadowMap.autoUpdate = false; renderer.setRenderTarget(srWarmRT); renderer.render(scene, cam); renderer.setRenderTarget(prev); renderer.shadowMap.autoUpdate = auto;
+  showroom.group.visible = was; showroom.liftGroup.visible = lift; for (const o of meshes) o.frustumCulled = true; srDropKey();
+  if (showroom.carsReady || showroom.carsFailed) SR.warm = 2;   // (drawn before the copies arrived: once more when they have)
+  SR.warmMs = Math.round(performance.now() - t0);
+}
 function srFade(then, instant) {
   if (instant) { then(); return; }
   const f = $('srFade'); f.style.transition = 'opacity .2s'; f.style.opacity = 1;
@@ -9963,10 +9997,10 @@ function enterShowroom(instant = false) {
   if (!state.garage || !garage.ready || SR.on || switching) return;
   srFade(() => {
     if (!state.garage || SR.on) return;
-    srPrepare();
+    srPrepare(); srWarm();   // (the first time up, the tower is drawn once here, behind the fade)
     Object.assign(SR, { on: true, mode: 'overview', bay: null, home: activeId, pose: null, pan: 0, tilt: 0, snap: true, hover: null, wantSel: false, ride: null, envAt: 2 });
     closeKeyMenu();
-    garage.showRoom(false); showroom.show(true); showroom.setLift({ y: 0, show: false }); carRoot.visible = false;
+    garage.showRoom(false); showroom.show(true); showroom.setLift({ y: 0, show: false });
     if (garage.cap) garage.cap.visible = false;
     document.body.classList.add('in-showroom'); $('srUi').hidden = false; srCard();
     camera.clearViewOffset(); syncRenderScale();
@@ -9978,7 +10012,7 @@ function srEnd(snap = true) {
   if (SR.bay) showroom.hideCar(SR.bay.id, false);
   Object.assign(SR, { on: false, mode: 'off', pose: null, bay: null, ride: null, hover: null, wantSel: false });
   srDropKey();
-  showroom.show(false); showroom.setLift({ y: 0, show: false }); garage.showRoom(true); carRoot.visible = true; srLight.intensity = 0;
+  showroom.show(false); showroom.setLift({ y: 0, show: false }); garage.showRoom(true); srLight.intensity = 0;
   if (garage.cap) garage.cap.visible = true;
   document.body.classList.remove('in-showroom'); $('srUi').hidden = true; $('srTip').hidden = true; canvas.style.cursor = '';
   garageViewOffset(); probeRefresh = 2; syncRenderScale();
@@ -10001,16 +10035,45 @@ function srZoom(bay) {
   let id = bay.id; { const d = CAR_DEFS[id]; if (d && d.variantFor) id = d.variantFor(loadMods(id)); }
   if (baseOf(activeId) === bay.id) id = activeId;   // the car already out (a movie livery of it, say) stays as it is
   const show = (p) => { if (SR.bay === bay && !SR.pose) { SR.loadP = p; srCardLoad(); } };
-  ensureRig(id, show).then(() => { if (!SR.on || SR.bay !== bay || SR.mode !== 'zoom') return; srPose(bay, id); if (SR.wantSel) srSelect(); })
-    .catch((e) => { console.error(e); if (SR.bay === bay) { SR.loadFail = true; srCardLoad(); } });
+  // (v104) A car not loaded yet: its file starts downloading at once, but it is unpacked and built only once the camera has had
+  // 0.85 s to walk up. Building a car holds the picture still for up to half a second: better standing at the bay than mid-stride.
+  const build = () => { if (!SR.on || SR.bay !== bay || SR.mode !== 'zoom') return; ensureRig(id, show).then(() => srReadyCar(bay, id)).then(() => { if (!SR.on || SR.bay !== bay || SR.mode !== 'zoom') return; srPose(bay, id); if (SR.wantSel) srSelect(); })
+    .catch((e) => { console.error(e); if (SR.bay === bay) { SR.loadFail = true; srCardLoad(); } }); };
+  if (rigs[id]) build(); else { wasmReady.then((ok) => fetchModelText(CAR_DEFS[id], ok, show)).catch(() => {}); setTimeout(build, 850); }
 }
+// (v104) A car that has only just been loaded is made the active one while it is still out of sight (far below: see the frame loop),
+// and its shaders are compiled in the background, before it takes its copy's place: drawn straight away, the compiling froze the
+// picture for up to a second.
+function srReadyCar(bay, id) {
+  if (!SR.on || SR.bay !== bay || SR.mode !== 'zoom' || SR.pose) return null;
+  if (activeId !== id) activateCar(id);
+  if (SR.envTex) carRoot.traverse((o) => { const m = o.material; if (m && !Array.isArray(m) && 'envMap' in m && !m.isMeshBasicMaterial && m.envMap !== SR.envTex) m.envMap = SR.envTex; });
+  if (!renderer.compileAsync) return null;
+  // Only what will be drawn: stand-ins for the car's visible meshes (same geometry and material). Compiling the whole car, with
+  // every wing and kit it is not wearing, made 76 shaders for the 911 where 32 were wanted, and took four seconds over it.
+  const temp = new THREE.Group(), shown = (o) => { for (let q = o; q && q !== carRoot.parent; q = q.parent) if (!q.visible) return false; return true; };
+  carRoot.traverse((o) => { if (o.isMesh && o.material && !Array.isArray(o.material) && shown(o)) temp.add(new THREE.Mesh(o.geometry, o.material)); });
+  const prevRT = renderer.getRenderTarget(), prevClip = renderer.clippingPlanes; let pr = null;
+  try {
+    // the versions the workshop floor's mirror draws with (one clipping plane, the mirror camera's lights): made first, not waited for;
+    // an empty draw with the plane on sets the renderer's count of clipping planes, which compile() reads
+    renderer.clippingPlanes = srClip; renderer.setRenderTarget(srWarmRT); renderer.render(srEmpty, world.refl.cam); renderer.compile(temp, world.refl.cam, scene);
+    renderer.clippingPlanes = prevClip; renderer.render(srEmpty, camera);
+    // the versions the main picture draws with: waited for
+    pr = renderer.compileAsync(temp, camera, scene);
+  } catch (e) { console.warn('compile ahead', e); pr = null; }
+  renderer.clippingPlanes = prevClip; renderer.setRenderTarget(prevRT);
+  return pr && Promise.race([pr.then(() => new Promise((r) => setTimeout(r, 250))), new Promise((r) => setTimeout(r, 6000))]).catch(() => {});
+}
+const srEmpty = new THREE.Scene(), srClip = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)];
 // the real car takes its copy's place in the bay
 function srPose(bay, id) {
   if (activeId !== id) activateCar(id);
   SR.pose = { x: bay.pos[0], y: bay.y + 0.03, z: bay.pos[2], yaw: bay.yaw };
-  showroom.hideCar(bay.id, true); carRoot.visible = true; probeRefresh = 3; srCardLoad();
+  showroom.hideCar(bay.id, true); probeRefresh = 3; srCardLoad();
+  SR.mirrorOnce = 3;   // (v104) the floor mirror's version of the car's shaders is compiled now, at the bay, not when the lift nears the workshop (a third of a second's stutter mid-ride)
 }
-function srUnpose() { if (SR.bay) showroom.hideCar(SR.bay.id, false); SR.pose = null; carRoot.visible = false; }
+function srUnpose() { if (SR.bay) showroom.hideCar(SR.bay.id, false); SR.pose = null; }
 function srOverview() { if (SR.mode !== 'zoom') return; srUnpose(); srDropKey(); Object.assign(SR, { mode: 'overview', bay: null, wantSel: false, pan: 0, tilt: 0 }); srCard(); }
 // "Take the keys": out of the bay and down the lift
 function srSelect() {
@@ -10027,14 +10090,19 @@ function srArrive() {
   gcam.t.set(car.x, camera.position.y - 3, car.z); gcam.dist = camera.position.distanceTo(gcam.t); gcam.pitch = Math.asin(clamp((camera.position.y - gcam.t.y) / Math.max(0.1, gcam.dist), -1, 1));
   toast(CAR_DEFS[id].name, 1800);
 }
+// a bay's key, built the first time it is wanted (and, v104, ahead of the click when the pointer rests on the car: building it took
+// a third of a second, which held the camera up at the click)
+function srMakeKey(bay) {
+  if (bay.key) return;
+  const k = buildKey(brandOf(bay.id)), S = 0.0036, h = new THREE.Group();
+  k.scale.setScalar(S); k.position.set(0, 0.05 - (0.046 + (k.userData.drop || 0)) * S / 0.0022, 0.03);
+  h.position.set(bay.keyPos[0], bay.keyPos[1], bay.keyPos[2]); h.rotation.y = bay.keyYaw; h.add(k); h.visible = false; showroom.group.add(h); bay.key = h; KW.env = null;
+}
+function srPrefetch(id) { const d = CAR_DEFS[id]; if (!d || rigs[id] || building[id]) return; const v = d.variantFor ? d.variantFor(loadMods(id)) : id; if (rigs[v] || building[v]) return; wasmReady.then((ok) => fetchModelText(CAR_DEFS[v], ok, () => {})).catch(() => {}); }
 function srHangKey(bay) {
   srDropKey();
   try {
-    if (!bay.key) {
-      const k = buildKey(brandOf(bay.id)), S = 0.0036, h = new THREE.Group();
-      k.scale.setScalar(S); k.position.set(0, 0.05 - (0.046 + (k.userData.drop || 0)) * S / 0.0022, 0.03);
-      h.position.set(bay.keyPos[0], bay.keyPos[1], bay.keyPos[2]); h.rotation.y = bay.keyYaw; h.add(k); showroom.group.add(h); bay.key = h;
-    }
+    srMakeKey(bay);
     bay.key.visible = true; SR.key = bay.key; SR.keySwing = 0.5; KW.env = null;
   } catch (e) { console.warn('key', e); }
 }
@@ -10125,6 +10193,8 @@ function srOnKey(cx, cy) {
     const b = srPick(e.clientX, e.clientY); canvas.style.cursor = b ? 'pointer' : '';
     if (b !== SR.hover) { SR.hover = b; if (b) { const d = CAR_DEFS[b.id]; tip.replaceChildren(el('b', { textContent: d.name }), el('span', { textContent: carLocked(b.id) ? `Locked until level ${carLevel(b.id)}` : d.pick || '' })); tip.style.setProperty('--hue', d.hue || '#5ad7ff'); } tip.hidden = !b; }
     if (b) { tip.style.left = Math.min(innerWidth - 240, e.clientX) + 'px'; tip.style.top = Math.min(innerHeight - 70, e.clientY) + 'px'; }
+    // (v104) the car under the pointer for a quarter of a second starts downloading, so it is nearer ready when it is clicked
+    clearTimeout(SR.hoverT); if (b && !carLocked(b.id)) SR.hoverT = setTimeout(() => { if (SR.on && SR.hover === b && SR.mode === 'overview') { srPrefetch(b.id); try { srMakeKey(b); } catch (e) {} } }, 250);
   });
 }
 $('srBack').addEventListener('click', () => { if (SR.mode === 'zoom') srOverview(); else leaveShowroom(); });
@@ -11160,7 +11230,11 @@ function frameInner(now) {
   let x = lerp(car.px, car.x, alpha), z = lerp(car.pz, car.z, alpha), yaw = car.pyaw + wrapAngle(car.yaw - car.pyaw) * alpha;
   { const L = world.locate(x, z); roadY = L.y; roadG = L.g; roadTh = L.th; }
   // (v103) up in the collection, or riding the lift down from it, the car is drawn where the tower has it
-  if (SR.on) { srUpdate(dt); if (SR.pose) { const w = garage.toWorld([SR.pose.x, SR.pose.y, SR.pose.z], srV); x = w.x; z = w.z; roadY = w.y; yaw = garage.group.rotation.y + SR.pose.yaw; roadG = 0; } }
+  // (v104) While the tower is up and the real car is not standing in a bay, the car is not hidden: it is drawn 400 m straight down,
+  // out of sight in the dark. Hiding it (carRoot.visible) took its two headlight spotlights out of the scene with it, and every
+  // change in the number of lights rebuilds every shader on screen: that was most of the freeze on first going up to the tower, and
+  // again each time a real car took its copy's place.
+  if (SR.on) { srUpdate(dt); if (SR.pose) { const w = garage.toWorld([SR.pose.x, SR.pose.y, SR.pose.z], srV); x = w.x; z = w.z; roadY = w.y; yaw = garage.group.rotation.y + SR.pose.yaw; roadG = 0; } else roadY -= 400; }
   updateCarVisual(live ? dt : 0, x, z, yaw);
   updateDamage(dt);
   updateHood(dt);
@@ -11206,18 +11280,19 @@ function frameInner(now) {
   audio.update(dt);
   syncFxLights();
   // reflections: the car's probe and the planar mirrors for the wet road and open water (and the garage floor)
-  world.forceRefl = roomUp();
+  world.forceRefl = roomUp() && (garage.room.visible || SR.mirrorOnce > 0);   // (v104: the tower has no mirror floor: no mirror pass while only it is drawn)
+  if (SR.mirrorOnce > 0) SR.mirrorOnce--;
   // in the garage the floor is the mirror: level, at the floor's height (not the road's grade a few metres on)
-  world.reflPlane = roomUp() ? (garageMirror.p.set(x, garage.floorY(), z), garageMirror) : null;
+  world.reflPlane = roomUp() ? (garageMirror.p.set(car.x, garage.floorY(), car.z), garageMirror) : null;   // (v104: the turntable's own spot, not the car's place up in the tower)
   // The car's reflection cube: in the garage it is captured while the work lights come up, then left alone (the
   // room never changes, and re-capturing it every few frames only gave the thin LED lines a chance to shimmer)
   roomTime = roomUp() ? roomTime + dtReal : 0;
   if (probeRefresh > 0 && --probeRefresh === 0) world.updateProbe(x, roadY, z, true);
   else if (roomTime < 1.6 && !SR.on) world.updateProbe(x, roadY, z);
-  else if (SR.mode === 'ride' && (SR.rideProbe = (SR.rideProbe || 0) + 1) % 8 === 0) world.updateProbe(x, roadY, z, true);   // (v103) the lift's ride: the car mirrors each floor it passes
+  else if (SR.mode === 'ride') world.updateProbe(x, roadY, z);   // (v103) the lift's ride: the car mirrors each floor it passes (v104: two faces of the cube a frame; a whole cube every eighth frame made the ride stutter)
   updateCarbonLod(dtReal, x, roadY + 0.6, z);
   world.renderReflections(camera);
-  if (roomUp() && SHARED.uReflOn.value > 0.5) mirrorBlur.run(); else if (SHARED.uRefl.value !== world.refl.rt.texture) SHARED.uRefl.value = world.refl.rt.texture;
+  if (roomUp() && garage.room.visible && SHARED.uReflOn.value > 0.5) mirrorBlur.run(); else if (SHARED.uRefl.value !== world.refl.rt.texture) SHARED.uRefl.value = world.refl.rt.texture;
   syncAA();
   composer.render(dt);
   renderMirror(dt, live, x, z, yaw);
@@ -11396,6 +11471,7 @@ function pickTitleCar(id, data = {}) {
     if (data.car) car.reset(data.car.x, data.car.z, data.car.yaw);
     if (state.driving) { cam.yaw = car.yaw; }
     state.ready = true;
+    setTimeout(srPreload, 1500);   // (v104) the collection's building and its cars are fetched and unpacked now, not when you first go up
     $('loadErr').hidden = true;
     // the road should already be busy when you set off: wait for the traffic too
     trafficLoad().then(() => {
@@ -11462,7 +11538,7 @@ window.__game = {
     const des = gaugeFor(id); des.face(q, L); des.live(q, { rpm: f * tachMax * 1000, f, spd, unit: state.units === 'mph' ? 'mph' : 'km/h', boost: 0.5, gear }, L);
     [tachMax, CAR.redline] = keep; return c;
   },
-  showroom, SR, enterShowroom, leaveShowroom, srZoom, srSelect, srOverview, srPick, TOWER,
+  showroom, SR, ROOMQ, enterShowroom, leaveShowroom, srZoom, srSelect, srOverview, srPick, TOWER,
   KW, keyBrands, pickBrand, keyAt, lookAtKeys, leaveKeyWall, chooseCar, roadQ, renderScale, syncRenderScale, gcam, get gBrand() { return gBrand; }, get gTab() { return gTab; },
   advance(sec, input = {}, withTraffic = false) {
     const fixed = typeof input === 'function' ? input : Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false }, input);

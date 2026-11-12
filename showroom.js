@@ -90,6 +90,7 @@ const blobTexture = () => canvasTex(128, 256, (g, w, h) => {
   g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 62, 0, 7); g.fill(); g.restore();
 });
 
+const whitePixel = () => canvasTex(2, 2, (g) => { g.fillStyle = '#fff'; g.fillRect(0, 0, 2, 2); });
 // A surface whose light is worked out when it is built and kept in its corners (the `bake` attribute): the surface
 // glows by its own colour times that light. Real lights and the room's reflections still fall on it.
 function baked(o, gain = 1) {
@@ -280,12 +281,15 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     mats.deck = baked({ name: 'showroom deck', map: tile, roughness: 0.24, metalness: 0, envMapIntensity: 0.55 }, 2.4);
     mats.wood = baked({ name: 'showroom walnut', map: woodT, roughness: 0.5, metalness: 0, envMapIntensity: 0.25 }, 2.2);
     mats.back = baked({ name: 'showroom back wall', map: backT, roughness: 0.7, metalness: 0.05, envMapIntensity: 0.15 }, 1.5);
-    mats.conc = baked({ name: 'showroom concrete', color: 0x3a3d43, roughness: 0.92, metalness: 0, envMapIntensity: 0.1 }, 1.6);
+    // (v104: every lit surface of the building is a `baked` material with a picture, a single white pixel where it has none, so the
+    // whole tower needs one shader: each different kind of material cost a tenth to a quarter of a second to compile the first time)
+    const white = whitePixel(); disposables.push(white);
+    mats.conc = baked({ name: 'showroom concrete', map: white, color: 0x3a3d43, roughness: 0.92, metalness: 0, envMapIntensity: 0.1 }, 1.6);
     mats.fascia = baked({ name: 'showroom fascia', map: fasT, roughness: 0.4, metalness: 0.6, envMapIntensity: 0.3 }, 1.5);
     mats.plates = baked({ name: 'showroom plates', map: plT, roughness: 0.42, metalness: 0.7, envMapIntensity: 0.5 }, 0.75);
-    mats.steel = new THREE.MeshStandardMaterial({ name: 'showroom steel', color: 0x9aa0a8, roughness: 0.32, metalness: 0.9, envMapIntensity: 0.9, emissive: 0x9aa0a8, emissiveIntensity: 0.06 });
-    mats.dark = new THREE.MeshStandardMaterial({ name: 'showroom dark steel', color: 0x15171a, roughness: 0.5, metalness: 0.7, envMapIntensity: 0.6, emissive: 0x15171a, emissiveIntensity: 0.5 });
-    mats.glass = new THREE.MeshStandardMaterial({ name: 'lift glass', color: 0xbfd6e6, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.05, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.4 });
+    mats.steel = baked({ name: 'showroom steel', map: white, color: 0x9aa0a8, roughness: 0.32, metalness: 0.9, envMapIntensity: 0.9, emissive: 0x9aa0a8, emissiveIntensity: 0.06 });
+    mats.dark = baked({ name: 'showroom dark steel', map: white, color: 0x15171a, roughness: 0.5, metalness: 0.7, envMapIntensity: 0.6, emissive: 0x15171a, emissiveIntensity: 0.5 });
+    mats.glass = new THREE.MeshBasicMaterial({ name: 'lift glass', color: 0xbfd6e6, transparent: true, opacity: 0.035, depthWrite: false, side: THREE.DoubleSide, fog: false });
     mats.ledW = new THREE.MeshBasicMaterial({ name: 'showroom led', color: new THREE.Color(2.1, 2.0, 1.85), fog: false });
     mats.ledR = new THREE.MeshBasicMaterial({ name: 'showroom led locked', color: new THREE.Color(1.5, 0.1, 0.07), fog: false });
     mats.blob = new THREE.MeshBasicMaterial({ name: 'showroom shadow', map: blobT, transparent: true, depthWrite: false, fog: false, opacity: 0.85 });
@@ -310,13 +314,14 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
   // the two rails the pallet runs along from the bay to the platform
   const lift = { y: 0, platform: null, pallet: null, rails: null };
   {
-    const steelM = new THREE.MeshStandardMaterial({ name: 'lift steel', color: 0x2a2d32, roughness: 0.42, metalness: 0.85, envMapIntensity: 0.8, emissive: 0x2a2d32, emissiveIntensity: 0.25 });
-    const top = new THREE.MeshStandardMaterial({ name: 'lift deck', color: 0x0b0c0f, roughness: 0.3, metalness: 0.2, envMapIntensity: 0.6, emissive: 0x0b0c0f, emissiveIntensity: 0.6 });
+    const wpx = whitePixel();
+    const steelM = baked({ name: 'lift steel', map: wpx, color: 0x2a2d32, roughness: 0.42, metalness: 0.85, envMapIntensity: 0.8, emissive: 0x2a2d32, emissiveIntensity: 0.25 });
+    const top = baked({ name: 'lift deck', map: wpx, color: 0x0b0c0f, roughness: 0.3, metalness: 0.2, envMapIntensity: 0.6, emissive: 0x0b0c0f, emissiveIntensity: 0.6 });
     const led = new THREE.MeshBasicMaterial({ name: 'lift led', color: new THREE.Color(0.5, 1.7, 2.3), fog: false });
     const pf = new THREE.Group();
     pf.add(new THREE.Mesh(new THREE.CylinderGeometry(3.3, 3.3, 0.16, 72).translate(0, -0.085, 0), steelM), new THREE.Mesh(new THREE.CylinderGeometry(3.22, 3.22, 0.012, 72).translate(0, -0.003, 0), top), new THREE.Mesh(new THREE.TorusGeometry(3.26, 0.022, 6, 96).rotateX(Math.PI / 2).translate(0, 0.004, 0), led),
       new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 30, 20).translate(0, -15.17, 0), steelM));   // the ram under it
-    const pallet = new THREE.Group(); pallet.add(new THREE.Mesh(new THREE.BoxGeometry(2.36, 0.03, 5.1).translate(0, 0.015, 0), new THREE.MeshStandardMaterial({ name: 'pallet', color: 0x9aa0a8, roughness: 0.32, metalness: 0.9, envMapIntensity: 0.9, emissive: 0x9aa0a8, emissiveIntensity: 0.06 })));
+    const pallet = new THREE.Group(); pallet.add(new THREE.Mesh(new THREE.BoxGeometry(2.36, 0.03, 5.1).translate(0, 0.015, 0), baked({ name: 'pallet', map: wpx, color: 0x9aa0a8, roughness: 0.32, metalness: 0.9, envMapIntensity: 0.9, emissive: 0x9aa0a8, emissiveIntensity: 0.06 })));
     const rails = new THREE.Group(); for (const s of [-0.85, 0.85]) rails.add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 1).translate(s, -0.05, 0.5), steelM));
     pf.traverse((o) => { o.castShadow = false; }); liftGroup.add(pf, pallet, rails);
     lift.platform = pf; lift.pallet = pallet; lift.rails = rails; lift.mats = [steelM, top, pallet.children[0].material];
@@ -327,7 +332,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     metal: new THREE.MeshStandardMaterial({ name: 'proxy metal', vertexColors: true, metalness: 0.92, roughness: 0.3, envMapIntensity: 1 }),
     gloss: new THREE.MeshStandardMaterial({ name: 'proxy gloss', vertexColors: true, metalness: 0, roughness: 0.32, envMapIntensity: 0.9 }),
     matte: new THREE.MeshStandardMaterial({ name: 'proxy matte', vertexColors: true, metalness: 0, roughness: 0.8, envMapIntensity: 0.5 }),
-    glass: new THREE.MeshStandardMaterial({ name: 'proxy glass', color: 0x06080b, metalness: 0.2, roughness: 0.04, transparent: true, opacity: 0.86, envMapIntensity: 1.5 }),
+    glass: new THREE.MeshStandardMaterial({ name: 'proxy glass', vertexColors: true, color: 0x0a0d12, metalness: 0.2, roughness: 0.04, envMapIntensity: 1.5 }),   // (v104: dark and solid, the same shader as the rest of a copy)
   };
   for (const b of bays) { b.holder = new THREE.Group(); b.holder.position.set(b.pos[0], b.y + 0.03, b.pos[2]); b.holder.rotation.y = b.yaw; cars.add(b.holder); }
   let loading = null;
@@ -339,7 +344,9 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
       const gltf = await new Promise((ok, no) => loader.parse(bytes.buffer, '', ok, no));
       for (const node of [...gltf.scene.children]) {
         const b = byId[node.name]; if (!b) continue;
-        b.paint = new THREE.MeshPhysicalMaterial({ name: 'proxy paint ' + b.id, vertexColors: true, color: 0xffffff, metalness: 0, roughness: 0.38, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1 });
+        // (v104: plain standard paint, the same shader as the copies' other gloss parts. The clear-coated physical material it had first
+        // needed a shader of its own that took 0.85 s to compile the first time the tower was drawn; from across the hall the two look alike.)
+        b.paint = new THREE.MeshStandardMaterial({ name: 'proxy paint ' + b.id, vertexColors: true, color: 0xffffff, metalness: 0, roughness: 0.3, envMapIntensity: 1.15 });
         node.traverse((o) => { if (!o.isMesh) return; const k = o.material.name; o.material = k === 'paint' ? b.paint : PM[k] || PM.matte; o.castShadow = o.receiveShadow = false; if (k === 'glass') o.renderOrder = 2; });   // (the copies keep the models' own normals: worked out afresh from the simplified faces they came out blotched black, the models' faces not all being wound one way)
         b.proxy = node; b.size = node.userData.bounds || null; b.holder.add(node);
         if (b.pending) { api.setPaint(b.id, ...b.pending); b.pending = null; }
@@ -370,7 +377,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     setPaint(id, hex, fin) {
       const b = byId[id]; if (!b) return; if (!b.paint) { b.pending = [hex, fin]; return; }
       b.paint.color.set(hex);
-      if (fin) { b.paint.metalness = fin.metalness; b.paint.roughness = fin.roughness; b.paint.clearcoat = fin.clearcoat; b.paint.clearcoatRoughness = fin.clearcoatRoughness; }
+      if (fin) { b.paint.metalness = fin.metalness; b.paint.roughness = Math.max(0.12, fin.roughness - 0.14 * (fin.clearcoat || 0)); }   // (a clear coat reads as a glossier surface)
     },
     // the bay whose car a ray (world space) hits first
     pick(ray) {
