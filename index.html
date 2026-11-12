@@ -1172,8 +1172,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
 import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js';
 import { createGarage, GARAGE_SPEC } from './garage.js';
-import { createShowroom, TOWER } from './showroom.js?v=108';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?v=108';
+import { createShowroom, TOWER } from './showroom.js?v=109';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?v=109';
 import { SpikeStrips, Mirror } from './pursuit.js';
 import { Rain } from './rain.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -9996,7 +9996,7 @@ function srCapture() {
     if (!showroom.byId[base]) return;
     if (srIsStock(carId, mods)) { if (srLods[base]) { delete srLods[base]; showroom.setLod(base, null); lodDelete(base); srPaintOf(base); } return; }
     if (srLods[base] && srLods[base].sig === sig) return;
-    const raw = gatherRig(rig, carRoot, { head: [...rig.lamps.head, ...rig.mats.headLens], drl: [...new Set((rig.kinds.drl || []).map((o) => o.material))], headDark: !!(rig.mk2 && rig.mk2.visible), bulbs: !(rig.g80 && rig.g80.visible) });
+    const raw = gatherRig(rig, carRoot, { head: [...rig.lamps.head], lens: [...rig.mats.headLens], drl: [...new Set((rig.kinds.drl || []).map((o) => o.material))], headDark: !!(rig.mk2 && rig.mk2.visible) });
     srLods[base] = { sig, pending: true };
     lodSimplify(raw).then((parts) => {
       if (!srLods[base] || srLods[base].sig !== sig) return;   // changed again meanwhile

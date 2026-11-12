@@ -25,7 +25,7 @@ function weld(p) {
 export async function simplifyParts(parts, target = 26000) {
   await MeshoptSimplifier.ready; MeshoptSimplifier.useExperimentalFeatures = true;
   const names = Object.keys(parts).filter((k) => parts[k] && parts[k].idx.length >= 3);
-  const LAMPS = new Set(['lamp', 'head', 'drl']), share = (k) => Math.pow(parts[k].idx.length / 3, 0.7) * (k === 'paint' ? 1.5 : LAMPS.has(k) ? 1.2 : 1), total = names.reduce((s, k) => s + share(k), 0), out = [];
+  const LAMPS = new Set(['lamp', 'head', 'drl', 'lens']), share = (k) => Math.pow(parts[k].idx.length / 3, 0.7) * (k === 'paint' ? 1.5 : LAMPS.has(k) ? 1.2 : 1), total = names.reduce((s, k) => s + share(k), 0), out = [];
   for (const name of names) {
     const w = weld(parts[name]), nv = w.pos.length / 3, from = parts[name].idx.length / 3;
     if (w.idx.length < 3) continue;

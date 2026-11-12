@@ -9,7 +9,7 @@
 // never touched stands there as the stock copy shipped with the game (showroom-cars.txt, made the same way).
 import * as THREE from 'three';
 
-export const LOD_PARTS = ['paint', 'glass', 'metal', 'gloss', 'matte', 'lamp', 'head', 'drl', 'bulb'];
+export const LOD_PARTS = ['paint', 'glass', 'metal', 'gloss', 'matte', 'lamp', 'head', 'drl', 'lens'];
 export const LAMP_MAX = 6.4;   // a switched lamp's light is kept as a share of this level (the brightest in the game: a running-light strip at 6)
 const pxCache = new Map();
 function pixels(tex) {
@@ -41,12 +41,15 @@ const lum = (c, k = 1) => (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) * k;
 // and the running lights (`drl`: the strips' materials; the G80 and MK2 outlines) are surfaces of their own, 'head' and
 // 'drl', with four numbers a corner: the surface's own colour as it looks switched off, and how much of the lamp's light
 // that corner gives. The tower switches and colours them from each car's saved build (showroom.js setLights), and the
-// same for the bulb in each headlamp. `headDark`: the housing gives no light (the MK2 style). `bulbs` false: no bulbs (the
-// G80 style: a blacked-out lamp, the outlines are its light; its bulbs came out beside the car).
-export function gatherRig(r, top, { head = [], drl = [], headDark = false, bulbs = true } = {}) {
+// `headDark`: the housing gives no light (the MK2 style).
+// (v109: no bulbs. v106 put a small white ball of light in each headlamp so a lamp whose light is faint still read as on. The
+// owner: "make sure that there are no white bulbs that was what I was trying to get rid of dont replace them with white bulbs if u
+// cant see them just keep them the same". A copy's lamps are the real car's lamps and nothing else; one that is faint on the car
+// is faint here. `bulbs` is left for a look at the old way only; lodObject leaves the bulbs out of copies made before.)
+export function gatherRig(r, top, { head = [], drl = [], lens = [], headDark = false, bulbs = false } = {}) {
   top.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(top.matrixWorld).invert(), M = new THREE.Matrix4(), N = new THREE.Matrix3(), v = new THREE.Vector3();
-  const headSet = new Set(head), drlSet = new Set(drl), driver = r.driver || null, list = [], size = {};
+  const headSet = new Set(head), drlSet = new Set(drl), lensSet = new Set(lens), driver = r.driver || null, list = [], size = {};
   const stockLit = (m) => { const s = m.userData.stock; return s && s.emissive ? lum(s.emissive, s.emissiveIntensity || 0) > 0.35 : lum(m.emissive, m.emissiveIntensity || 0) > 0.35; };   // would it shine with the headlights on (whatever the switch says now)
   const shown = (o) => { for (let p = o; p && p !== top.parent; p = p.parent) if (!p.visible) return false; return true; };
   top.traverse((o) => {
@@ -65,6 +68,9 @@ export function gatherRig(r, top, { head = [], drl = [], headDark = false, bulbs
     else if (m.isMeshBasicMaterial) { if (m.transparent || Math.max(m.color.r, m.color.g, m.color.b) <= 1) return; b = 'lamp'; }   // the lit outlines of the running lights
     else if (!m.isMeshStandardMaterial) return;
     else if (drlSet.has(m) || kind === 'drl') b = 'drl';
+    // (v109) the lit lens inside some headlamps (`lens`: r.mats.headLens; the Corvette's strip, the M4's): a third switched surface.
+    // The game lights it faintly as it comes and at 0.6 in a chosen colour; left as dark glass it hid the lamp behind it.
+    else if (lensSet.has(m) || kind === 'headLens') b = 'lens';
     else if ((headSet.has(m) || kind === 'head') && !headDark && stockLit(m)) b = 'head';
     else if (lum(m.emissive, m.emissiveIntensity || 0) > 0.35 && !headSet.has(m) && kind !== 'head' && kind !== 'headLens') b = 'lamp';   // whatever else is giving light as the car stands
     else if (m === r.mats.paint) b = 'paint';
@@ -74,14 +80,14 @@ export function gatherRig(r, top, { head = [], drl = [], headDark = false, bulbs
     list.push([o, b]);
   });
   const parts = {}, at = {};
-  const CS = (b) => (b === 'head' || b === 'drl' ? 4 : 3);   // numbers a corner in its colour
+  const CS = (b) => (b === 'head' || b === 'drl' || b === 'lens' ? 4 : 3);   // numbers a corner in its colour
   for (const b in size) { parts[b] = { pos: new Float32Array(size[b].v * 3), nor: new Float32Array(size[b].v * 3), col: new Float32Array(size[b].v * CS(b)), idx: new Uint32Array(size[b].i) }; at[b] = { v: 0, i: 0 }; }
   let tris = 0;
   const side = [{ x: 0, y: 0, n: 0, z: -1e9 }, { x: 0, y: 0, n: 0, z: -1e9 }];   // the headlamps, left and right: where their middles are
   for (const [o, b] of list) {
     const m = o.material, g = o.geometry, P = g.attributes.position, Nn = g.attributes.normal, UV = g.attributes.uv, part = parts[b], a = at[b], v0 = a.v;
     M.multiplyMatrices(inv, o.matrixWorld); N.getNormalMatrix(M);
-    const sw = b === 'head' || b === 'drl', basic = m.isMeshBasicMaterial, cs = CS(b);   // sw: a lamp the tower switches
+    const sw = b === 'head' || b === 'drl' || b === 'lens', basic = m.isMeshBasicMaterial, cs = CS(b);   // sw: a lamp the tower switches
     const px = m.map && m.name !== 'carbon' ? pixels(m.map) : null, ex = b === 'lamp' || sw ? pixels(m.emissiveMap || m.map) : null;   // (a lamp with no picture of its light: its own picture, so the reflector's shapes show)
     let cr = m.color.r, cg = m.color.g, cb = m.color.b, er = 0, eg = 0, eb = 0;
     // (the game's carbon weave is drawn by its shader, on a white base: read as it was, a carbon hood came out white)
@@ -129,6 +135,25 @@ export function gatherRig(r, top, { head = [], drl = [], headDark = false, bulbs
     balls.forEach((q, k) => { const cx = q.x / q.n, cy = q.y / q.n, cz = front(cx, cy, q.z) - 0.012; for (let i = 0; i < n; i++) { const o3 = (k * n + i) * 3; pos[o3] = ico.attributes.position.getX(i) + cx; pos[o3 + 1] = ico.attributes.position.getY(i) + cy; pos[o3 + 2] = ico.attributes.position.getZ(i) + cz; nor[o3] = ico.attributes.normal.getX(i); nor[o3 + 1] = ico.attributes.normal.getY(i); nor[o3 + 2] = ico.attributes.normal.getZ(i); col[o3] = col[o3 + 1] = col[o3 + 2] = 1; idx[k * n + i] = k * n + i; } });
     parts.bulb = { pos, nor, col, idx }; ico.dispose();
   } }
+  // (v109) Glass over a lamp. A copy's glass is drawn dark and solid, so any pane left in front of a headlamp or a running light
+  // hides it: with the bulbs gone the Corvette, the Challenger and others stood with lamps that looked switched off while the real
+  // car's were lit. Every glass triangle lying over a lamp (inside its outline seen from the front, level with it or ahead of it)
+  // is left off, each side of the car by itself.
+  if (parts.glass) {
+    const boxes = [];
+    for (const b of ['head', 'drl', 'lens']) { if (!parts[b]) continue; const hp = parts[b].pos, two = [null, null];
+      for (let i = 0; i < hp.length; i += 3) { const q = (two[hp[i] > 0 ? 1 : 0] ||= [1e9, -1e9, 1e9, -1e9, 1e9]); if (hp[i] < q[0]) q[0] = hp[i]; if (hp[i] > q[1]) q[1] = hp[i]; if (hp[i + 1] < q[2]) q[2] = hp[i + 1]; if (hp[i + 1] > q[3]) q[3] = hp[i + 1]; if (hp[i + 2] < q[4]) q[4] = hp[i + 2]; }
+      for (const q of two) if (q) boxes.push(q); }
+    if (boxes.length) {
+      const gp = parts.glass.pos, gi = parts.glass.idx, keep = new Uint32Array(gi.length); let n = 0;
+      for (let k = 0; k < gi.length; k += 3) {
+        const a = gi[k] * 3, b = gi[k + 1] * 3, c = gi[k + 2] * 3, cx = (gp[a] + gp[b] + gp[c]) / 3, cy = (gp[a + 1] + gp[b + 1] + gp[c + 1]) / 3, cz = (gp[a + 2] + gp[b + 2] + gp[c + 2]) / 3;
+        let over = false; for (const q of boxes) if (cx > q[0] - 0.03 && cx < q[1] + 0.03 && cy > q[2] - 0.03 && cy < q[3] + 0.03 && cz > q[4] - 0.03) { over = true; break; }
+        if (!over) { keep[n++] = gi[k]; keep[n++] = gi[k + 1]; keep[n++] = gi[k + 2]; }
+      }
+      parts.glass.idx = keep.slice(0, n);
+    }
+  }
   pxCache.clear();
   return { parts, tris: Math.round(tris), bounds: r.bounds ? [r.bounds.min.toArray(), r.bounds.max.toArray()] : null };
 }
@@ -138,12 +163,12 @@ let worker = null, workerBad = false, jobs = new Map(), seq = 0;
 export function simplify(raw, target = 26000) {
   if (!worker && !workerBad) {
     try {
-      worker = new Worker(new URL('./lod-worker.js?v=108', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./lod-worker.js?v=109', import.meta.url), { type: 'module' });
       worker.onmessage = (e) => { const j = jobs.get(e.data.id); if (!j) return; jobs.delete(e.data.id); if (e.data.error) j.no(new Error(e.data.error)); else j.ok(e.data.parts); };
       worker.onerror = () => { workerBad = true; worker = null; for (const j of jobs.values()) j.retry(); jobs.clear(); };
     } catch (e) { workerBad = true; worker = null; }
   }
-  const onPage = () => import('./lod-core.js?v=108').then((m) => m.simplifyParts(raw.parts, target));
+  const onPage = () => import('./lod-core.js?v=109').then((m) => m.simplifyParts(raw.parts, target));
   if (!worker) return onPage();
   return new Promise((ok, no) => { const id = ++seq; jobs.set(id, { ok, no, retry: () => onPage().then(ok, no) }); worker.postMessage({ id, parts: raw.parts, target }); });
 }
@@ -151,9 +176,24 @@ export function simplify(raw, target = 26000) {
 // ---- a copy as something to draw: `mats` = { paint, glass, metal, gloss, matte, lamp, head, drl, bulb } materials
 export function lodObject(parts, mats) {
   const grp = new THREE.Group();
+  // (v109) a copy made in v108 still has glass lying over its lamps (see gatherRig): taken off here, the same way
+  const boxes = [];
+  for (const p of parts) { if (p.name !== 'head' && p.name !== 'drl' && p.name !== 'lens') continue; const two = [null, null];
+    for (let i = 0; i < p.pos.length; i += 3) { const q = (two[p.pos[i] > 0 ? 1 : 0] ||= [1e9, -1e9, 1e9, -1e9, 1e9]); if (p.pos[i] < q[0]) q[0] = p.pos[i]; if (p.pos[i] > q[1]) q[1] = p.pos[i]; if (p.pos[i + 1] < q[2]) q[2] = p.pos[i + 1]; if (p.pos[i + 1] > q[3]) q[3] = p.pos[i + 1]; if (p.pos[i + 2] < q[4]) q[4] = p.pos[i + 2]; }
+    for (const q of two) if (q) boxes.push(q); }
+  const clear = (p) => {
+    const gp = p.pos, gi = p.idx, keep = new Uint32Array(gi.length); let n = 0;
+    for (let k = 0; k < gi.length; k += 3) {
+      const a = gi[k] * 3, b = gi[k + 1] * 3, c = gi[k + 2] * 3, cx = (gp[a] + gp[b] + gp[c]) / 3, cy = (gp[a + 1] + gp[b + 1] + gp[c + 1]) / 3, cz = (gp[a + 2] + gp[b + 2] + gp[c + 2]) / 3;
+      let over = false; for (const q of boxes) if (cx > q[0] - 0.03 && cx < q[1] + 0.03 && cy > q[2] - 0.03 && cy < q[3] + 0.03 && cz > q[4] - 0.03) { over = true; break; }
+      if (!over) { keep[n++] = gi[k]; keep[n++] = gi[k + 1]; keep[n++] = gi[k + 2]; }
+    }
+    return n === gi.length ? gi : keep.slice(0, n);
+  };
   for (const p of parts) {
+    if (p.name === 'bulb') continue;   // (v109: none; see gatherRig)
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(p.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(p.nor, 3, true)); g.setAttribute('color', new THREE.BufferAttribute(p.col, Math.round(p.col.length / (p.pos.length / 3)), true)); g.setIndex(new THREE.BufferAttribute(p.idx, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(p.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(p.nor, 3, true)); g.setAttribute('color', new THREE.BufferAttribute(p.col, Math.round(p.col.length / (p.pos.length / 3)), true)); g.setIndex(new THREE.BufferAttribute(p.name === 'glass' && boxes.length ? clear(p) : p.idx, 1));
     const m = new THREE.Mesh(g, mats[p.name] || mats.matte); m.name = p.name; m.castShadow = m.receiveShadow = false; grp.add(m);
   }
   return grp;

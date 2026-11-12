@@ -21,7 +21,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { lodObject, LAMP_MAX } from './lod.js?v=108';   // (the same address the page uses: one copy of it)
+import { lodObject, LAMP_MAX } from './lod.js?v=109';   // (the same address the page uses: one copy of it)
 
 const D2R = Math.PI / 180;
 export const TOWER = { Y0: 6.2, NF: 5, NB: 5, FH: 3.05, SLAB: 0.34, RI: 8.4, RC: 11.55, RO: 14.7, RH: 15.3, ALPHA: 22 * D2R, TUBE: 3.38, EDGE: 2.15 };   // EDGE: how far back from the slab's edge the fins start
@@ -455,8 +455,6 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     glass: new THREE.MeshStandardMaterial({ name: 'proxy glass', vertexColors: true, color: 0x0a0d12, metalness: 0.2, roughness: 0.04, envMapIntensity: 1.5 }),
     // the lamps: lit, at a modest level (the owner: "all the headlights to be on ... but not incredibly bright")
     lamp: new THREE.MeshBasicMaterial({ name: 'proxy lamp', vertexColors: true, color: new THREE.Color(1.25, 1.22, 1.16), fog: false }),
-    // the bulb in each headlamp (v106): a small ball bright enough to carry a little glow, so every car plainly has its lights on
-    bulb: new THREE.MeshBasicMaterial({ name: 'proxy bulb', vertexColors: true, color: new THREE.Color(2.6, 2.5, 2.3), fog: false }),
   };
   // (v108, the owner: "the cars arent loading with the correct lights, ensure that the lights on the cars are exactly as they are
   // within the players car menu and how they were customized. make sure the color is correct and the options are set". A copy used
@@ -465,22 +463,27 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
   // own, switched and coloured from the car's saved build (setLights), so they are right for every car, at once, copy or stock.
   // They are drawn as the game draws the real lamp: the surface's own colour lit by the hall, plus, switched on, the lamp's light in
   // its colour at the game's own level for that lamp, corner by corner (the fourth number of the corner's colour).)
-  const glowMat = (name) => {
-    const m = new THREE.MeshStandardMaterial({ name, vertexColors: true, metalness: 0, roughness: 0.6, envMapIntensity: 0.5, envMap: envTex, side: THREE.DoubleSide });   // (both faces: the lit outlines are thin open shapes)
+  // (v109) Each is drawn 4 cm nearer the eye than it stands. A copy's body is a simplified surface, and where a thin lamp lies right
+  // against it (the Challenger's rings in their bowls) that surface came out in front and hid the lamp: with the bulbs gone, a car
+  // whose lamps are lit on the real thing stood dark. `see`: the see-through lens inside some lamps.
+  const glowMat = (name, see = false) => {
+    const m = new THREE.MeshStandardMaterial({ name, vertexColors: true, metalness: 0, roughness: 0.6, envMapIntensity: 0.5, envMap: envTex, side: THREE.DoubleSide, ...(see ? { transparent: true, opacity: 0.45, depthWrite: false } : {}) });   // (both faces: the lit outlines are thin open shapes)
     const u = m.userData.glow = { value: new THREE.Color(0, 0, 0) };
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uGlow = u;
+      sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.xyz *= 1.0 - 0.04 / max(length(mvPosition.xyz), 0.5);\n\tgl_Position = projectionMatrix * mvPosition;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', 'uniform vec3 uGlow;\n#include <common>')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n\tdiffuseColor.a = opacity;')   // (the fourth number is light, not see-through)
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR_ALPHA\n\ttotalEmissiveRadiance += uGlow * vColor.a;\n#endif');
     };
-    m.customProgramCacheKey = () => 'proxy lamp v108';
+    m.customProgramCacheKey = () => 'proxy lamp v109';
     return m;
   };
   const lightsOf = (b) => {
     if (!b.lm) {
-      b.lm = { head: glowMat('proxy head ' + b.id), drl: glowMat('proxy drl ' + b.id), bulb: new THREE.MeshBasicMaterial({ name: 'proxy bulb ' + b.id, fog: false }) };
+      b.lm = { head: glowMat('proxy head ' + b.id), drl: glowMat('proxy drl ' + b.id), lens: glowMat('proxy lens ' + b.id, true) };
       // until a build is given: on, as a car comes
-      b.lm.head.userData.glow.value.setScalar(LAMP_MAX); b.lm.drl.userData.glow.value.setRGB(0.847, 0.922, 1).multiplyScalar(LAMP_MAX); b.lm.bulb.color.setRGB(2.6, 2.43, 2.07);
+      b.lm.head.userData.glow.value.setScalar(LAMP_MAX); b.lm.drl.userData.glow.value.setRGB(0.847, 0.922, 1).multiplyScalar(LAMP_MAX);
     }
     return b.lm;
   };
@@ -491,14 +494,14 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
   let loading = null;
   function loadCars(decoder) {
     loading ||= (async () => {
-      const res = await fetch('showroom-cars.txt?v=108'); if (!res.ok) throw new Error('showroom cars ' + res.status);
+      const res = await fetch('showroom-cars.txt?v=109'); if (!res.ok) throw new Error('showroom cars ' + res.status);
       const bin = atob((await res.text()).trim()), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       const loader = new GLTFLoader(); if (decoder) loader.setMeshoptDecoder(decoder);
       const gltf = await new Promise((ok, no) => loader.parse(bytes.buffer, '', ok, no));
       for (const node of [...gltf.scene.children]) {
         const b = byId[node.name]; if (!b) continue;
         const M = matsOf(b);
-        node.traverse((o) => { if (!o.isMesh) return; const k = o.material.name; o.material = M[k] || PM.matte; o.castShadow = o.receiveShadow = false; });
+        node.traverse((o) => { if (!o.isMesh) return; const k = o.material.name; o.material = M[k] || PM.matte; o.castShadow = o.receiveShadow = false; if (k === 'bulb') o.visible = false; });
         b.stock = node; b.bounds = node.userData.bounds || null;
         if (!b.lod) { b.proxy = node; b.holder.add(node); }
         if (b.lights) api.setLights(b.id, b.lights);   // (its underglow is sized by the car)
@@ -523,7 +526,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     // the reflections every surface here mirrors: the game's cube of the hall
     setEnv(tex) {
       envTex = tex;
-      const all = [...Object.values(mats), ...Object.values(PM), ...lift.mats, ...bays.map((b) => b.paint).filter(Boolean), ...bays.flatMap((b) => (b.lm ? [b.lm.head, b.lm.drl] : []))];
+      const all = [...Object.values(mats), ...Object.values(PM), ...lift.mats, ...bays.map((b) => b.paint).filter(Boolean), ...bays.flatMap((b) => (b.lm ? [b.lm.head, b.lm.drl, b.lm.lens] : []))];
       for (const m of all) if (m && 'envMap' in m && !m.isMeshBasicMaterial && m.envMap !== tex) { m.envMap = tex; m.needsUpdate = true; }
     },
     // What the building's own surfaces mirror: a cube of the hall taken once, here, from the middle of the shaft. (Not the
@@ -555,8 +558,9 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
       // (the game's own figures, applyMods: a chosen colour goes on the headlamps at 1.6 times their level, on the running lights at their level)
       const lit = (m, is, stock, k) => { const g = m.userData.glow.value; if (!is) g.setScalar(0); else if (color) g.copy(c).multiplyScalar(LAMP_MAX * k); else g.setRGB(...stock).multiplyScalar(LAMP_MAX); };
       lit(L.head, on, [1, 1, 1], 1.6); lit(L.drl, run, [0.847, 0.922, 1], 1);
-      // the bulb: a point of light in the lamp's colour (a chosen colour is driven less hard than white: pushed as far, red washes out to pink)
-      L.bulb.visible = on; if (color) L.bulb.color.copy(c).multiplyScalar(1.1 / Math.max(c.r, c.g, c.b, 1e-3)); else L.bulb.color.setRGB(2.6, 2.43, 2.07);
+      // the lens inside a lamp: its own faint light as it comes; in a chosen colour, that colour all over at 0.6 (applyMods)
+      lit(L.lens, on && !color, [1, 1, 1], 1); if (on && color) L.lens.emissive.copy(c); else L.lens.emissive.setScalar(0); L.lens.emissiveIntensity = 0.6;
+      // (v109: no bulbs in the lamps: the owner, "make sure that there are no white bulbs ... if u cant see them just keep them the same")
       // the neon under the car: the game's own pool of colour, sized to the car as the game sizes it (placeUnderglow)
       if (glow && glowTex && b.holder) {
         if (!b.glow) { b.glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({ name: 'proxy underglow', map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 })); b.glow.renderOrder = 4; b.glow.position.y = 0.014; b.holder.add(b.glow); }
