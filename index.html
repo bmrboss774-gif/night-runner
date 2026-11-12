@@ -5512,11 +5512,10 @@ function applyMods() {
   carRoot.traverse((o) => o.layers.enable(1)); contactShadow.layers.set(0); underglow.layers.set(0);
   // (v106, the owner: "make sure all the headlights are turned on for all the cars but I dont want any headlight bright projection
   // onto everything just the lights on the car". Indoors (the workshop, the collection) the lamps glow at their plain level, not the
-  // 2.4 times they are given for the road at night, and the two spotlights that throw the beams are at nothing (updateWorld). Up
-  // in the collection a car's lamps are lit whatever its own light switch says; the workshop still shows the switch as it is set.)
+  // 2.4 times they are given for the road at night, and the two spotlights that throw the beams are at nothing.)
   for (const mat of r.lamps.head) mat.emissiveIntensity *= state.garage ? 1 : 2.4;   // brighter for night
   // headlight modes (cars with a running-light strip): on = everything; drl = just the strip, no beams; off = dark
-  const lights = SR.on ? 'on' : r.kinds.drl ? m.lights : 'on';
+  const lights = r.kinds.drl ? m.lights : 'on';   // (v107: in the collection too. v106 lit every car's lamps there whatever its switch said; the owner: "the headlights should be based on what was selected for each car in the menu")
   state.headOn = lights === 'on';
   if (!state.headOn) { for (const mat of r.lamps.head) mat.emissiveIntensity = 0; for (const mat of r.mats.headLens) mat.emissiveIntensity = 0; }
   for (const mesh of r.kinds.drl || []) { restore(mesh.material); mesh.material.emissiveIntensity = lights === 'off' ? 0 : (def.lampLevels.drl ?? 5); if (m.head) mesh.material.emissive.set(m.head); }
@@ -9972,7 +9971,7 @@ const srLight = new THREE.DirectionalLight(0xfff1e0, 0); scene.add(srLight, srLi
 // bay (which mends a car last changed before this version existed). The copies are kept in the browser between visits. A car
 // with the default build keeps the stock copy shipped with the game.
 const srLods = {};   // base car id -> { id, carId, sig, parts } (or { sig, pending } while one is being made)
-const srSigOf = (carId, m) => 'c2|' + carId + '|' + JSON.stringify(loadMods(carId, m));   // ('c2': how copies are made changed in v106 (lamp covers off, bulbs); older ones are made again)   // (a live build is put through loadMods too, so it reads the same as the saved one will)
+const srSigOf = (carId, m) => 'c3|' + carId + '|' + JSON.stringify(loadMods(carId, m));   // ('c3': how copies are made changed in v106 (lamp covers off, bulbs) and v107 (lamps as the build has them); older ones are made again)   // (a live build is put through loadMods too, so it reads the same as the saved one will)
 const srIsStock = (carId, m) => baseOf(carId) === carId && JSON.stringify(loadMods(carId, m)) === JSON.stringify(loadMods(carId, null));
 function srPaintOf(base) {
   const d0 = CAR_DEFS[base]; let cid = srLods[base]?.carId || base; if (cid === base && d0.variantFor) cid = d0.variantFor(loadMods(base));
@@ -9986,7 +9985,8 @@ function srCapture() {
     if (!showroom.byId[base]) return;
     if (srIsStock(carId, mods)) { if (srLods[base]) { delete srLods[base]; showroom.setLod(base, null); lodDelete(base); srPaintOf(base); } return; }
     if (srLods[base] && srLods[base].sig === sig) return;
-    const raw = gatherRig(rig, carRoot, { head: [...rig.lamps.head, ...rig.mats.headLens] });
+    const hc = mods.head ? new THREE.Color(mods.head).lerp(new THREE.Color(0xffffff), 0.35) : null;   // the headlight colour chosen, as the beams take it
+    const raw = gatherRig(rig, carRoot, { head: [...rig.lamps.head, ...rig.mats.headLens], bulb: hc ? [hc.r, hc.g, hc.b] : undefined });
     srLods[base] = { sig, pending: true };
     lodSimplify(raw).then((parts) => {
       if (!srLods[base] || srLods[base].sig !== sig) return;   // changed again meanwhile

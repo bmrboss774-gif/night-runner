@@ -31,9 +31,11 @@ function sample(px, u, v) {
 }
 const lum = (c, k = 1) => (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) * k;
 
-// Every piece the car is showing, in the car's own frame (`top` = the group the car hangs in). The headlights are read
-// as lit whatever the build's light switch says: `head` = the materials of the headlamps (r.lamps.head, r.mats.headLens).
-export function gatherRig(r, top, { head = [], headLevel = 2.6 } = {}) {
+// Every piece the car is showing, in the car's own frame (`top` = the group the car hangs in). The lamps are read as
+// the build has them (v107, the owner: "the headlights should be based on what was selected for each car in the menu"):
+// lit, running lights only, or dark, in the colour and the style chosen. `head` = the materials of the headlamps
+// (r.lamps.head, r.mats.headLens): where they are lit each gets a bulb, in `bulb` (its colour, [r, g, b]).
+export function gatherRig(r, top, { head = [], bulb = [1, 0.97, 0.9] } = {}) {
   top.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(top.matrixWorld).invert(), M = new THREE.Matrix4(), N = new THREE.Matrix3(), v = new THREE.Vector3();
   const headSet = new Set(head), driver = r.driver || null, list = [], size = {};
@@ -49,7 +51,7 @@ export function gatherRig(r, top, { head = [], headLevel = 2.6 } = {}) {
     let b;
     if (m.isMeshBasicMaterial) { if (m.transparent || Math.max(m.color.r, m.color.g, m.color.b) <= 1) return; b = 'lamp'; }   // the lit outlines of the running lights
     else if (!m.isMeshStandardMaterial) return;
-    else if (headSet.has(m) || o.userData.kind === 'drl' || o.userData.kind === 'head' || o.userData.kind === 'headLens' || lum(m.emissive, m.emissiveIntensity || 0) > 0.6) b = 'lamp';
+    else if (lum(m.emissive, m.emissiveIntensity || 0) > 0.35) b = 'lamp';   // whatever is giving light as the car stands: a lamp switched off is just a part of the car
     else if (m === r.mats.paint) b = 'paint';
     else if (r.mats.glass.has(m) || o.userData.kind === 'glass' || o.userData.kind === 'lampGlass' || (m.transparent && m.opacity < 0.85)) b = 'glass';
     else b = m.metalness > 0.5 ? 'metal' : m.roughness < 0.45 ? 'gloss' : 'matte';
@@ -87,15 +89,14 @@ export function gatherRig(r, top, { head = [], headLevel = 2.6 } = {}) {
     for (let k = 0; k < n3; k++) part.idx[a.i++] = v0 + (ix ? ix.getX(k) : k);
     tris += n3 / 3;
   }
-  // (v106, the owner: "make sure all the headlights are turned on for all the cars ... just the lights on the car". A lamp's picture is
-  // often dark all over, its light being in how bright the game makes it, and such a lamp stood in the tower looking switched
-  // off. Every headlamp gets a bulb: a small ball of light at its middle, just behind where its cover was.)
+  // (v106: a lamp's picture is often dark all over, its light being in how bright the game makes it, and such a lamp stood in the
+  // tower looking switched off. Every headlamp that is lit gets a bulb: a small ball of light at its middle.)
   { const balls = side.filter((q) => q.n > 0); if (balls.length) {
     const ico = new THREE.IcosahedronGeometry(0.052, 1), n = ico.attributes.position.count, pos = new Float32Array(n * 3 * balls.length), nor = new Float32Array(n * 3 * balls.length), col = new Float32Array(n * 3 * balls.length), idx = new Uint32Array(n * balls.length);
     // (each ball sits on the outermost surface the car has at that spot, lens and all: set just inside the lamp, four cars' bulbs were
     // hidden behind a lens that is not see-through in the copy)
     const front = (cx, cy, z0) => { let z = -1e9; for (const b in parts) { const pp = parts[b].pos; for (let i = 0; i < pp.length; i += 3) if (pp[i + 2] > z && pp[i + 2] > z0 - 0.6 && Math.abs(pp[i] - cx) < 0.05 && Math.abs(pp[i + 1] - cy) < 0.05) z = pp[i + 2]; } return z > -1e8 ? z : z0; };
-    balls.forEach((q, k) => { const cx = q.x / q.n, cy = q.y / q.n, cz = front(cx, cy, q.z) - 0.012; for (let i = 0; i < n; i++) { const o3 = (k * n + i) * 3; pos[o3] = ico.attributes.position.getX(i) + cx; pos[o3 + 1] = ico.attributes.position.getY(i) + cy; pos[o3 + 2] = ico.attributes.position.getZ(i) + cz; nor[o3] = ico.attributes.normal.getX(i); nor[o3 + 1] = ico.attributes.normal.getY(i); nor[o3 + 2] = ico.attributes.normal.getZ(i); col[o3] = 1; col[o3 + 1] = 0.97; col[o3 + 2] = 0.9; idx[k * n + i] = k * n + i; } });
+    balls.forEach((q, k) => { const cx = q.x / q.n, cy = q.y / q.n, cz = front(cx, cy, q.z) - 0.012; for (let i = 0; i < n; i++) { const o3 = (k * n + i) * 3; pos[o3] = ico.attributes.position.getX(i) + cx; pos[o3 + 1] = ico.attributes.position.getY(i) + cy; pos[o3 + 2] = ico.attributes.position.getZ(i) + cz; nor[o3] = ico.attributes.normal.getX(i); nor[o3 + 1] = ico.attributes.normal.getY(i); nor[o3 + 2] = ico.attributes.normal.getZ(i); col[o3] = bulb[0]; col[o3 + 1] = bulb[1]; col[o3 + 2] = bulb[2]; idx[k * n + i] = k * n + i; } });
     parts.bulb = { pos, nor, col, idx }; ico.dispose();
   } }
   pxCache.clear();
