@@ -1382,20 +1382,24 @@ const ZL1_SPEC = {
   steerLock: 0.6, front: 2.35,
   launchGrip: 0.33, spinSlip: [9, 32], slideMu: 0.87, driftAssist: [0.8, 16, 2.5],
 };
-// v94: Dodge Challenger SRT Hellcat (2018): supercharged 6.2 litre Hemi V8, 707 hp at 6,000 rpm and 881 Nm at 4,800,
-// eight-speed automatic, rear drive, about 2,020 kg with 57% on the nose. The police Charger's engine in a coupé.
+// v94: Dodge Challenger SRT Hellcat (2018): supercharged 6.2 litre Hemi V8, eight-speed automatic, rear drive, about
+// 2,020 kg with 57% on the nose. The police Charger's engine in a coupé.
+// v96, the owner: "make the car faster". It came as the factory car (707 hp, 881 Nm: 0-60 in 4.3 s, a 12.1 s quarter
+// mile, 204 mph: the slowest of the fast cars). Now a built one: a smaller pulley, more boost and a tune for about
+// 930 hp at 6,500 rpm and 1,140 Nm, 200 rpm more revs, quicker shifts, and the grip of the widebody's 305-section
+// tyres. 0-60 in 3.6 s, the quarter in 11.2 s at 139 mph, 233 mph (build/tools/sprint.mjs).
 const HC_SPEC = {
   mass: 2020, Iz: 4150, a: 1.29, b: 1.72, cgH: 0.52, wheelR: 0.365, weightFront: 0.57,
-  muF: 1.12, muR: 1.17, csF: 20, csR: 23,
-  gears: [4.71, 3.14, 2.10, 1.67, 1.29, 1.0, 0.84, 0.67], reverse: 3.3, final: 2.62, eff: 0.86,
-  idle: 750, redline: 6200, limiter: 6400, shiftUp: 6100, shiftDown: 2400, kickdown: 3800, burnRpm: 3600,
-  shiftTime: 0.1, spoolRate: 9,
-  torque: [[600, 380], [1500, 480], [2500, 530], [3500, 560], [4500, 570], [5500, 545], [6200, 500], [6600, 460]],
-  boostTorque: [[600, 80], [1500, 230], [2500, 300], [3500, 320], [4500, 315], [5500, 300], [6200, 280], [6600, 250]],
+  muF: 1.18, muR: 1.27, csF: 21, csR: 25,
+  gears: [4.71, 3.14, 2.10, 1.67, 1.29, 1.0, 0.84, 0.67], reverse: 3.3, final: 2.62, eff: 0.87,
+  idle: 750, redline: 6400, limiter: 6600, shiftUp: 6300, shiftDown: 2400, kickdown: 3800, burnRpm: 3600,
+  shiftTime: 0.08, spoolRate: 9,
+  torque: [[600, 380], [1500, 480], [2500, 530], [3500, 560], [4500, 570], [5500, 550], [6200, 515], [6800, 470]],
+  boostTorque: [[600, 110], [1500, 330], [2500, 470], [3500, 540], [4500, 570], [5500, 570], [6200, 555], [6800, 510]],
   spool: [800, 1800],
-  drag: 0.5, downforce: 0.12, rollRes: 225, brakeG: 1.25, brakeBias: 0.63,
+  drag: 0.5, downforce: 0.16, rollRes: 225, brakeG: 1.32, brakeBias: 0.63,
   steerLock: 0.58, front: 2.55,
-  launchGrip: 0.3, spinSlip: [9, 32], slideMu: 0.87, driftAssist: [0.8, 16, 2.5],
+  launchGrip: 0.4, spinSlip: [9, 32], slideMu: 0.87, driftAssist: [0.8, 16, 2.5],
 };
 const S2K_SPEC = {
   mass: 1180, Iz: 1750, a: 1.2, b: 1.2, cgH: 0.44, wheelR: 0.3, weightFront: 0.5,
@@ -3668,9 +3672,9 @@ const hcExhaust = () => [-0.6, 0.6].map((x) => new THREE.Vector3(x, 0.33, -2.45)
 const hcPlates = (items, shift) => [{ end: 'rear', pos: V(0, 0.62, -2.52).add(shift), normal: V(0, 0, -1) }, { end: 'front', pos: V(0, 0.36, 2.5).add(shift), normal: V(0, 0, 1) }];
 CAR_DEFS.hc = {
   id: 'hc', name: 'Dodge Challenger SRT Hellcat', short: 'Challenger', title: 'Challenger Hellcat', hue: '#ff6a1f',
-  eyebrow: 'Dodge Challenger SRT Hellcat · supercharged 6.2 Hemi V8 · 707 hp · 8-speed auto',
-  lede: 'Two tons of coupé with the supercharged Hemi the police Charger carries: 707 hp, an eight-speed automatic, and a blower whine you hear before the car.',
-  pick: '707 hp · 8-speed',
+  eyebrow: 'Dodge Challenger SRT Hellcat · widebody · built supercharged 6.2 Hemi V8 · 930 hp · 8-speed auto',
+  lede: 'Two tons of widebody coupé with the police Charger’s supercharged Hemi, built: a smaller pulley and a tune for 930 hp, an eight-speed automatic, and a blower whine you hear before the car.',
+  pick: '930 hp · 8-speed',
   files: { meshopt: { url: 'hc-meshopt.txt', size: 2858764 }, plain: { url: 'hc-plain.txt', size: 6292248 } },
   spec: HC_SPEC, tach: 8, classify: classifyTagged('HC', { stripeTint: 'plain' }), exhaust: hcExhaust, plates: hcPlates,
   plate: { style: 'us', text: 'HLLCAT', caption: 'NIGHT RUNNER', front: 'off' },
