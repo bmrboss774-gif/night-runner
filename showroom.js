@@ -483,7 +483,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     if (!b.lm) {
       b.lm = { head: glowMat('proxy head ' + b.id), drl: glowMat('proxy drl ' + b.id), lens: glowMat('proxy lens ' + b.id, true) };
       // until a build is given: on, as a car comes
-      b.lm.head.userData.glow.value.setScalar(LAMP_MAX); b.lm.drl.userData.glow.value.setRGB(0.847, 0.922, 1).multiplyScalar(LAMP_MAX);
+      b.lm.head.userData.glow.value.setScalar(LAMP_MAX * 0.65); b.lm.drl.userData.glow.value.setRGB(0.847, 0.922, 1).multiplyScalar(LAMP_MAX * 0.65);
     }
     return b.lm;
   };
@@ -556,7 +556,9 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
       const L = lightsOf(b), on = mode === 'on', run = mode !== 'off', c = lc;
       if (color) c.set(color);
       // (the game's own figures, applyMods: a chosen colour goes on the headlamps at 1.6 times their level, on the running lights at their level)
-      const lit = (m, is, stock, k) => { const g = m.userData.glow.value; if (!is) g.setScalar(0); else if (color) g.copy(c).multiplyScalar(LAMP_MAX * k); else g.setRGB(...stock).multiplyScalar(LAMP_MAX); };
+      // (v110: at 0.65 of the game's level. The real car's lamps sit behind a cover of dark glass that a copy does not have, and at the
+      // full level the copy's lamps were plainly the brighter: the M3's a white glare where the car's own are a lit lamp.)
+      const lit = (m, is, stock, k) => { const g = m.userData.glow.value; if (!is) g.setScalar(0); else if (color) g.copy(c).multiplyScalar(LAMP_MAX * k * 0.65); else g.setRGB(...stock).multiplyScalar(LAMP_MAX * 0.65); };
       lit(L.head, on, [1, 1, 1], 1.6); lit(L.drl, run, [0.847, 0.922, 1], 1);
       // the lens inside a lamp: its own faint light as it comes; in a chosen colour, that colour all over at 0.6 (applyMods)
       lit(L.lens, on && !color, [1, 1, 1], 1); if (on && color) L.lens.emissive.copy(c); else L.lens.emissive.setScalar(0); L.lens.emissiveIntensity = 0.6;

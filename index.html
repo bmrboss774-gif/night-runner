@@ -301,6 +301,10 @@ body.is-touch .g-rev kbd{display:none}
 .np[hidden],.np.np-away{display:none}
 .np.np-top{bottom:auto;top:var(--np-top,130px)}
 .np.np-title{left:auto;bottom:auto;right:calc(18px + env(safe-area-inset-right,0px));top:calc(16px + env(safe-area-inset-top,0px))}
+/* (v110) in the collection the card goes top right: top left, where it sits in the workshop, it lay over the collection's own
+   heading and hid the way back to the workshop. On a phone there is no room beside the heading: it is put away. */
+body.in-showroom .np{left:auto;bottom:auto;right:calc(18px + env(safe-area-inset-right,0px));top:calc(16px + env(safe-area-inset-top,0px))}
+@media (max-width:760px){ body.in-showroom .np{display:none} }
 .np-art{flex:none;width:58px;height:58px;border-radius:3px;background:#1a212d center/cover no-repeat;box-shadow:0 2px 10px rgba(0,0,0,.6),inset 0 0 0 1px rgba(255,255,255,.1)}
 .np-art.blank{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%235ad7ff' d='M9 3v10.6A3.5 3.5 0 1 0 11 17V7h7V3z'/%3E%3C/svg%3E") center/26px no-repeat,linear-gradient(135deg,#26344a,#0d1119)}
 .np-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
@@ -647,7 +651,20 @@ body.is-touch .attribution{bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 @media (max-width:560px){ .hwcard b{font-size:19px} .hwcard i{min-width:44px;height:34px;font-size:16px} }
 .roadfade{position:fixed;inset:0;z-index:30;background:#000;opacity:0;pointer-events:none}
 /* v103: the collection */
-.srfade{position:fixed;inset:0;z-index:29;background:#000;opacity:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
+/* the loading screen (v110, the owner: "make more loading screens for things that take a while to load like loading a car model at
+   the beginning of the game"): over everything while the first car and the traffic come in, and whenever a room has to be fetched */
+.loadscr{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:radial-gradient(130% 100% at 50% 115%,#161d2b 0%,#090b10 55%,#020203 100%);opacity:1}
+.loadscr[hidden]{display:none} .loadscr.out{opacity:0;pointer-events:none;transition:opacity .45s}   /* (it fades away; it comes up at once) */
+.ls-in{width:min(470px,calc(100vw - 56px));display:flex;flex-direction:column;gap:10px}
+.ls-logo{display:flex;gap:.22em;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:clamp(46px,8.5vw,92px);line-height:.85;letter-spacing:-.02em;text-transform:uppercase}
+.ls-logo span:last-child{padding-right:.14em;background:linear-gradient(100deg,#5ad7ff 0%,#7b6cff 55%,#ff4fd8 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+#lsText{margin:18px 0 0;font-family:var(--f-display);font-weight:700;font-style:italic;font-size:21px;letter-spacing:.08em;text-transform:uppercase}
+.loadscr .bar{height:5px} .loadscr .bar.run i{width:34%;animation:lsRun 1.05s ease-in-out infinite alternate}
+@keyframes lsRun{from{transform:translateX(-12%)}to{transform:translateX(206%)}}
+#lsSub{min-height:17px;font-family:var(--f-display);font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.loadscr.bad .bar{display:none} .loadscr.bad #lsText{color:#ff8d8d;font-style:normal;font-size:17px;text-transform:none;letter-spacing:0}
+.srfade{position:fixed;inset:0;z-index:29;background:#000;opacity:0;pointer-events:none;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center}
+.srfade small{min-height:18px;font-family:var(--f-display);font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
 .srfade b{font-family:var(--f-display);font-weight:800;font-style:italic;font-size:clamp(26px,5vw,54px);letter-spacing:.14em;text-transform:uppercase;color:#fff;text-shadow:0 0 28px rgba(90,215,255,.55)}
 .sr{position:fixed;inset:0;z-index:15;pointer-events:none;color:#fff}
 .sr[hidden],.sr-card[hidden],.sr-tip[hidden]{display:none}
@@ -658,6 +675,7 @@ body.is-touch .attribution{bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 .sr-go:hover{filter:brightness(1.12)} .sr-go:disabled{filter:grayscale(.6) brightness(.8);cursor:default} .sr-go[hidden]{display:none}
 .sr-title b{display:block;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:27px;letter-spacing:.07em;text-transform:uppercase;line-height:1}
 .sr-title span{display:block;margin-top:3px;font-size:13px;color:#c5cad3}
+.sr-title .sr-busy{color:var(--needle)} .sr-title .sr-busy[hidden]{display:none}
 .sr-card{position:absolute;left:max(18px,env(safe-area-inset-left,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));width:min(410px,calc(100vw - 36px));padding:16px 18px 17px;background:rgba(10,12,16,.9);border:1px solid var(--edge);border-left:4px solid var(--hue,#5ad7ff);border-radius:6px;box-shadow:0 14px 44px rgba(0,0,0,.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);pointer-events:auto}
 .sr-card i{display:block;font-style:normal;font-family:var(--f-display);font-weight:700;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--hue,#5ad7ff)}
 .sr-card h2{margin:3px 0 4px;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:31px;line-height:1.02;letter-spacing:.02em;text-transform:uppercase}
@@ -830,7 +848,7 @@ body.is-touch .cc{font-size:22px}
       <dl class="t-stats" id="tStats"></dl>
       <div class="load" id="load"><div class="bar"><i id="loadBar"></i></div><span id="loadText">Loading the car… 0%</span></div>
       <p class="err" id="loadErr" hidden></p>
-      <div class="t-actions" id="titleActions" hidden><button type="button" class="drive" id="driveBtn"><span>Drive</span><kbd>Enter</kbd></button><button type="button" class="ghost" id="keysBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7.5 6.5a5.5 5.5 0 0 1 5.3 4H22v3.2h-2.3v2.6h-3.2v-2.6h-3.7a5.5 5.5 0 1 1-5.3-7.2zm0 3.6a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg><span>Change car</span></button><button type="button" class="ghost" id="garageBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.2 6.6a5.2 5.2 0 0 1-6.9 4.9l-7.7 7.7a2.1 2.1 0 0 1-3-3l7.7-7.7A5.2 5.2 0 0 1 17.6 1.9l-3.2 3.2.9 2.7 2.7.9z"/></svg><span>Garage</span><kbd>B</kbd></button></div>
+      <div class="t-actions" id="titleActions" hidden><button type="button" class="drive" id="driveBtn"><span>Drive</span><kbd>Enter</kbd></button><button type="button" class="ghost" id="keysBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7.5 6.5a5.5 5.5 0 0 1 5.3 4H22v3.2h-2.3v2.6h-3.2v-2.6h-3.7a5.5 5.5 0 1 1-5.3-7.2zm0 3.6a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8z"/></svg><span>Change car</span></button><button type="button" class="ghost" id="garageBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.2 6.6a5.2 5.2 0 0 1-6.9 4.9l-7.7 7.7a2.1 2.1 0 0 1-3-3l7.7-7.7A5.2 5.2 0 0 1 17.6 1.9l-3.2 3.2.9 2.7 2.7.9z"/></svg><span>Workshop</span><kbd>B</kbd></button></div>
     </aside>
     <div class="t-strip" id="carPick" role="radiogroup" aria-label="Car" hidden>
       <button type="button" data-car="supra" role="radio" aria-checked="true"><small>Toyota</small><b>Supra</b></button>
@@ -861,7 +879,7 @@ body.is-touch .cc{font-size:22px}
     <p class="credit-line"><span id="tCredit"></span></p>
     <button type="button" class="t-back" id="backBtn">← Back</button>
   </section>
-  <footer class="prompts" id="titleControls"><span><kbd>↑↓←→</kbd> Navigate</span><span><kbd>Enter</kbd> Select</span><span><kbd>Esc</kbd> Back</span><span class="prompts-right"><kbd>W A S D</kbd> Drive <kbd>+ −</kbd> Shift <kbd>Space</kbd> Handbrake <kbd>B</kbd> Garage</span></footer>
+  <footer class="prompts" id="titleControls"><span><kbd>↑↓←→</kbd> Navigate</span><span><kbd>Enter</kbd> Select</span><span><kbd>Esc</kbd> Back</span><span class="prompts-right"><kbd>W A S D</kbd> Drive <kbd>+ −</kbd> Shift <kbd>Space</kbd> Handbrake <kbd>B</kbd> Workshop</span></footer>
 </div>
 
 <div class="page" id="settings" hidden role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
@@ -876,7 +894,7 @@ body.is-touch .cc{font-size:22px}
       <section class="set-row"><div class="set-k"><b>Steering assist</b><small>Keys and touch: holds the car round bends and straightens it after a tap.</small></div><div class="seg"><button type="button" role="radio" data-set="assist:full">Full</button><button type="button" role="radio" data-set="assist:light">Light</button><button type="button" role="radio" data-set="assist:off">Off</button></div></section>
       <section class="set-row"><div class="set-k"><b>Units</b></div><div class="seg"><button type="button" role="radio" data-set="units:mph">mph</button><button type="button" role="radio" data-set="units:kmh">km/h</button></div></section>
       <section class="set-row"><div class="set-k"><b>Sound</b></div><div class="seg"><button type="button" role="radio" data-set="sound:on">On</button><button type="button" role="radio" data-set="sound:off">Off</button></div></section>
-      <section class="set-row"><div class="set-k"><b>Music</b><small>“Midnight Touge”, made for the game, in the menus, the garage and on the road. N turns it on or off, 6 starts it again.</small></div><div class="seg"><button type="button" role="radio" data-set="radio:on">On</button><button type="button" role="radio" data-set="radio:off">Off</button></div></section>
+      <section class="set-row"><div class="set-k"><b>Music</b><small>“Midnight Touge”, made for the game, in the menus, the workshop and on the road. N turns it on or off, 6 starts it again.</small></div><div class="seg"><button type="button" role="radio" data-set="radio:on">On</button><button type="button" role="radio" data-set="radio:off">Off</button></div></section>
     </div>
   </div>
 </div>
@@ -902,7 +920,7 @@ body.is-touch .cc{font-size:22px}
     <div class="tnos" id="tnos" hidden title="NO2: press B when the bar is full"><span class="k">NO2</span><div class="nbar"><b id="tnosFill"></b></div><kbd>B</kbd></div>
   </div>
   <div class="toolbar" hidden>
-    <button class="tool panel" id="btnGarage" title="Garage (B)"><span>Garage</span><kbd>B</kbd></button>
+    <button class="tool panel" id="btnGarage" title="Workshop (B)"><span>Workshop</span><kbd>B</kbd></button>
     <button class="tool panel" id="btnCam" title="Change camera (C)"><span>Cam<span class="lbl-long">era</span></span><kbd>C</kbd></button>
     <button class="tool panel" id="btnSound" title="Sound on or off (M)"><span id="soundLbl">Sound</span><kbd>M</kbd></button>
     <button class="tool panel" id="btnReset" title="New run from the ramp (R)"><span>New run</span><kbd>R</kbd></button>
@@ -911,7 +929,7 @@ body.is-touch .cc{font-size:22px}
     <button class="tool panel" id="btnCredits" title="Credits"><span>Credits</span></button>
   </div>
   <button type="button" class="pausebtn" id="pauseBtn" aria-label="Pause"><i></i><i></i></button>
-  <button type="button" class="ramp-garage" id="rampGarage" title="Garage (B), while you're on the ramp" aria-label="Garage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M7 20v-7h10v7M7 15.5h10M7 18h10"/></svg><b><i>Tune</i><span>Garage</span></b><kbd>B</kbd></button>
+  <button type="button" class="ramp-garage" id="rampGarage" title="Workshop (B), while you're on the ramp" aria-label="Workshop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M7 20v-7h10v7M7 15.5h10M7 18h10"/></svg><b><i>Tune</i><span>Workshop</span></b><kbd>B</kbd></button>
   <div class="cluster" id="cluster">
     <div class="shiftnote" id="shiftNote"></div>
     <div class="vitals" id="vitals" title="Fuel: fill up at a gas station. Damage: at 100% the car is wrecked."><span>Fuel</span><i class="vbar fuel" id="vFuel"><b></b></i><span>Damage</span><i class="vbar dmg" id="vDmg"><b></b></i></div>
@@ -930,7 +948,7 @@ body.is-touch .cc{font-size:22px}
     <dt><kbd>G</kbd></dt><dd>Manual / automatic</dd>
     <dt><kbd>C</kbd></dt><dd>Camera</dd>
     <dt><kbd>R</kbd></dt><dd>New run</dd>
-    <dt><kbd>B</kbd></dt><dd id="keyB">Garage (on the ramp)</dd>
+    <dt><kbd>B</kbd></dt><dd id="keyB">Workshop (on the ramp)</dd>
     <dt><kbd>M</kbd></dt><dd>Sound on / off</dd>
     <dt><kbd>N</kbd></dt><dd>Music on / off</dd>
     <dt><kbd>6</kbd> <kbd>7</kbd></dt><dd>Music back / skip</dd>
@@ -971,9 +989,10 @@ body.is-touch .cc{font-size:22px}
 </div>
 <div class="roadfade" id="roadFade"></div>
 <!-- v103: the collection (the car tower over the workshop) -->
-<div class="srfade" id="srFade"><b>The Collection</b></div>
+<div class="loadscr" id="loadScr" role="status" aria-live="polite"><div class="ls-in"><b class="ls-logo"><span>Night</span><span>Runner</span></b><p id="lsText">Loading…</p><div class="bar run"><i id="lsBar"></i></div><small id="lsSub"></small></div></div>
+<div class="srfade" id="srFade"><b>The Collection</b><small id="srFadeSub"></small></div>
 <div class="sr" id="srUi" hidden>
-  <div class="sr-top"><button type="button" class="sr-back" id="srBack">‹ Workshop</button><div class="sr-title"><b>The Collection</b><span id="srHint"></span></div></div>
+  <div class="sr-top"><button type="button" class="sr-back" id="srBack">‹ Workshop</button><div class="sr-title"><b>The Collection</b><span id="srHint"></span><span class="sr-busy" id="srBusy" hidden></span></div></div>
   <div class="sr-card" id="srCard" hidden>
     <i id="srRow"></i><h2 id="srName"></h2><p class="sr-eye" id="srEyebrow"></p><p class="sr-lede" id="srLede"></p><small id="srLoad"></small>
     <div class="sr-acts"><button type="button" class="sr-go" id="srTake">Take the keys</button><button type="button" class="sr-ghost" id="srOver">All cars</button></div>
@@ -985,7 +1004,7 @@ body.is-touch .cc{font-size:22px}
   <div class="over-sub" id="overSub"></div>
   <div class="over-card" id="overCard" role="dialog" aria-labelledby="overTitle">
     <div id="overStats"></div>
-    <div class="over-btns"><button class="tool panel go" id="overRetry"><span>Try again</span><kbd>Enter</kbd></button><button class="tool panel" id="overGarage"><span>Garage</span><kbd>B</kbd></button></div>
+    <div class="over-btns"><button class="tool panel go" id="overRetry"><span>Try again</span><kbd>Enter</kbd></button><button class="tool panel" id="overGarage"><span>Workshop</span><kbd>B</kbd></button></div>
   </div>
 </div>
 
@@ -1019,7 +1038,7 @@ body.is-touch .cc{font-size:22px}
     <button type="button" class="g-sw-main" id="gSwitchBtn" aria-expanded="false"><i>Vehicle <span id="gSwIdx"></span></i><h2 id="gCar">Toyota Supra</h2><small><span id="gSwPick"></span><em>The collection ▴</em></small></button>
     <button type="button" class="g-sw-arrow" id="gNext" aria-label="Next car" hidden>›</button>
   </div>
-  <nav class="g-tabs" id="gTabs" role="tablist" aria-label="Garage sections"></nav>
+  <nav class="g-tabs" id="gTabs" role="tablist" aria-label="Workshop sections"></nav>
   <div class="g-hero" id="gHero" aria-hidden="true"><svg viewBox="0 0 24 24" id="gHeroIco"></svg><div><b id="gHeroT"></b><span id="gHeroP"></span></div></div>
   <div class="g-body" id="gBody"></div>
   <div class="g-foot" id="gStats"></div>
@@ -1031,35 +1050,35 @@ body.is-touch .cc{font-size:22px}
     <section>
       <h3>Car models</h3>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/toyota-supra-mk-iv-1994-eb9bb1eb41db431cb078088ae1ce45f8" target="_blank" rel="noopener">Toyota Supra MK IV (1994)</a>” by <a href="https://sketchfab.com/Bexxie" target="_blank" rel="noopener">Martin Trafas</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
-      <p class="note">Changes made for this game: textures resized and compressed, meshes compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the garage.</p>
-      <p>The Supra’s engine (under the hood in the garage) is the engine out of “<a href="https://sketchfab.com/3d-models/jdm-style-drift-car-67613c6c3f8941479fb38b2c3506d319" target="_blank" rel="noopener">JDM style Drift Car</a>” by <a href="https://sketchfab.com/jeandiz" target="_blank" rel="noopener">SpatialNeglect</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
-      <p class="note">Changes made for this game: turned to face the car’s nose, textures resized and compressed, and the cam covers, couplers and filter cut out of the colour atlas so the garage can recolour them.</p>
+      <p class="note">Changes made for this game: textures resized and compressed, meshes compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop.</p>
+      <p>The Supra’s engine (under the hood in the workshop) is the engine out of “<a href="https://sketchfab.com/3d-models/jdm-style-drift-car-67613c6c3f8941479fb38b2c3506d319" target="_blank" rel="noopener">JDM style Drift Car</a>” by <a href="https://sketchfab.com/jeandiz" target="_blank" rel="noopener">SpatialNeglect</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
+      <p class="note">Changes made for this game: turned to face the car’s nose, textures resized and compressed, and the cam covers, couplers and filter cut out of the colour atlas so the workshop can recolour them.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/bmw-m4csl-b53782a00cc240a191d5d7d005af1423" target="_blank" rel="noopener">BMW M4csl</a>” by <a href="https://sketchfab.com/mpgs.studio" target="_blank" rel="noopener">Mpgs Studios</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
       <p class="note">Changes made for this game: meshes simplified and re-shaded for the web, the front tyres separated from the rims, and the wheels split apart so they can steer and spin.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/free-chevrolet-corvette-z06-c7r-edition-15-6f9ecf35cac5461fb7ec1410b9bf05a2" target="_blank" rel="noopener">(FREE) Chevrolet Corvette Z06 C7.R Edition '15</a>” by <a href="https://sketchfab.com/dgknuldg" target="_blank" rel="noopener">dgknuldg</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
       <p class="note">Changes made for this game: brake hardware hidden behind the wheels removed, meshes simplified and textures resized and compressed for the web, and the wheels split apart so they can steer and spin.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/nissan-aimgain-gt-r35-type2-77456704dc1b4d299a23fecdf341003c" target="_blank" rel="noopener">Nissan Aimgain GT R35 Type2</a>” by <a href="https://sketchfab.com/heynic" target="_blank" rel="noopener">vecarz</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, the engine under the bonnet removed, rims and cabin simplified, textures resized and compressed for the web, the rear wing separated from the boot and quarter panels so it can be removed, and the paint split into panels for the garage.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, the engine under the bonnet removed, rims and cabin simplified, textures resized and compressed for the web, the rear wing separated from the boot and quarter panels so it can be removed, and the paint split into panels for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2004-porsche-carrera-gt-a43be10ac0174dc0a35984c2d41d4058" target="_blank" rel="noopener">2004 Porsche Carrera GT</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. This game is free and non-commercial; the prepared model carries the same licence.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, rims, engine, radiators and cabin simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the garage.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, rims, engine, radiators and cabin simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2016-dodge-viper-acr-f9849ec2069343f4a7fafbc94f5e80c0" target="_blank" rel="noopener">2016 Dodge Viper ACR</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a> (same terms as above).</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the garage.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/honda-civic-type-r-fl5-custom-407a8981be2d45a388d7280d9b931663" target="_blank" rel="noopener">Honda Civic Type R FL5 Custom</a>” by <a href="https://sketchfab.com/blakebella" target="_blank" rel="noopener">blakebella</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a>.</p>
-      <p class="note">Changes made for this game (format conversion only, to run in a browser): scaled and turned to face the road, meshes simplified and textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the garage.</p>
+      <p class="note">Changes made for this game (format conversion only, to run in a browser): scaled and turned to face the road, meshes simplified and textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/dodge-charger-srt-police-c6d52512e32d42abb89466ced4d56c1d" target="_blank" rel="noopener">DODGE CHARGER SRT (POLICE)</a>” by <a href="https://sketchfab.com/temich_" target="_blank" rel="noopener">temich</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener">CC BY-NC 4.0</a>.</p>
       <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, the light bar split left and right so it can flash. It is the pursuit car.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/1995-mitsubishi-eclipse-robocar-fast-furious-277e17565771475fae51629d94ad85a1" target="_blank" rel="noopener">1995 Mitsubishi Eclipse Robocar Fast &amp; Furious</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin and engine simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the garage. The model’s livery is kept as an option; the stock look is the same model in plain paint.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin and engine simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop. The model’s livery is kept as an option; the stock look is the same model in plain paint.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/1994-toyota-supra-mk-iv-bomex-fast-furious-126c185845724e0eadb35229677ba44b" target="_blank" rel="noopener">1994 Toyota Supra MK IV Bomex Fast &amp; Furious</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a> (same terms as the Carrera GT above). Used for the Supra’s Fast &amp; Furious livery option.</p>
       <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin and engine simplified, textures resized and compressed for the web, and the wheels split apart so they can steer and spin.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2020-honda-nsx-na1-lbworks-49a04d3d1a8b4f419e3f305ac694c345" target="_blank" rel="noopener">2020 Honda NSX (NA1) LB★WORKS</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin and engine simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the garage. The model’s black LB★Works livery is kept as an option; the stock look is the same model in plain paint.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, cabin and engine simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop. The model’s black LB★Works livery is kept as an option; the stock look is the same model in plain paint.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/audi-r8-0e5c6feed3ff489093e33e686dd8f796" target="_blank" rel="noopener">Audi R8</a>” by <a href="https://sketchfab.com/throwbackthursdaymodels" target="_blank" rel="noopener">Randomness</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.</p>
-      <p class="note">Changes made for this game: scaled to metres, centred and baked into one space, the solid materials made opaque, the wheels split apart so they can steer and spin, and the paint split into panels for the garage.</p>
+      <p class="note">Changes made for this game: scaled to metres, centred and baked into one space, the solid materials made opaque, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2009-audi-r8-lms-e98ea154b9b34a5eaa72092caa7d9832" target="_blank" rel="noopener">2009 Audi R8 LMS</a>” by <a href="https://sketchfab.com/outpiston" target="_blank" rel="noopener">OUTPISTON</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. Used for the R8’s race-car option.</p>
       <p class="note">Changes made for this game: baked into one space, cabin simplified, the roof aerial removed, the front wheels lowered to meet the ground, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the body in plain paint so its colour can be chosen (the decals kept).</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2015-bmw-x5-a2e7d663902e4be7bd170fdb9f333ad8" target="_blank" rel="noopener">2015 BMW X5</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the garage.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, textures resized and compressed for the web, the wheels split apart so they can steer and spin, and the paint split into panels for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2015-pandem-v1-mazda-nd-mx-5-miata-with-gt-wing-4abed89f152b4196b96b6fd1a2ec771e" target="_blank" rel="noopener">2015 Pandem V1 Mazda ND MX-5 Miata with GT Wing</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/lamborghini-aventador-e328d9f5dcfd48bdbe8c73324b52ece3" target="_blank" rel="noopener">Lamborghini Aventador</a>” by <a href="https://sketchfab.com/Outlaw_Games" target="_blank" rel="noopener">Outlaw Games™</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener">CC BY-NC 4.0</a>. It is the Aventador SVJ; the parts were sorted and thinned for the game.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/porsche-992-gt3-rs-80bf174857414a57ac9741567d3c4534" target="_blank" rel="noopener">Porsche 992 GT3 RS</a>” by <a href="https://sketchfab.com/VTX_car" target="_blank" rel="noopener">VTX</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. Scaled to the real car’s wheelbase, the right-hand wheels mirrored from the left, the parts sorted and thinned for the game; this version is shared under the same licence.</p>
@@ -1068,16 +1087,16 @@ body.is-touch .cc{font-size:22px}
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/1999-nissan-skyline-gt-r-r34-r3-a0300a4c5e664d379d1fbbf52deca81e" target="_blank" rel="noopener">1999 Nissan Skyline GT-R (R34) R3</a>” by <a href="https://sketchfab.com/outpiston" target="_blank" rel="noopener">OUTPISTON</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. (The Skyline’s R3 Speed Rush livery.) The parts were sorted for the game.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/toyota-supra-b7616ec43ecf4ffd8ed810d94f15eea6" target="_blank" rel="noopener">Toyota Supra</a>” by <a href="https://sketchfab.com/saitoyang" target="_blank" rel="noopener">Jiaxing</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. (The GR Supra.) The parts were sorted and thinned to about a tenth for the game.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/bmw-m3-e92-stance-c35a14d811b042d792a6da69381f7f80" target="_blank" rel="noopener">BMW M3 e92 [stance]</a>” by <a href="https://sketchfab.com/BlackSnow02" target="_blank" rel="noopener">Black Snow</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. The parts were sorted and thinned for the game and the engines under the bonnet left out.</p>
-      <p>This work is based on “<a href="https://sketchfab.com/3d-models/2018-ferrari-812-superfast-6716d40cad6c4f7db9c42e2db3a94ce3" target="_blank" rel="noopener">2018 Ferrari 812 Superfast</a>”, “<a href="https://sketchfab.com/3d-models/2020-ferrari-812-gts-91ed463e1c6a4ef688e97cc011873fe0" target="_blank" rel="noopener">2020 Ferrari 812 GTS</a>” and “<a href="https://sketchfab.com/3d-models/2023-ferrari-812-competizione-2a1c6415c50048e0abdca02067fae59d" target="_blank" rel="noopener">2023 Ferrari 812 Competizione</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, each licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. The parts were sorted and thinned for the game, and the three are offered as one car (a Model and a Roof setting in the garage); these versions are shared under the same licence.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/2018-ferrari-812-superfast-6716d40cad6c4f7db9c42e2db3a94ce3" target="_blank" rel="noopener">2018 Ferrari 812 Superfast</a>”, “<a href="https://sketchfab.com/3d-models/2020-ferrari-812-gts-91ed463e1c6a4ef688e97cc011873fe0" target="_blank" rel="noopener">2020 Ferrari 812 GTS</a>” and “<a href="https://sketchfab.com/3d-models/2023-ferrari-812-competizione-2a1c6415c50048e0abdca02067fae59d" target="_blank" rel="noopener">2023 Ferrari 812 Competizione</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, each licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. The parts were sorted and thinned for the game, and the three are offered as one car (a Model and a Roof setting in the workshop); these versions are shared under the same licence.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/mclaren-720s-spider-e820cf40821940bcafebf24bec693d16" target="_blank" rel="noopener">McLaren 720s Spider</a>” by <a href="https://sketchfab.com/mpgs.studio" target="_blank" rel="noopener">Mpgs Studios</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Scaled to the real car’s wheelbase and thinned from 1.67 million triangles to about 270,000 for the game.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2011-honda-js-racing-s2000-type-gt-bodykit-21d6858f7f424deaaf22c9a72737ed99" target="_blank" rel="noopener">2011 Honda J’s Racing S2000 Type-GT Bodykit</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>. The parts were sorted and thinned for the game, and three options were made from the kit’s own shapes: a smooth bonnet, different running lights, and a smooth “street” front bumper (the kit’s bumper face reshaped, its corner vents closed, and a small flat lip in place of the splitter); this version is shared under the same licence.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, interior simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, the soft top made removable, and the paint split into panels for the garage.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, interior simplified, textures resized and compressed for the web, the wheels split apart so they can steer and spin, the soft top made removable, and the paint split into panels for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/bmw-i8-liberty-walk-a109331f70784b749b6e842c813af854" target="_blank" rel="noopener">BMW i8 Liberty Walk</a>” by <a href="https://sketchfab.com/0verly" target="_blank" rel="noopener">J5nnym1r™ (0verly)</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener">CC BY-NC 4.0</a>.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, the second set of wheels removed, each wheel split into tyre and rim so it can steer and spin, cabin and front compartment simplified, textures resized and compressed for the web, the bonnet separated as a panel for the garage.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, the second set of wheels removed, each wheel split into tyre and rim so it can steer and spin, cabin and front compartment simplified, textures resized and compressed for the web, the bonnet separated as a panel for the workshop.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2018-hennessey-the-exorcist-camaro-zl1-a0d1b13a7e3a4fdd9eea0bbec25c52ab" target="_blank" rel="noopener">2018 Hennessey THE EXORCIST Camaro ZL1</a>” by <a href="https://sketchfab.com/ddiaz-design" target="_blank" rel="noopener">Ddiaz Design</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>.</p>
-      <p class="note">Changes made for this game: scaled to metres and baked into one space, each wheel split into tyre and rim so it can steer and spin, cabin and engine simplified, textures resized and compressed for the web, the bonnet, boot lid, roof and mirror caps separated as panels for the garage, and the side stripes and lettering separated from the paint so they can be taken off or recoloured.</p>
+      <p class="note">Changes made for this game: scaled to metres and baked into one space, each wheel split into tyre and rim so it can steer and spin, cabin and engine simplified, textures resized and compressed for the web, the bonnet, boot lid, roof and mirror caps separated as panels for the workshop, and the side stripes and lettering separated from the paint so they can be taken off or recoloured.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/2018-dodge-challenger-srt-hellcat-e31b4430d9934f61b212f55f194c9ef7" target="_blank" rel="noopener">2018 Dodge Challenger SRT Hellcat</a>” by <a href="https://sketchfab.com/3001105" target="_blank" rel="noopener">Emmanual Robinson, Jr.</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
-      <p class="note">Changes made for this game: every part thinned (about a quarter of the original’s triangles), the amber side markers made white lamps, a doubled tyre, disc and caliper at one corner removed, the wheels separated so they can steer and spin, the red guard strip under the front splitter made black, the red headlamp lenses made clear, and the bonnet, boot lid, mirrors and centre stripes separated for the garage.</p>
+      <p class="note">Changes made for this game: every part thinned (about a quarter of the original’s triangles), the amber side markers made white lamps, a doubled tyre, disc and caliper at one corner removed, the wheels separated so they can steer and spin, the red guard strip under the front splitter made black, the red headlamp lenses made clear, and the bonnet, boot lid, mirrors and centre stripes separated for the workshop.</p>
       <p>The rim designs are based on “<a href="https://sketchfab.com/3d-models/bbs-rim-mate-black-free-16238a61e9c749369b46b64df58726e0" target="_blank" rel="noopener">BBS RIM ( MATE BLACK ) FREE</a>” by <a href="https://sketchfab.com/rajatnidaria" target="_blank" rel="noopener">rajatnidaria</a>, “<a href="https://sketchfab.com/3d-models/bmw-cscsl-rim-48dd2d121ce14a419fb55262f777df3a" target="_blank" rel="noopener">BMW CS/CSL Rim</a>” by <a href="https://sketchfab.com/pira.midale" target="_blank" rel="noopener">pira.midale</a>, “<a href="https://sketchfab.com/3d-models/realistic-jdm-rim-pack-6c0fab94636e4c60b2c2f766fe7f477f" target="_blank" rel="noopener">Realistic JDM Rim Pack</a>” by <a href="https://sketchfab.com/visthetique" target="_blank" rel="noopener">Visthétique</a>, “<a href="https://sketchfab.com/3d-models/rim-whell-b2e08fa90c9f45299f442a2a2e972ed2" target="_blank" rel="noopener">rim whell</a>” by <a href="https://sketchfab.com/diyor1fer" target="_blank" rel="noopener">diyor1fer</a>, “<a href="https://sketchfab.com/3d-models/wire-rim-bda093957f8e47a7b27270de6c3e0d14" target="_blank" rel="noopener">Wire rim</a>” by <a href="https://sketchfab.com/3dpeter" target="_blank" rel="noopener">rotating3d.com</a> and “<a href="https://sketchfab.com/3d-models/work-meister-style-5-spoke-rims-668ff4ead5384f14b6dd85051e29c912" target="_blank" rel="noopener">WORK Meister style 5 Spoke rims</a>” by <a href="https://sketchfab.com/bordres" target="_blank" rel="noopener">bordres</a>, each licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Each was thinned, stripped of its textures and rescaled to fit every car.</p>
       <p>The driver is based on “<a href="https://sketchfab.com/3d-models/driver-80-64a63abe88c54840b03ecb83d1f9f555" target="_blank" rel="noopener">driver_80</a>” by <a href="https://sketchfab.com/MattDoesBlender" target="_blank" rel="noopener">MattDoesBlender</a>, licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noopener">CC BY-NC-SA 4.0</a>; this version is shared under the same licence.</p>
       <p class="note">Changes made for this game: only the suit and gloves are used, scaled to metres, textures resized; his arms are bent onto each car’s steering wheel and his fingers curled in code; the helmet is the game’s own.</p>
@@ -1099,7 +1118,7 @@ body.is-touch .cc{font-size:22px}
       <p class="note">Toyota, Camry and RAV4 are trademarks of Toyota Motor Corporation; Tesla and Model 3 of Tesla, Inc.; Ford, Expedition and F-150 of Ford Motor Company; Chevrolet and Express of General Motors.</p>
     </section>
     <section>
-      <h3>Garage</h3>
+      <h3>Workshop</h3>
       <p class="note">Changes made for this game: the mesh reduced to a quarter of its triangles and compressed for the web, its two textures resized to 2K, the room darkened a little and closed off with a dark shell where the scan ends.</p>
     </section>
     <section>
@@ -1145,8 +1164,8 @@ body.is-touch .cc{font-size:22px}
     </section>
     <section>
       <h3>Game</h3>
-      <p>The make logos on the garage keys are files from <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener">Wikimedia Commons</a> (marked public domain or CC0 there); the Porsche and Lamborghini crests are images from <a href="https://logos-world.net/porsche-logo/" target="_blank" rel="noopener">logos-world.net</a> and <a href="https://www.lambocars.com/lamborghini-logo-meaning-and-history/" target="_blank" rel="noopener">lambocars.com</a>. Every logo is a trademark of its maker.</p>
-      <p>Built with three.js. The driving physics, the traffic and police drivers, the spike strips, tyre and wind sounds, the siren, the carbon weave and the garage's body-kit parts are made in code for this game.</p>
+      <p>The make logos on the car keys are files from <a href="https://commons.wikimedia.org/" target="_blank" rel="noopener">Wikimedia Commons</a> (marked public domain or CC0 there); the Porsche and Lamborghini crests are images from <a href="https://logos-world.net/porsche-logo/" target="_blank" rel="noopener">logos-world.net</a> and <a href="https://www.lambocars.com/lamborghini-logo-meaning-and-history/" target="_blank" rel="noopener">lambocars.com</a>. Every logo is a trademark of its maker.</p>
+      <p>Built with three.js. The driving physics, the traffic and police drivers, the spike strips, tyre and wind sounds, the siren, the carbon weave and the workshop's body-kit parts are made in code for this game.</p>
     </section>
     <button class="close" id="closeCredits">Close</button>
   </div>
@@ -1172,7 +1191,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
 import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js';
 import { createGarage, GARAGE_SPEC } from './garage.js';
-import { createShowroom, TOWER } from './showroom.js?v=109';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { createShowroom, TOWER } from './showroom.js?v=110';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
 import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?v=109';
 import { SpikeStrips, Mirror } from './pursuit.js';
 import { Rain } from './rain.js';
@@ -6570,6 +6589,16 @@ const CAMS = ['Chase', 'Far chase', 'Hood', 'Cockpit'];
 const cam = { yaw: 0, yawVel: 0, side: 1, look: 0, lookHold: 0, fov: 58, dist: 6, orbit: 0.6, kick: 0 };
 const vis = { roll: 0, rollV: 0, pitch: 0, pitchV: 0, t: 0 };
 
+// The loading screen (v110): up from the first moment (it is in the page as it arrives), taken down when the first car and the
+// traffic are in; put up again whenever something has to be fetched before there is anything to look at (the workshop's room, the
+// collection straight from the title). Counted: each show() needs its hide(). `p`: how far along, 0 to 1; null = no telling.
+const loadScr = {
+  boot: true, n: 1, _t: 0,
+  set(text, p = null, sub = '') { $('lsText').textContent = text; $('lsSub').textContent = sub; const bar = $('lsBar'); bar.parentNode.classList.toggle('run', p == null); bar.style.width = p == null ? '' : `${Math.round(Math.max(0, Math.min(1, p)) * 100)}%`; },
+  show(text, p = null, sub = '') { this.n++; const el = $('loadScr'); clearTimeout(this._t); this.set(text, p, sub); el.hidden = false; el.classList.remove('out', 'bad'); },
+  hide() { if (this.n > 0) this.n--; if (this.n > 0) return; const el = $('loadScr'); el.classList.add('out'); clearTimeout(this._t); this._t = setTimeout(() => { if (!this.n) el.hidden = true; }, 480); },
+  fail(text) { $('loadScr').classList.add('bad'); $('lsText').textContent = text; $('lsSub').textContent = ''; },
+};
 function toast(text, ms = 1100) {
   const el = $('toast'); el.textContent = text; el.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), ms);
@@ -6709,7 +6738,7 @@ function updateNitroHud() {
   const el = $('tnos'); el.hidden = !fitted; el.classList.toggle('ready', mode === 'ready'); el.classList.toggle('burn', mode === 'burn');
   $('tnosFill').style.width = pct + '%';
   const b = $('nosBtn'); b.hidden = !fitted; b.classList.toggle('ready', mode === 'ready');
-  $('keyB').textContent = nitroFitted() ? 'NO2 · garage on the ramp' : 'Garage (on the ramp)';
+  $('keyB').textContent = nitroFitted() ? 'NO2 · workshop on the ramp' : 'Workshop (on the ramp)';   // (v110, the owner: "make sure everywhere you click to go to the workshop it says workshop not garage")
 }
 function setWeather(w) { state.weather = w; store.set('weather', w); world.setWeather(w); syncSettings(); }
 function setTrafficLevel(k) { state.traffic = k; store.set('traffic', k); traffic.setDensity(k); syncSettings(); }
@@ -8604,7 +8633,7 @@ function openGarage() {
   // the car's reflections come from the room from now on (a full capture now, then live)
   const roomIn = () => { garage.show(true); world.forceRefl = true; world.updateProbe(car.x, roadY, car.z, true); setTimeout(srPreload, 700); };   // (v104: the tower upstairs is built and its cars fetched, if they have not been yet)
   if (garage.ready) roomIn();
-  else if (!garage.failed) { toast('Loading the garage…', 1800); garage.load().then(() => { if (state.garage) { garage.place(car.x, roadY, car.z, car.yaw); roomIn(); } }); }
+  else if (!garage.failed) { loadScr.show('Opening the workshop'); garage.load().then(() => { if (state.garage) { garage.place(car.x, roadY, car.z, car.yaw); roomIn(); } }).catch(() => {}).then(() => setTimeout(() => loadScr.hide(), 150)); }   // (v110: a loading screen; it was a line of text over an empty road)
   // start the orbit from wherever the chase camera is now
   gcam.phi = wrapAngle(Math.atan2(car.x - camera.position.x, car.z - camera.position.z) - car.yaw);
   gcam.t.set(car.x, 0.6, car.z); gcam.dist = camera.position.distanceTo(gcam.t); gcam.focus = null; setFocus(gTab === 'wheels' ? 'wheel' : gTab === 'stance' ? 'stance' : 'overview');
@@ -9996,15 +10025,90 @@ function srCapture() {
     if (!showroom.byId[base]) return;
     if (srIsStock(carId, mods)) { if (srLods[base]) { delete srLods[base]; showroom.setLod(base, null); lodDelete(base); srPaintOf(base); } return; }
     if (srLods[base] && srLods[base].sig === sig) return;
-    const raw = gatherRig(rig, carRoot, { head: [...rig.lamps.head], lens: [...rig.mats.headLens], drl: [...new Set((rig.kinds.drl || []).map((o) => o.material))], headDark: !!(rig.mk2 && rig.mk2.visible) });
-    srLods[base] = { sig, pending: true };
-    lodSimplify(raw).then((parts) => {
-      if (!srLods[base] || srLods[base].sig !== sig) return;   // changed again meanwhile
-      const rec = { id: base, carId, sig, at: Date.now(), parts };
-      srLods[base] = rec; showroom.setLod(base, parts); srPaintOf(base); lodSave(rec);
-    }).catch((e) => { console.warn('car copy', e); if (srLods[base] && srLods[base].pending) delete srLods[base]; });
+    srKeep(base, carId, sig, srGather(rig));
   } catch (e) { console.warn('car copy', e); }
 }
+const srGather = (r) => gatherRig(r, carRoot, { head: [...r.lamps.head], lens: [...r.mats.headLens], drl: [...new Set((r.kinds.drl || []).map((o) => o.material))], headDark: !!(r.mk2 && r.mk2.visible) });
+// what was gathered, simplified off the page's thread, put in the bay and kept in the browser; the promise ends when it stands there
+function srKeep(base, carId, sig, raw) {
+  const mark = srLods[base] = { sig, pending: true };
+  return mark.done = lodSimplify(raw).then((parts) => {
+    if (srLods[base] !== mark) return;   // changed again meanwhile
+    const rec = { id: base, carId, sig, at: Date.now(), parts };
+    srLods[base] = rec; showroom.setLod(base, parts); srPaintOf(base); lodSave(rec);
+  }).catch((e) => { console.warn('car copy', e); if (srLods[base] === mark) delete srLods[base]; });
+}
+// ---- every car brought up to date by itself (v110)
+// The owner: "make it so I dont have to click on the cars for them to update how I have changed them in the workshop". A car's copy
+// was only made while that car was the one out: in the workshop, or walked up to in the tower. A car built in an earlier version, or
+// whose copy a change to the copies had thrown away (three times in one day, v106 to v108), stood in the tower as it left the factory
+// until it was clicked. Now every car whose saved build has no copy made from it is seen to without being asked: its model is
+// fetched and built out of sight, dressed in its saved build, gathered, and let go again, one car at a time, whenever the game is
+// not being driven (the title, the workshop, the tower). The car that is out stays the car that is out: for the moment of the
+// gathering the game's "this car" and "this build" point at the other one, then back, and the car out is dressed again.
+const srFix = { run: false, done: 0, total: 0, tried: new Set() };
+const srCalm = () => state.ready && !switching && !state.paused && !document.hidden && (!state.driving || state.garage) && SR.mode !== 'ride' && !(SR.mode === 'zoom' && !SR.pose);
+const srWait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function srWhenCalm() { while (!srCalm()) await srWait(400); }
+function srNeedy() {
+  const out = [];
+  for (const b of showroom.bays) {
+    const base = b.id; if (!base || carLocked(base) || srFix.tried.has(base) || baseOf(activeId) === base) continue;   // (the car out now: srCapture sees to it)
+    const d0 = CAR_DEFS[base], cid = d0.variantFor ? d0.variantFor(loadMods(base)) : base; if (!CAR_DEFS[cid]) continue;
+    const have = srLods[base];
+    if (have && (have.pending || have.sig === srSigOf(have.carId || cid))) continue;
+    if (srIsStock(cid)) { if (have) { delete srLods[base]; showroom.setLod(base, null); lodDelete(base); srPaintOf(base); } continue; }   // as it left the factory: the stock copy
+    out.push([base, cid]);
+  }
+  return out;
+}
+// the copy of a car that is not the one out, made from its saved build
+function srGatherOther(r, cid) {
+  const home = rig, keep = [rig, mods, activeId], vis = [r.body.visible, r.wheelGroup.visible, home && home.body.visible, home && home.wheelGroup.visible];
+  try {
+    rig = r; activeId = cid; mods = loadMods(cid);
+    if (home && home !== r) home.body.visible = home.wheelGroup.visible = false;
+    r.body.visible = r.wheelGroup.visible = true;
+    applyMods();
+    return srGather(r);
+  } finally {
+    r.body.visible = vis[0]; r.wheelGroup.visible = vis[1]; if (home && home !== r) { home.body.visible = vis[2]; home.wheelGroup.visible = vis[3]; }
+    [rig, mods, activeId] = keep;
+    if (rig) applyMods();   // the car out, as it was
+  }
+}
+// a car fetched only to have its copy made is let go again (23 whole cars at once is more than a phone's memory holds)
+function srDropRig(cid, base) {
+  const r = rigs[cid]; if (!r || r === rig || titleCar === cid || switching === cid || SR.home === cid || (SR.bay && SR.bay.id === base)) return;
+  delete rigs[cid]; bodyGroup.remove(r.body); carRoot.remove(r.wheelGroup);
+  for (const top of [r.body, r.wheelGroup]) top.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+}
+async function srCatchUp() {
+  if (srFix.run) return; srFix.run = true;
+  try {
+    await srLoadLods(); const ok = await wasmReady;
+    const list = srNeedy(); srFix.total = list.length; srFix.done = 0; srBusy();
+    for (const [base, cid] of list) {
+      srFix.tried.add(base);
+      try {
+        await srWhenCalm();
+        const had = !!rigs[cid] || !!building[cid];
+        if (!had) await fetchModelText(CAR_DEFS[cid], ok, () => {});   // the download first: the unpacking and building wait for a quiet moment
+        await srWhenCalm();
+        const r = await ensureRig(cid);
+        await srWait(350); await srWhenCalm();
+        const have = srLods[base];
+        if (baseOf(activeId) !== base && !(have && (have.pending || have.sig === srSigOf(cid)))) { const t0 = performance.now(), raw = srGatherOther(r, cid); srFix.ms = Math.max(srFix.ms || 0, Math.round(performance.now() - t0)); await srKeep(base, cid, srSigOf(cid), raw); }
+        if (!had) srDropRig(cid, base);
+      } catch (e) { console.warn('car copy', cid, e); }
+      srFix.done++; srBusy();
+      await srWait(450);
+    }
+  } catch (e) { console.warn('car copies', e); }
+  srFix.run = false; srBusy();
+}
+// the line under "The Collection" while cars are being brought up to date
+function srBusy() { const el = $('srBusy'), left = srFix.run ? srFix.total - srFix.done : 0; el.hidden = left <= 0; if (left > 0) el.textContent = `Bringing your builds up · ${srFix.done + 1} of ${srFix.total}`; }
 let srLodsLoaded = null;
 function srLoadLods() {
   srLodsLoaded ||= lodLoadAll().then((recs) => {
@@ -10050,10 +10154,21 @@ function srWarm() {
   if (showroom.carsReady || showroom.carsFailed) SR.warm = 2;   // (drawn before the copies arrived: once more when they have)
   SR.warmMs = Math.round(performance.now() - t0);
 }
+// (v110: `then` may hand back a promise: the black stays up until it ends, so the tower is not shown with a car still to change)
 function srFade(then, instant) {
   if (instant) { then(); return; }
   const f = $('srFade'); f.style.transition = 'opacity .2s'; f.style.opacity = 1;
-  setTimeout(() => { then(); setTimeout(() => { f.style.transition = 'opacity .35s'; f.style.opacity = 0; }, 60); }, 210);
+  setTimeout(() => { Promise.resolve(then()).catch(() => {}).then(() => setTimeout(() => { f.style.transition = 'opacity .35s'; f.style.opacity = 0; }, 60)); }, 210);
+}
+// the tower is ready to be looked at: its cars' copies are in, and the car that was in the workshop stands in its bay as it is built
+// now (its copy takes a moment to make). Six seconds at the most.
+function srShown() {
+  const mark = srLods[baseOf(activeId)], waits = [];
+  if (mark && mark.pending && mark.done) waits.push(mark.done);
+  if (!showroom.carsReady && !showroom.carsFailed) waits.push(wasmReady.then((ok) => showroom.loadCars(ok ? MeshoptDecoder : null)));
+  if (!waits.length) return null;
+  $('srFadeSub').textContent = 'Bringing the cars up…';
+  return Promise.race([Promise.all(waits), srWait(6000)]).then(() => { $('srFadeSub').textContent = ''; if (SR.warm < 2) srWarm(); });
 }
 function enterShowroom(instant = false) {
   if (!state.garage || !garage.ready || SR.on || switching) return;
@@ -10068,6 +10183,8 @@ function enterShowroom(instant = false) {
     document.body.classList.add('in-showroom'); $('srUi').hidden = false; srCard();
     camera.clearViewOffset(); syncRenderScale();
     if (!SR.hinted) { SR.hinted = true; toast(isTouch ? 'Tap a car to walk up to it' : 'Click a car to walk up to it', 2600); }
+    setTimeout(srCatchUp, 900);   // (v110) any car whose build has no copy yet
+    return srShown();
   }, instant);
 }
 // back in the workshop, with whichever car is the active one on the turntable
@@ -11501,10 +11618,11 @@ function syncCarText(id = activeId || titleCar) {
 function setProgress(p) {
   $('loadBar').style.width = `${p * 100}%`;
   $('loadText').textContent = `Loading the ${CAR_DEFS[titleCar].short}… ${Math.round(p * 100)}%`;
+  if (loadScr.boot) { if (p < 1) loadScr.set(`Loading the ${CAR_DEFS[titleCar].short}`, p * 0.7, `${Math.round(p * 100)}%`); else loadScr.set(`Building the ${CAR_DEFS[titleCar].short}`, 0.72, ''); }   // (v110) the first car: on the loading screen
 }
 // Traffic models load alongside the first car, and the title waits for them so the road is full from the start.
 function trafficLoad() {
-  traffic.loading ||= wasmReady.then((ok) => (ok ? traffic.load(MeshoptDecoder, (n, of) => { trafficProgress = n / of; if (state.ready && n < of) $('loadText').textContent = `Loading traffic… ${n} of ${of}`; }) : false))
+  traffic.loading ||= wasmReady.then((ok) => (ok ? traffic.load(MeshoptDecoder, (n, of) => { trafficProgress = n / of; if (state.ready && n < of) $('loadText').textContent = `Loading traffic… ${n} of ${of}`; if (loadScr.boot && state.ready) loadScr.set('Loading the traffic', 0.75 + 0.25 * n / of, `${n} of ${of}`); }) : false))
     .then((ok) => { if (ok) warmTraffic(); return ok; })
     .catch((e) => console.warn('traffic did not load', e));
   return traffic.loading;
@@ -11546,10 +11664,13 @@ function pickTitleCar(id, data = {}) {
     if (state.driving) { cam.yaw = car.yaw; }
     state.ready = true;
     setTimeout(srPreload, 1500);   // (v104) the collection's building and its cars are fetched and unpacked now, not when you first go up
+    setTimeout(srCatchUp, 9000);   // (v110) and any car whose saved build has no copy made from it is seen to, without a click
     $('loadErr').hidden = true;
     // the road should already be busy when you set off: wait for the traffic too
+    if (loadScr.boot) loadScr.set('Loading the traffic', 0.75 + 0.25 * trafficProgress, '');
     trafficLoad().then(() => {
       if (titleCar !== id) return;
+      if (loadScr.boot) { loadScr.boot = false; loadScr.set('Ready', 1, ''); loadScr.hide(); }
       $('load').hidden = true; $('titleActions').hidden = false;
       if (data.driving) startDriving();
       // fetch the other cars in the background (one at a time, once the traffic is in) so switching is quick
@@ -11565,12 +11686,20 @@ function pickTitleCar(id, data = {}) {
     if (titleCar !== id) return;
     $('loadErr').hidden = false;
     $('loadErr').textContent = 'The car model did not load. Reload the page to try again.';
+    if (loadScr.boot) loadScr.fail('The car model did not load. Reload the page to try again.');
   });
 }
 for (const b of $('carPick').children) b.addEventListener('click', () => { if (carLocked(b.dataset.car)) { toast(`Unlocks at level ${carLevel(b.dataset.car)}`, 2000); return; } if (b.dataset.car !== titleCar) pickTitleCar(b.dataset.car); });
 syncLocks();
 $('garageBtn').addEventListener('click', openGarage);
-$('keysBtn').addEventListener('click', () => { openGarage(); if (!state.garage) return; const go = () => { if (state.garage) enterShowroom(true); }; if (garage.ready) setTimeout(go, 0); else garage.load().then(() => setTimeout(go, 0)); });   // (v103) straight up to the collection
+$('keysBtn').addEventListener('click', () => {   // (v103) straight up to the collection
+  // (v110) behind the loading screen whenever the room, the tower or its cars are still to come, and until the car out stands in its bay as built
+  const slow = !garage.ready || SR.warm < 2 || !showroom.carsReady; if (slow) loadScr.show('Opening the collection');
+  const done = () => { if (slow) setTimeout(() => loadScr.hide(), 150); };
+  openGarage(); if (!state.garage) { done(); return; }
+  const go = () => { if (state.garage) enterShowroom(true); Promise.resolve(SR.on ? srShown() : null).catch(() => {}).then(done); };
+  if (garage.ready) setTimeout(go, 0); else garage.load().then(() => setTimeout(go, 0), done);
+});
 $('btnGarage').addEventListener('click', openGarage);
 $('rampGarage').addEventListener('click', () => openGarage());
 
@@ -11612,7 +11741,7 @@ window.__game = {
     const des = gaugeFor(id); des.face(q, L); des.live(q, { rpm: f * tachMax * 1000, f, spd, unit: state.units === 'mph' ? 'mph' : 'km/h', boost: 0.5, gear }, L);
     [tachMax, CAR.redline] = keep; return c;
   },
-  showroom, SR, ROOMQ, srLods, srCapture, enterShowroom, leaveShowroom, srZoom, srSelect, srOverview, srPick, TOWER,
+  showroom, SR, ROOMQ, srLods, srCapture, srCatchUp, srFix, loadScr, enterShowroom, leaveShowroom, srZoom, srSelect, srOverview, srPick, TOWER,
   KW, keyBrands, pickBrand, keyAt, lookAtKeys, leaveKeyWall, chooseCar, roadQ, renderScale, syncRenderScale, gcam, get gBrand() { return gBrand; }, get gTab() { return gTab; },
   advance(sec, input = {}, withTraffic = false) {
     const fixed = typeof input === 'function' ? input : Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false }, input);
