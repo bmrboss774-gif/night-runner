@@ -9957,7 +9957,7 @@ const SR_ROWS = [
   { name: 'America', sub: 'Chevrolet · Dodge', cars: ['c7', 'zl1', 'hc', 'viper'] },
   { name: 'Exotics', sub: 'Porsche · Ferrari · Lamborghini · McLaren', cars: ['cgt', 'gt3', 'f812', 'svj', 'mcl'] },
 ];
-const showroom = createShowroom({ parent: garage.group, rows: SR_ROWS, defs: Object.fromEntries(CAR_IDS.map((id) => [id, CAR_DEFS[id]])), displayFont: '"Saira Condensed","Arial Narrow",Arial,sans-serif' });
+const showroom = createShowroom({ parent: garage.group, rows: SR_ROWS, defs: Object.fromEntries(CAR_IDS.map((id) => [id, CAR_DEFS[id]])), displayFont: '"Saira Condensed","Arial Narrow",Arial,sans-serif', glowTex: underglow.material.map });
 const SR = { on: false, mode: 'off', bay: null, home: null, pos: new THREE.Vector3(), tgt: new THREE.Vector3(), fov: 46, pan: 0, tilt: 0, hover: null, ride: null, pose: null, locks: '', t: 0, wantSel: false, loadP: 0, loadFail: false, key: null, keySwing: 0, snap: false, envAt: 0, hinted: false, warm: 0, hoverT: 0, hoverId: null };
 // (v104, the owner: "the collection is laggy and loads to slow". Timed: the tower was drawn like the workshop, at up to 3.2 million
 // pixels with 4x multisampling, about 50 frames a second with real frames; the multisampling alone was half the cost. It is now drawn
@@ -9971,12 +9971,23 @@ const srLight = new THREE.DirectionalLight(0xfff1e0, 0); scene.add(srLight, srLi
 // bay (which mends a car last changed before this version existed). The copies are kept in the browser between visits. A car
 // with the default build keeps the stock copy shipped with the game.
 const srLods = {};   // base car id -> { id, carId, sig, parts } (or { sig, pending } while one is being made)
-const srSigOf = (carId, m) => 'c3|' + carId + '|' + JSON.stringify(loadMods(carId, m));   // ('c3': how copies are made changed in v106 (lamp covers off, bulbs) and v107 (lamps as the build has them); older ones are made again)   // (a live build is put through loadMods too, so it reads the same as the saved one will)
-const srIsStock = (carId, m) => baseOf(carId) === carId && JSON.stringify(loadMods(carId, m)) === JSON.stringify(loadMods(carId, null));
+// (v108, the owner: "the cars arent loading with the correct lights, ensure that the lights on the cars are exactly as they are within
+// the players car menu and how they were customized. make sure the color is correct and the options are set". A copy held the lights
+// its car had when it was made, and one is only made with the car in the workshop: every car not brought down since stood in the tower
+// with white lights, on. The lights are no longer part of the copy: the tower sets each car's headlamps, running lights, bulbs and
+// underglow from its saved build (srPaintOf -> showroom.setLights), every time it is shown. So the three settings below are left out
+// of what tells one copy from another, and a car changed only in them keeps the stock copy.)
+const SR_LIVE = ['lights', 'head', 'glow'];
+const srShape = (carId, m) => { const o = loadMods(carId, m); for (const k of SR_LIVE) delete o[k]; return JSON.stringify(o); };
+const srSigOf = (carId, m) => 'c4|' + carId + '|' + srShape(carId, m);   // ('c3': how copies are made changed in v106 (lamp covers off, bulbs) and v107 (lamps as the build has them); older ones are made again)   // (a live build is put through loadMods too, so it reads the same as the saved one will)
+const srIsStock = (carId, m) => baseOf(carId) === carId && srShape(carId, m) === srShape(carId, null);
 function srPaintOf(base) {
   const d0 = CAR_DEFS[base]; let cid = srLods[base]?.carId || base; if (cid === base && d0.variantFor) cid = d0.variantFor(loadMods(base));
   const d = CAR_DEFS[cid] || d0, m = cid === activeId ? mods : loadMods(cid);   // (the car out now: its build as it stands, saved or not)
   showroom.setPaint(base, d.liveryOf && !d.liveryColour ? '#ffffff' : m.paint || d.stock.paint, FINISHES[m.finish] || FINISHES.gloss);
+  // (v108) and its lights as its Lights menu has them (a movie livery locks the build: its lights are the car's own)
+  const lm = liveryOn(d, m) ? defaultMods(d) : m;
+  showroom.setLights(base, { mode: lm.lights, color: lm.head, glow: lm.glow });
 }
 function srCapture() {
   if (!rig || !state.garage || !carRoot.visible) return;
@@ -9985,8 +9996,7 @@ function srCapture() {
     if (!showroom.byId[base]) return;
     if (srIsStock(carId, mods)) { if (srLods[base]) { delete srLods[base]; showroom.setLod(base, null); lodDelete(base); srPaintOf(base); } return; }
     if (srLods[base] && srLods[base].sig === sig) return;
-    const hc = mods.head ? new THREE.Color(mods.head).lerp(new THREE.Color(0xffffff), 0.35) : null;   // the headlight colour chosen, as the beams take it
-    const raw = gatherRig(rig, carRoot, { head: [...rig.lamps.head, ...rig.mats.headLens], bulb: hc ? [hc.r, hc.g, hc.b] : undefined });
+    const raw = gatherRig(rig, carRoot, { head: [...rig.lamps.head, ...rig.mats.headLens], drl: [...new Set((rig.kinds.drl || []).map((o) => o.material))], headDark: !!(rig.mk2 && rig.mk2.visible), bulbs: !(rig.g80 && rig.g80.visible) });
     srLods[base] = { sig, pending: true };
     lodSimplify(raw).then((parts) => {
       if (!srLods[base] || srLods[base].sig !== sig) return;   // changed again meanwhile
@@ -10000,7 +10010,8 @@ function srLoadLods() {
   srLodsLoaded ||= lodLoadAll().then((recs) => {
     for (const rec of recs) {
       if (!rec || !showroom.byId[rec.id] || !CAR_DEFS[rec.carId] || srLods[rec.id]) continue;
-      if (rec.sig !== srSigOf(rec.carId)) { lodDelete(rec.id); continue; }   // the build has changed since (another tab, cleared settings)
+      // (a copy from v107 whose build has not changed since is kept as it is: its lamps were set in it when it was made, from that same build)
+      if (rec.sig !== srSigOf(rec.carId) && rec.sig !== 'c3|' + rec.carId + '|' + JSON.stringify(loadMods(rec.carId))) { lodDelete(rec.id); continue; }   // the build has changed since (another tab, cleared settings)
       srLods[rec.id] = rec; showroom.setLod(rec.id, rec.parts); srPaintOf(rec.id);
     }
   }).catch(() => {});
