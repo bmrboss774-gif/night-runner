@@ -419,6 +419,7 @@ body.in-showroom .np{left:auto;bottom:auto;right:calc(18px + env(safe-area-inset
 .sw.stock::after{content:"F";font-family:var(--f-display);font-weight:700;font-size:13px;color:#fff;text-shadow:0 0 3px #000,0 0 2px #000}
 .sw.custom{background:conic-gradient(#f33,#fd3,#3e5,#3cf,#55f,#e3e,#f33)}
 .sw.custom.set{background:var(--c)}
+.sw.cham{box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),inset 0 3px 6px rgba(255,255,255,.18)}
 .sw.custom span{font-weight:600;font-size:18px;line-height:1;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7)}
 .sw.custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:0;padding:0}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
@@ -1191,7 +1192,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
 import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js';
 import { createGarage, GARAGE_SPEC } from './garage.js';
-import { createShowroom, TOWER } from './showroom.js?v=110';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { createShowroom, TOWER } from './showroom.js?v=111';
+import { setChameleon } from './paintfx.js?v=111';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
 import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?v=109';
 import { SpikeStrips, Mirror } from './pursuit.js';
 import { Rain } from './rain.js';
@@ -2263,22 +2265,59 @@ const wind = (() => {
 
 // ---------------------------------------------------------------- exhaust flames
 const exhaust = (() => {
-  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
-  const g = c.getContext('2d');
-  const gr = g.createLinearGradient(0, 0, 0, 128);
-  gr.addColorStop(0, 'rgba(255,255,235,1)'); gr.addColorStop(0.18, 'rgba(255,214,120,0.95)'); gr.addColorStop(0.5, 'rgba(255,110,30,0.75)'); gr.addColorStop(1, 'rgba(255,60,10,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 64, 128);
-  // taper it into a teardrop: an ellipse mask, widest at the pipe, fading out to the tip and the sides
-  g.globalCompositeOperation = 'destination-in';
-  g.save(); g.translate(32, 0); g.scale(1, 3.6);
-  const mask = g.createRadialGradient(0, 3, 0, 0, 3, 31);
-  mask.addColorStop(0, 'rgba(0,0,0,1)'); mask.addColorStop(0.55, 'rgba(0,0,0,0.55)'); mask.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = mask; g.fillRect(-32, 0, 64, 36); g.restore();
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(1.7, 1.5, 1.3) });
   const group = new THREE.Group(); group.visible = false;
-  // two crossed planes with their base at the tailpipe and the flame trailing backwards (-Z)
-  const plane = new THREE.PlaneGeometry(0.2, 0.7).translate(0, -0.35, 0).rotateX(Math.PI / 2), planeB = plane.clone().rotateZ(Math.PI / 2);
+  // (v111) The pop flame, drawn rather than painted. The owner: "can u make the flames look better and cooler". It was one fixed
+  // picture of a smooth orange teardrop on two crossed cards, flickered by stretching it: seen from the chase camera, straight
+  // behind, the cards were edge-on and the flame was a glow and a line. A real backfire is a ball of fire that bursts out of the
+  // pipe, licks back in ragged tongues and tears apart as it dies: white-yellow where it is hottest, orange, then dark red at the
+  // ragged edges, with a blue flicker right at the pipe. Each pop is now drawn that way by a shader: moving turbulence (layered
+  // noise streaming away from the pipe) shapes its edges, its heat sets its colour, and its age (uAge, 0 to 1 over the pop) grows
+  // it out of the pipe and then eats it away from the tip and the edges. Three cards round the pipe's axis give it body from the
+  // side; a fireball facing the camera at the pipe gives it body from behind. Each pipe has its own pattern (uSeed).
+  const FU = { uTime: { value: 0 }, uPow: { value: 0 }, uAge: { value: 0 }, uCore: { value: new THREE.Color(0.35, 0.55, 1) }, uHot: { value: new THREE.Color(1, 0.93, 0.72) }, uMid: { value: new THREE.Color(1, 0.45, 0.08) }, uTip: { value: new THREE.Color(0.5, 0.06, 0) } };
+  const FHEAD = `uniform float uTime, uPow, uAge, uSeed; uniform vec3 uCore, uHot, uMid, uTip; varying vec2 vUv;
+    float fh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float fn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(fh(i), fh(i + vec2(1.0, 0.0)), f.x), mix(fh(i + vec2(0.0, 1.0)), fh(i + vec2(1.0, 1.0)), f.x), f.y); }
+    float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * fn(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return s; }
+    // heat (0 to 1) to colour and brightness: dark red, orange, white-yellow; the hottest parts bright enough to bloom
+    vec3 heatCol(float h) { vec3 c = mix(uTip, uMid, smoothstep(0.1, 0.45, h)); c = mix(c, uHot, smoothstep(0.52, 0.88, h)); return c * mix(0.45, 2.2, h * h); }`;
+  const flameMat = (seed) => new THREE.ShaderMaterial({ name: 'exhaust flame', uniforms: { ...FU, uSeed: { value: seed } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `${FHEAD}
+      void main() {
+        float s = 1.0 - vUv.y, x = (vUv.x - 0.5) * 2.0;   // s: 0 at the pipe, 1 at the far end; x: -1 to 1 across
+        float reach = mix(0.45, 1.0, smoothstep(0.0, 0.3, uAge)) * (1.0 - 0.35 * smoothstep(0.6, 1.0, uAge));
+        float sr = s / reach, t = uTime * 9.0 + uSeed * 37.0;
+        vec2 q = vec2(x * 1.4, sr * 3.0 - t);
+        float tu = fbm(q + uSeed * 7.0), tu2 = fbm(q * 2.3 + vec2(4.1, -t * 0.5));
+        float w = (0.3 + 0.55 * sin(pow(clamp(sr, 0.0, 1.0), 0.6) * 3.0)) * (0.62 + 0.7 * tu);   // a bulb just behind the pipe, ragged
+        float body = 1.0 - smoothstep(w * 0.6, w, abs(x) + (tu2 - 0.5) * 0.5);   // (a firm edge: tongues, not a haze)
+        float len = 1.0 - smoothstep(0.5, 1.0, sr + (tu - 0.5) * 0.6);
+        float d = body * len * smoothstep(uAge - 0.2, uAge + 0.1, tu + 0.3 * (1.0 - sr));   // torn away as it dies, the tip first
+        float h = clamp((1.0 - sr) * (0.55 + 0.7 * tu) * (1.0 - 0.6 * abs(x) / max(w, 0.05)), 0.0, 1.0) * (1.0 - 0.45 * uAge);
+        vec3 c = heatCol(h);
+        c = mix(c, uCore * 2.2, (1.0 - smoothstep(0.0, 0.1, s)) * 0.7 * (1.0 - uAge));   // the blue flicker at the pipe
+        float a = d * uPow;
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(c, a);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const ballMat = (seed) => new THREE.ShaderMaterial({ name: 'exhaust fireball', uniforms: { ...FU, uSeed: { value: seed } },
+    // always facing the camera, sized by the outlet's own scale
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0); mv.xy += position.xy * length(modelMatrix[0].xyz); gl_Position = projectionMatrix * mv; }',
+    fragmentShader: `${FHEAD}
+      void main() {
+        vec2 p = (vUv - 0.5) * 2.0; float r = length(p), t = uTime * 7.0 + uSeed * 19.0;
+        float tu = fbm(p * 1.7 + vec2(uSeed * 3.0, -t * 0.8)), tu2 = fbm(p * 3.6 + vec2(-t * 0.6, uSeed));
+        float edge = mix(0.5, 0.95, smoothstep(0.0, 0.35, uAge)) * (0.72 + 0.5 * tu);
+        float d = (1.0 - smoothstep(edge * 0.5, edge, r + (tu2 - 0.5) * 0.25)) * smoothstep(uAge - 0.25, uAge + 0.05, tu + 0.35 * (1.0 - r));
+        float h = clamp((1.0 - r / edge) * (0.55 + 0.5 * tu), 0.0, 0.92) * (1.0 - 0.5 * uAge);
+        float a = d * uPow * 0.6;
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(heatCol(h), a);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  const plane = new THREE.PlaneGeometry(0.24, 0.7).translate(0, -0.35, 0).rotateX(Math.PI / 2), ballGeo = new THREE.PlaneGeometry(1, 1);
   const glowTex = (() => { const k = document.createElement('canvas'); k.width = k.height = 64; const q = k.getContext('2d'); const r = q.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,240,200,1)'); r.addColorStop(0.35, 'rgba(255,140,40,.7)'); r.addColorStop(1, 'rgba(255,80,0,0)'); q.fillStyle = r; q.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(k); t.colorSpace = THREE.SRGBColorSpace; return t; })();
   const glowMat = new THREE.SpriteMaterial({ map: glowTex, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, color: new THREE.Color(1.6, 1.4, 1.2) });
   const light = new THREE.PointLight(0xff7a2a, 0, 3.5, 2);
@@ -2317,7 +2356,11 @@ const exhaust = (() => {
       const glow = new THREE.Sprite(glowMat); glow.scale.set(0.32, 0.32, 1);
       const torch = new THREE.Group(); torch.visible = false;
       for (let k = 0; k < 3; k++) { const t = new THREE.Mesh(torchPlane, torchMat); t.rotation.z = k * Math.PI / 3; torch.add(t); }
-      o.add(new THREE.Mesh(plane, mat), new THREE.Mesh(planeB, mat), glow, torch); o.userData.torch = torch; o.userData.glow = glow;
+      // (v111) the drawn flame: three cards round the pipe's axis, and the fireball at the pipe
+      const seed = outlets.length * 0.61 + 0.13, fm = flameMat(seed), pop = new THREE.Group();
+      for (let k = 0; k < 3; k++) { const f = new THREE.Mesh(plane, fm); f.rotation.z = k * Math.PI / 3 + 0.3; pop.add(f); }
+      const ball = new THREE.Mesh(ballGeo, ballMat(seed + 0.29)); ball.scale.setScalar(0.2); ball.position.z = -0.08; ball.frustumCulled = false; pop.add(ball);
+      o.add(pop, glow, torch); o.userData.torch = torch; o.userData.glow = glow; o.userData.pop = pop; o.userData.ball = ball;
       group.add(o); outlets.push(o); c.add(p);
     }
     light.position.copy(c.multiplyScalar(1 / Math.max(1, list.length))).add(new THREE.Vector3(0, 0.1, -0.4));
@@ -2333,16 +2376,19 @@ const exhaust = (() => {
     q.putImageData(d, 0, 0);
     const out = new THREE.CanvasTexture(k); out.colorSpace = THREE.SRGBColorSpace; return out;
   };
-  const stock = [[mat, tex, mat.color.clone()], [torchMat, torchTex, torchMat.color.clone()], [glowMat, glowTex, glowMat.color.clone()]];
+  const stock = [[torchMat, torchTex, torchMat.color.clone()], [glowMat, glowTex, glowMat.color.clone()]];
   let grey = null; const tint = new THREE.Color(), white = new THREE.Color(1, 1, 1);
+  const FACTORY = [FU.uCore.value.clone(), FU.uHot.value.clone(), FU.uMid.value.clone(), FU.uTip.value.clone()];
   function setColor(hex) {
-    if (!hex) { for (const [m, t, c] of stock) { m.map = t; m.color.copy(c); } light.color.set(0xff7a2a); return; }
+    if (!hex) { for (const [m, t, c] of stock) { m.map = t; m.color.copy(c); } light.color.set(0xff7a2a); [FU.uCore, FU.uHot, FU.uMid, FU.uTip].forEach((u, i) => u.value.copy(FACTORY[i])); return; }
     grey ||= stock.map(([, t]) => mono(t));
     tint.set(hex);
     stock.forEach(([m], i) => { m.map = grey[i]; m.color.copy(tint).lerp(white, 0.22).multiplyScalar(2.3); });
     light.color.copy(tint).lerp(white, 0.15);
+    // (v111) the drawn flame in a chosen colour: white-hot where it is hottest, the colour through its body, a dark shade of it at the edges
+    FU.uCore.value.copy(tint).lerp(white, 0.35); FU.uHot.value.copy(tint).lerp(white, 0.6); FU.uMid.value.copy(tint); FU.uTip.value.copy(tint).multiplyScalar(0.3);
   }
-  return { group, outlets, setOutlets, setColor, glowMat, light, t: 0, power: 0 };
+  return { group, outlets, setOutlets, setColor, glowMat, light, t: 0, t0: 0.1, power: 0, FU };
 })();
 
 // ---------------------------------------------------------------- tyre smoke
@@ -4421,7 +4467,21 @@ const FINISHES = {
   // of colour over it), the surface reflects twice as much of the night as paint, and a little diffuse keeps it from
   // going black where the sky it mirrors is dark
   chrome: { label: 'Chrome', metalness: 0.92, roughness: 0.045, clearcoat: 0.6, clearcoatRoughness: 0.02, iridescence: 0, chrome: true, env: 2.2 },
+  // (v111, the owner: "add colour shifting chameleon wraps"): a gloss film with metal flake in it, its colour by angle (paintfx.js; CHAMELEONS)
+  chameleon: { label: 'Chameleon', metalness: 0.5, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.03, iridescence: 0, cham: true },
 };
+// the chameleon colours: [name, key, [square-on, turning away, at the edges]], after the colour-shift wraps sold for cars
+const CHAMELEONS = [
+  ['Purple · Green', 'violet', ['#5b1fa3', '#2a63b5', '#2fa65a']],
+  ['Teal · Purple', 'teal', ['#0e8a8c', '#2e4fb8', '#7c2aa8']],
+  ['Blue · Red', 'blurple', ['#1d3fbd', '#76289e', '#c22840']],
+  ['Green · Gold', 'emerald', ['#1a8a46', '#78a020', '#d6a21c']],
+  ['Red · Gold', 'fire', ['#a3102c', '#cc5418', '#e2b230']],
+  ['Copper · Blue', 'copper', ['#ad5a26', '#6e4a7c', '#2a5ab4']],
+  ['Oil Slick', 'oil', ['#191c4c', '#5a1d6c', '#1c7a6a']],
+  ['Silver · Violet', 'frost', ['#9aa3ad', '#7a86c8', '#8a54c4']],
+];
+const chamOf = (key) => (CHAMELEONS.find(([, k]) => k === key) || CHAMELEONS[0])[2];
 // rim finishes: [name, colour, metalness, roughness] (v79: many more metals, and carbon)
 const RIMS = [['Factory', null], ['Gloss Black', '#0d0d0f', 0.3, 0.2], ['Satin Black', '#131416', 0.5, 0.5], ['Gunmetal', '#3c4147', 0.85, 0.32], ['Silver', '#c4c8cc', 0.9, 0.25], ['Polished Aluminium', '#dde0e4', 1, 0.1], ['Brushed Aluminium', '#b9bdc2', 1, 0.4], ['Titanium', '#8f8b84', 1, 0.33], ['Burnt Titanium', '#5f68c9', 1, 0.24], ['Magnesium', '#6f6a5c', 0.8, 0.45], ['Bronze', '#8a5a2b', 0.9, 0.3], ['Gold', '#c9a03c', 1, 0.24], ['Rose Gold', '#c98f7a', 1, 0.22], ['Copper', '#b5683c', 1, 0.26], ['Brass', '#b59a4c', 1, 0.3], ['Chrome', '#f2f4f6', 1, 0.04], ['Black Chrome', '#34363b', 1, 0.07], ['White', '#eceeed', 0.1, 0.3], ['Red', '#b40f12', 0.3, 0.3], ['Carbon Fibre', 'carbon', 0, 0.4]];
 const CALIPERS = [['Factory', null], ['Red', '#c5141a'], ['Yellow', '#f2c21b'], ['Blue', '#1f5fc4'], ['Green', '#2f9e3a'], ['Orange', '#e8641a'], ['Gold', '#c7a046'], ['Black', '#111113']];
@@ -4480,6 +4540,7 @@ const defaultMods = (def) => ({
   badge: 'stock',    // v61: the M4 CSL's roundels (BADGES)
   bumper: 'stock',   // v61: the S2000's front bumper ('street': the smooth one)
   bonnet: 'stock', lamps: 'stock',   // v50: smooth bonnet (cars with a hoodFlat panel), headlight style (def.lampStyles)
+  cham: 'violet',    // v111: the chameleon colours (CHAMELEONS), with the Chameleon finish
 });
 let mods = defaultMods(CAR_DEFS.supra);
 function loadMods(id, saved = store.get('mods_' + modsKey(id), null)) {
@@ -5381,9 +5442,13 @@ function drawPlatePreview(cv) {
 }
 
 // ---------------------------------------------------------------- garage: applying a build to the car
-function setPaint(mat, hex, finish) {
+function setPaint(mat, hex, finish, cham) {
   const f = FINISHES[finish] || FINISHES.gloss;
   mat.color.set(hex);
+  // (v111) a chameleon wrap: the colour comes from the angle (paintfx.js), over white; what the colour "is" elsewhere (the roll cage
+  // in body colour, say) is the middle one
+  setChameleon(mat, f.cham ? chamOf(cham) : null);
+  if (f.cham) { mat.color.set('#ffffff'); mat.userData.shown = new THREE.Color(chamOf(cham)[1]); } else mat.userData.shown = null;
   // Chrome: a metal's colour is what it reflects, so a dark paint colour made a black mirror. The colour is brought up
   // to full brightness keeping its hue (grey and black become silver, gold stays gold, red goes candy red), with a
   // touch of silver so it reads as metal.
@@ -5426,7 +5491,7 @@ function applyMods() {
   // (v92) parts that are carbon as the car comes (def.stockCarbon: the M3's roof) count as switched on until the player says otherwise
   for (const k of rig.def.stockCarbon || []) if (mods.carbon && mods.carbon[k] === undefined) mods.carbon = { ...mods.carbon, [k]: true };
   const r = rig, def = r.def, m = liveryOn(def, mods) ? Object.assign(defaultMods(def), { livery: 'on' }, def.liveryColour ? { paint: mods.paint, finish: mods.finish } : {}) : mods;
-  if (r.mats.paint) setPaint(r.mats.paint, m.paint, m.finish);
+  if (r.mats.paint) setPaint(r.mats.paint, m.paint, m.finish, m.cham);
   // the engine bay (cars that have one): its coloured parts
   if (def.engineBay && buildEngineBay(r)) paintBay(r, m.bay);
   // every paint mesh back to its own material first (v34: with only the panel loop below, the body meshes that
@@ -5500,7 +5565,7 @@ function applyMods() {
   r.mats.rim.forEach((mat) => { restore(mat); if (rim && rim[1] && rim[1] !== 'carbon') { mat.color.set(rim[1]); mat.metalness = rim[2]; mat.roughness = rim[3]; } });
   applyRims(r, m);   // v79: the rim design, its finish and its size
   r.mats.caliper.forEach((mat) => { restore(mat); if (m.caliper) { mat.color.set(m.caliper); mat.roughness = 0.4; } });
-  r.mats.cage.forEach((mat) => { if (m.cage) mat.color.set(m.cage); else if (r.mats.paint) mat.color.copy(r.mats.paint.color); });   // v86: the roll cage: its own colour, or the body's
+  r.mats.cage.forEach((mat) => { if (m.cage) mat.color.set(m.cage); else if (r.mats.paint) mat.color.copy(r.mats.paint.userData.shown || r.mats.paint.color); });   // v86: the roll cage: its own colour, or the body's
   // lights and glass
   const head = r.lamps.head.concat([...r.mats.headLens]);
   head.forEach((mat) => { restore(mat); if (m.head) { mat.emissive.set(m.head); if (r.lamps.head.includes(mat)) mat.emissiveIntensity = def.lampLevels.head * 1.6; else mat.emissiveIntensity = 0.6; } });
@@ -8339,6 +8404,17 @@ function rangeRow(min, max, step, value, fmt, onInput) {
   inp.addEventListener('change', () => onInput(+inp.value, true));
   return el('div', { className: 'range' }, inp, out);
 }
+// (v111) the chameleon colours, each swatch drawn as its three colours
+function chamRow(current, onPick) {
+  const row = el('div', { className: 'swatches', role: 'radiogroup' });
+  for (const [name, key, c] of CHAMELEONS) {
+    const b = el('button', { className: 'sw cham', title: name, type: 'button' });
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', key === current); b.setAttribute('aria-label', name);
+    b.style.setProperty('--c', `linear-gradient(135deg, ${c[0]} 12%, ${c[1]} 50%, ${c[2]} 88%)`);
+    b.addEventListener('click', () => onPick(key)); row.append(b);
+  }
+  return row;
+}
 const nameOf = (list, hex, stock = 'Factory') => (hex == null ? stock : (list.find(([, h]) => h === hex) || ['Custom'])[0]);
 const mm = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)} mm`;
 
@@ -8374,7 +8450,7 @@ function renderGarage() {
   if (lv && liveryOn(def, m) && gTab !== 'car') {
     if (def.liveryColour) {
       // a race-car variant (the R8 LMS): the switch back, the paint colour and its finish (v34); nothing else
-      body.append(liveryGroup(), gGroup('Colour', nameOf(PAINTS, m.paint === def.stock.paint ? null : m.paint, 'Factory'),
+      body.append(liveryGroup(), FINISHES[m.finish]?.cham ? gGroup('Chameleon colours', (CHAMELEONS.find(([, k]) => k === m.cham) || CHAMELEONS[0])[0], chamRow(m.cham, (k) => setMod('cham', k, 'overview'))) : gGroup('Colour', nameOf(PAINTS, m.paint === def.stock.paint ? null : m.paint, 'Factory'),
         swatchRow([['Factory', def.stock.paint], ...PAINTS], m.paint, (hex) => setMod('paint', hex, 'overview'), { custom: true })),
         gGroup('Finish', null, segRow(Object.entries(FINISHES).map(([k, f]) => [k, f.label]), m.finish, (k) => setMod('finish', k, 'overview'))),
         el('p', { className: 'g-note', textContent: 'The race car is built as it is: only its colour and finish can change. Switch it off to modify the road car.' }));
@@ -8393,7 +8469,8 @@ function renderGarage() {
         el('button', { type: 'button', className: 'g-ghost', textContent: 'Reset this car to stock', onclick: () => { mods = defaultMods(def); saveMods(); applyMods(); setFocus('overview'); renderGarage(); syncVariant(); } })));
   } else if (gTab === 'paint') {
     if (lv) body.append(liveryGroup());
-    body.append(gGroup('Colour', nameOf(PAINTS, m.paint === def.stock.paint ? null : m.paint, 'Factory'),
+    if (FINISHES[m.finish]?.cham) body.append(gGroup('Chameleon colours', (CHAMELEONS.find(([, k]) => k === m.cham) || CHAMELEONS[0])[0], el('p', { className: 'g-note', textContent: 'A colour-shift wrap: one colour square-on, the next as the body turns away, the last at the edges. Turn the car to see it move.' }), chamRow(m.cham, (k) => setMod('cham', k, 'overview'))));
+    else body.append(gGroup('Colour', nameOf(PAINTS, m.paint === def.stock.paint ? null : m.paint, 'Factory'),
       swatchRow([['Factory', def.stock.paint], ...PAINTS], m.paint, (hex) => setMod('paint', hex, 'overview'), { custom: true })));
     body.append(gGroup('Finish', null, segRow(Object.entries(FINISHES).map(([k, f]) => [k, f.label]), m.finish, (k) => setMod('finish', k, 'overview'))));
     if (def.stripe) body.append(gGroup(def.stripe === true ? 'C7.R stripe' : def.stripe, null, segRow([['on', 'On'], ['off', 'Off']], m.stripe, (k) => setMod('stripe', k, 'hood'))));
@@ -9713,7 +9790,7 @@ function ensureDriver(r) {
 }
 function applyDriver(r, m) {
   if (!r || !r.driver) return; const h = r.driver.userData.helmet.userData, pick = HELMETS.find(([k]) => k === (m.helmet || 'paint')) || HELMETS[0];
-  h.shellM.color.set(pick[2] || m.paint || '#b9bec6');
+  h.shellM.color.set(pick[2] || (FINISHES[m.finish]?.cham ? chamOf(m.cham)[1] : m.paint) || '#b9bec6');   // (v111: on a chameleon car, its middle colour)
   const env = r.mats.paint && r.mats.paint.envMap; for (const mat of [h.shellM, h.visorM, h.trimM]) if (env && mat.envMap !== env) { mat.envMap = env; mat.needsUpdate = true; }
 }
 // ---------- wheels (v79) ----------
@@ -10013,7 +10090,8 @@ const srIsStock = (carId, m) => baseOf(carId) === carId && srShape(carId, m) ===
 function srPaintOf(base) {
   const d0 = CAR_DEFS[base]; let cid = srLods[base]?.carId || base; if (cid === base && d0.variantFor) cid = d0.variantFor(loadMods(base));
   const d = CAR_DEFS[cid] || d0, m = cid === activeId ? mods : loadMods(cid);   // (the car out now: its build as it stands, saved or not)
-  showroom.setPaint(base, d.liveryOf && !d.liveryColour ? '#ffffff' : m.paint || d.stock.paint, FINISHES[m.finish] || FINISHES.gloss);
+  const fin = FINISHES[m.finish] || FINISHES.gloss;
+  showroom.setPaint(base, d.liveryOf && !d.liveryColour ? '#ffffff' : m.paint || d.stock.paint, fin, fin.cham && !(d.liveryOf && !d.liveryColour) ? chamOf(m.cham) : null);   // (v111: and a chameleon wrap's colours)
   // (v108) and its lights as its Lights menu has them (a movie livery locks the build: its lights are the car's own)
   const lm = liveryOn(d, m) ? defaultMods(d) : m;
   showroom.setLights(base, { mode: lm.lights, color: lm.head, glow: lm.glow });
@@ -10395,9 +10473,17 @@ $('srOver').addEventListener('click', () => srOverview());
 
 // ---------------------------------------------------------------- effects: shifts, backfires, drift score
 const fx = { lastThr: 0, boostHold: 0, crackle: 0, crackleT: 0, driftUi: 0 };
-function flame(power, dur) { exhaust.t = Math.max(exhaust.t, dur); exhaust.power = Math.max(exhaust.power, power); }
+// (v111) a new pop starts the flame's life again (exhaust.t0: how long this one lasts, for its age); one asked for while a longer one burns joins it
+function flame(power, dur) { if (dur >= exhaust.t) { exhaust.t0 = dur; if (exhaust.t <= 0) exhaust.power = 0; } exhaust.t = Math.max(exhaust.t, dur); exhaust.power = Math.max(exhaust.power, power); }
 // cars with a low popVol (the Civic's four-cylinder) get small, quiet pops rather than bangs and flames
-function backfire(power) { const k = rig ? clamp(rig.def.audio.popVol ?? 1, 0.2, 1) : 1; flame(power * k, (0.06 + power * 0.08) * k); audio.pop(power * k); }
+// (v111: a pop lasts a little longer, so its fireball is seen to burst and break up; a big bang throws a few sparks of hot carbon)
+function backfire(power) {
+  const k = rig ? clamp(rig.def.audio.popVol ?? 1, 0.2, 1) : 1; flame(power * k, (0.09 + power * 0.11) * k); audio.pop(power * k);
+  if (power * k > 0.55 && Math.random() < 0.35 && exhaust.outlets.length) {
+    const fwX = Math.sin(car.yaw), fwZ = Math.cos(car.yaw), v = car.vx; sparks.ground = roadY;
+    for (const o of exhaust.outlets) { o.getWorldPosition(torchTmp); sparks.emit(torchTmp.x - fwX * 0.1, torchTmp.y, torchTmp.z - fwZ * 0.1, fwX * (v - 6), 0.4, fwZ * (v - 6), 1 + (Math.random() * 2 | 0), 2.4); }
+  }
+}
 function onShift(ev) {
   const sp = shiftProfile(rig?.def);
   audio.shift(ev, sp);
@@ -10481,16 +10567,18 @@ function updateExhaust(dt) {
     exhaust.t -= dt;
     const k = exhaust.power * (0.7 + Math.random() * 0.5);
     exhaust.group.visible = true;
-    const small = exhaust.outlets.length > 2 ? 0.8 : 1, torch = fx.torch > 0;
+    const small = exhaust.outlets.length > 2 ? 0.8 : 1, torch = fx.torch > 0, P = exhaust.power;
+    // (v111) the drawn flame's clock, age and strength (its flicker is in the drawing now, not in jerking its size about)
+    const FU = exhaust.FU; FU.uTime.value = (FU.uTime.value + dt) % 1000; FU.uAge.value = torch ? 0.12 : clamp(1 - exhaust.t / Math.max(0.02, exhaust.t0), 0, 1); FU.uPow.value = Math.min(1.25, (torch ? 0.8 : 0.55 + 0.6 * P) * (0.9 + Math.random() * 0.2));
     for (const o of exhaust.outlets) {
-      // with the show torch lit the outlet stays near full size (the torch sets its own length); else the pop flame
-      if (torch) o.scale.set(1.05, 1.05, 0.85 + Math.random() * 0.3); else o.scale.set((0.8 + k * 0.6) * small, (0.8 + k * 0.6) * small, (0.5 + k * 1.3 + Math.random() * 0.4) * small);
-      if (o.userData.glow) o.userData.glow.scale.setScalar(torch ? 0.36 + 0.12 * Math.random() : 0.32);
+      // with the show torch lit the outlet stays near full size (the torch sets its own length); else the pop flame, sized by how big a bang it was
+      if (torch) o.scale.set(1.05, 1.05, 0.85 + Math.random() * 0.3); else o.scale.set((0.75 + P * 0.55) * small, (0.75 + P * 0.55) * small, (0.55 + P * 1.15 + Math.random() * 0.12) * small);
+      if (o.userData.glow) o.userData.glow.scale.setScalar(torch ? 0.36 + 0.12 * Math.random() : 0.3);
     }
     exhaust.glowMat.opacity = Math.min(1, k * 1.4);
     exhaust.light.intensity = (torch ? 7 : 6) * k;
     if (exhaust.t <= 0) { exhaust.group.visible = false; exhaust.light.intensity = 0; exhaust.power = 0; }
-  }
+  } else if (exhaust.group.visible && fx.torch <= 0) { exhaust.group.visible = false; exhaust.light.intensity = 0; exhaust.power = 0; }   // (v111: never left burning)
 }
 // Close calls: points for every car you squeeze past; a combo builds while they keep coming, and a touch ends it.
 function closeCallPoints(c) {
@@ -11664,6 +11752,7 @@ function pickTitleCar(id, data = {}) {
     if (state.driving) { cam.yaw = car.yaw; }
     state.ready = true;
     setTimeout(srPreload, 1500);   // (v104) the collection's building and its cars are fetched and unpacked now, not when you first go up
+    { const v = exhaust.group.visible; exhaust.group.visible = true; warmShaders(exhaust.group); exhaust.group.visible = v; }   // (v111) the flame's shaders, made now and not at the first pop
     setTimeout(srCatchUp, 9000);   // (v110) and any car whose saved build has no copy made from it is seen to, without a click
     $('loadErr').hidden = true;
     // the road should already be busy when you set off: wait for the traffic too
@@ -11741,7 +11830,7 @@ window.__game = {
     const des = gaugeFor(id); des.face(q, L); des.live(q, { rpm: f * tachMax * 1000, f, spd, unit: state.units === 'mph' ? 'mph' : 'km/h', boost: 0.5, gear }, L);
     [tachMax, CAR.redline] = keep; return c;
   },
-  showroom, SR, ROOMQ, srLods, srCapture, srCatchUp, srFix, loadScr, enterShowroom, leaveShowroom, srZoom, srSelect, srOverview, srPick, TOWER,
+  showroom, SR, ROOMQ, srLods, srCapture, srCatchUp, srFix, loadScr, CHAMELEONS, backfire, enterShowroom, leaveShowroom, srZoom, srSelect, srOverview, srPick, TOWER,
   KW, keyBrands, pickBrand, keyAt, lookAtKeys, leaveKeyWall, chooseCar, roadQ, renderScale, syncRenderScale, gcam, get gBrand() { return gBrand; }, get gTab() { return gTab; },
   advance(sec, input = {}, withTraffic = false) {
     const fixed = typeof input === 'function' ? input : Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false }, input);

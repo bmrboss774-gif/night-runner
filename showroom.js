@@ -21,7 +21,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { lodObject, LAMP_MAX } from './lod.js?v=109';   // (the same address the page uses: one copy of it)
+import { lodObject, LAMP_MAX } from './lod.js?v=109';
+import { setChameleon } from './paintfx.js?v=111';   // (the same address the page uses: one copy of it)
 
 const D2R = Math.PI / 180;
 export const TOWER = { Y0: 6.2, NF: 5, NB: 5, FH: 3.05, SLAB: 0.34, RI: 8.4, RC: 11.55, RO: 14.7, RH: 15.3, ALPHA: 22 * D2R, TUBE: 3.38, EDGE: 2.15 };   // EDGE: how far back from the slab's edge the fins start
@@ -544,9 +545,9 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
       for (const m of mirrors) { m.envMap = hallCube.texture; m.needsUpdate = true; }
     },
     // a car's copy wears its owner's paint
-    setPaint(id, hex, fin) {
+    setPaint(id, hex, fin, cham = null) {
       const b = byId[id]; if (!b) return; const m = paintOf(b);
-      m.color.set(hex);
+      m.color.set(cham ? '#ffffff' : hex); setChameleon(m, cham);   // (v111: a chameleon wrap: [square-on, turning away, edges], as the car in the game)
       if (fin) { m.metalness = fin.metalness; m.roughness = Math.max(0.12, fin.roughness - 0.14 * (fin.clearcoat || 0)); }   // (a clear coat reads as a glossier surface)
     },
     // (v108) a car's lamps as its own Lights menu has them. `mode`: 'on', 'drl' (running lights only) or 'off'; `color`: the
