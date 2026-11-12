@@ -676,6 +676,10 @@ body.is-touch .attribution{bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 .sr-go:hover{filter:brightness(1.12)} .sr-go:disabled{filter:grayscale(.6) brightness(.8);cursor:default} .sr-go[hidden]{display:none}
 .sr-title b{display:block;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:27px;letter-spacing:.07em;text-transform:uppercase;line-height:1}
 .sr-title span{display:block;margin-top:3px;font-size:13px;color:#c5cad3}
+/* (v112) the arrows that turn the overview along the wider floors */
+.sr-turn{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:78px;border:0;background:rgba(10,12,16,.72);color:#fff;font:700 38px/1 var(--f-display);pointer-events:auto;cursor:pointer;box-shadow:inset 0 0 0 1px var(--edge)}
+.sr-turn.l{left:max(10px,env(safe-area-inset-left,0px));border-radius:0 6px 6px 0} .sr-turn.r{right:max(10px,env(safe-area-inset-right,0px));border-radius:6px 0 0 6px}
+.sr-turn:hover{background:rgba(40,44,54,.9)} .sr-turn:disabled{opacity:.25;cursor:default} .sr-turn[hidden]{display:none}
 .sr-title .sr-busy{color:var(--needle)} .sr-title .sr-busy[hidden]{display:none}
 .sr-card{position:absolute;left:max(18px,env(safe-area-inset-left,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));width:min(410px,calc(100vw - 36px));padding:16px 18px 17px;background:rgba(10,12,16,.9);border:1px solid var(--edge);border-left:4px solid var(--hue,#5ad7ff);border-radius:6px;box-shadow:0 14px 44px rgba(0,0,0,.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);pointer-events:auto}
 .sr-card i{display:block;font-style:normal;font-family:var(--f-display);font-weight:700;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--hue,#5ad7ff)}
@@ -994,6 +998,7 @@ body.is-touch .cc{font-size:22px}
 <div class="srfade" id="srFade"><b>The Collection</b><small id="srFadeSub"></small></div>
 <div class="sr" id="srUi" hidden>
   <div class="sr-top"><button type="button" class="sr-back" id="srBack">‹ Workshop</button><div class="sr-title"><b>The Collection</b><span id="srHint"></span><span class="sr-busy" id="srBusy" hidden></span></div></div>
+  <button type="button" class="sr-turn l" id="srTurnL" aria-label="Look left along the floors">‹</button><button type="button" class="sr-turn r" id="srTurnR" aria-label="Look right along the floors">›</button>
   <div class="sr-card" id="srCard" hidden>
     <i id="srRow"></i><h2 id="srName"></h2><p class="sr-eye" id="srEyebrow"></p><p class="sr-lede" id="srLede"></p><small id="srLoad"></small>
     <div class="sr-acts"><button type="button" class="sr-go" id="srTake">Take the keys</button><button type="button" class="sr-ghost" id="srOver">All cars</button></div>
@@ -1192,7 +1197,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
 import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js';
 import { createGarage, GARAGE_SPEC } from './garage.js';
-import { createShowroom, TOWER } from './showroom.js?v=111';
+import { createShowroom, TOWER } from './showroom.js?v=112';
 import { setChameleon } from './paintfx.js?v=111';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
 import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?v=109';
 import { SpikeStrips, Mirror } from './pursuit.js';
@@ -5690,6 +5695,7 @@ addEventListener('keydown', (e) => {
   if (state.garage && SR.on) {   // (v103) the collection
     if ((e.code === 'Escape' || e.code === 'Backspace') && !e.repeat) { e.preventDefault(); if (SR.mode === 'zoom') srOverview(); else if (SR.mode === 'overview') leaveShowroom(); else if (SR.ride) SR.ride.skip = true; }
     else if (e.code === 'Enter' && SR.mode === 'zoom' && !e.repeat) { e.preventDefault(); srSelect(); }
+    else if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight' || e.code === 'KeyA' || e.code === 'KeyD') && SR.mode === 'overview') { e.preventDefault(); srTurn(e.code === 'ArrowLeft' || e.code === 'KeyA' ? -1 : 1); }   // (v112) a third of a floor at a press
     return;
   }
   if (state.garage) {
@@ -7684,7 +7690,7 @@ canvas.addEventListener('pointerdown', (e) => { if (dragging) dragging.y = e.cli
 canvas.addEventListener('pointermove', (e) => {
   if (!dragging || e.pointerId !== dragging.id) return;
   if (state.garage && SR.on) {   // (v103) the collection: a drag looks along the tower, or walks a little round the car
-    const lim = SR.mode === 'zoom' ? 0.55 : 0.9; SR.pan = clamp(SR.pan + (e.clientX - dragging.x) * 0.003, -lim, lim); SR.tilt = clamp(SR.tilt + (e.clientY - (dragging.y ?? e.clientY)) * 0.0012, -0.12, 0.2);
+    const lim = SR.mode === 'zoom' ? 0.55 : TOWER.PAN; SR.pan = clamp(SR.pan + (e.clientX - dragging.x) * 0.003, -lim, lim);   // (v112: round to the end bays of the wider floors) SR.tilt = clamp(SR.tilt + (e.clientY - (dragging.y ?? e.clientY)) * 0.0012, -0.12, 0.2); srTurnSync();
     dragging.x = e.clientX; dragging.y = e.clientY; return;
   }
   if (state.garage) {
@@ -10345,7 +10351,7 @@ function srMirrorWarm(bay) {
   for (const o of off) o.frustumCulled = true;
 }
 function srUnpose() { if (SR.bay) showroom.hideCar(SR.bay.id, false); SR.pose = null; }
-function srOverview() { if (SR.mode !== 'zoom') return; srUnpose(); srDropKey(); Object.assign(SR, { mode: 'overview', bay: null, wantSel: false, pan: 0, tilt: 0 }); srCard(); }
+function srOverview() { if (SR.mode !== 'zoom') return; const back = SR.bay ? clamp(-SR.bay.th, -TOWER.PAN, TOWER.PAN) : 0; srUnpose(); srDropKey(); Object.assign(SR, { mode: 'overview', bay: null, wantSel: false, pan: back, tilt: 0 }); srCard(); }   // (v112: back out facing the bay you were at)
 // "Take the keys": out of the bay and down the lift
 function srSelect() {
   const bay = SR.bay; if (!bay || SR.mode !== 'zoom' || carLocked(bay.id) || SR.loadFail) return;
@@ -10381,7 +10387,8 @@ function srDropKey() { if (SR.key) SR.key.visible = false; SR.key = null; }
 function srCard() {
   const b = SR.bay, card = $('srCard');
   $('srBack').textContent = SR.mode === 'zoom' ? '‹ All cars' : '‹ Workshop';
-  $('srHint').textContent = SR.mode === 'zoom' ? '' : `${showroom.bays.filter((q) => q.id).length} cars · ${isTouch ? 'tap' : 'click'} one to walk up to it`;
+  srTurnSync();
+  $('srHint').textContent = SR.mode === 'zoom' ? '' : `${showroom.bays.filter((q) => q.id).length} cars · ${isTouch ? 'tap one to walk up to it, drag to look round' : 'click one to walk up to it · drag or ← → to look round'}`;
   if (SR.mode !== 'zoom' || !b) { card.hidden = true; return; }
   const d = CAR_DEFS[b.id];
   card.hidden = false; card.style.setProperty('--hue', d.hue || '#5ad7ff');
@@ -10438,6 +10445,8 @@ function showroomCamera(dt) {
   SR.tgt.set(damp(SR.tgt.x, t[0], kk, dt), damp(SR.tgt.y, t[1], kk, dt), damp(SR.tgt.z, t[2], kk, dt));
   SR.fov = damp(SR.fov, fov, kk, dt);
   garage.toWorld([SR.pos.x, SR.pos.y, SR.pos.z], camera.position); camera.lookAt(garage.toWorld([SR.tgt.x, SR.tgt.y, SR.tgt.z], srV2));
+  // (v112) the shaft's rails kept where they line up with the columns from where the camera is: the overview's turn, or the bay's angle
+  { const want = SR.mode === 'overview' ? Math.atan2(SR.pos.x, SR.pos.z) : SR.bay ? -SR.bay.th : SR.ride?.bay ? -SR.ride.bay.th : 0; SR.railA = damp(SR.railA ?? want, want, kk, dt); showroom.setView(SR.railA); }
   if (Math.abs(camera.fov - SR.fov) > 0.01) { camera.fov = SR.fov; camera.updateProjectionMatrix(); }
 }
 // the bay under a point of the screen; and whether the point is on the hanging key
@@ -10468,6 +10477,10 @@ function srOnKey(cx, cy) {
   });
 }
 $('srBack').addEventListener('click', () => { if (SR.mode === 'zoom') srOverview(); else leaveShowroom(); });
+// (v112) turning the overview along the floors, which now run 242 degrees round: a third of the way at a press, to the end bays and no further
+function srTurn(dir) { SR.pan = clamp(Math.round((SR.pan - dir * TOWER.PAN / 2) / (TOWER.PAN / 2)) * (TOWER.PAN / 2), -TOWER.PAN, TOWER.PAN); srTurnSync(); }   // (the view turns left as the turn grows)
+function srTurnSync() { const ov = SR.mode === 'overview'; $('srTurnL').hidden = $('srTurnR').hidden = !ov; $('srTurnL').disabled = SR.pan >= TOWER.PAN - 0.01; $('srTurnR').disabled = SR.pan <= -TOWER.PAN + 0.01; }
+$('srTurnL').addEventListener('click', () => srTurn(-1)); $('srTurnR').addEventListener('click', () => srTurn(1));
 $('srTake').addEventListener('click', () => srSelect());
 $('srOver').addEventListener('click', () => srOverview());
 

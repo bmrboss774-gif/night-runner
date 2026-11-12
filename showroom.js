@@ -25,8 +25,11 @@ import { lodObject, LAMP_MAX } from './lod.js?v=109';
 import { setChameleon } from './paintfx.js?v=111';   // (the same address the page uses: one copy of it)
 
 const D2R = Math.PI / 180;
-export const TOWER = { Y0: 6.2, NF: 5, NB: 5, FH: 3.05, SLAB: 0.34, RI: 8.4, RC: 11.55, RO: 14.7, RH: 15.3, ALPHA: 22 * D2R, TUBE: 3.38, EDGE: 2.15 };   // EDGE: how far back from the slab's edge the fins start
+// (v112, the owner: "expand the collection so there is room for more cars on each level and basically add 3 more car spots on each side
+// of each floor": eleven bays a floor, 242 degrees of the ring, where there were five; the gallery is the rest)
+export const TOWER = { Y0: 6.2, NF: 5, NB: 11, FH: 3.05, SLAB: 0.34, RI: 8.4, RC: 11.55, RO: 14.7, RH: 15.3, ALPHA: 22 * D2R, TUBE: 3.38, EDGE: 2.15 };   // EDGE: how far back from the slab's edge the fins start
 TOWER.A = TOWER.NB * TOWER.ALPHA / 2;                       // half the bays' arc
+TOWER.PAN = TOWER.A - 0.95;                                 // (v112) how far the overview may turn either way: the end bays in the middle of the picture
 TOWER.YT = TOWER.Y0 + TOWER.NF * TOWER.FH + 1.2;            // the top of the shaft
 const er = (th) => [Math.sin(th), -Math.cos(th)], et = (th) => [Math.cos(th), Math.sin(th)];   // radial and tangential unit vectors (x, z)
 const P = (r, th, y) => [r * Math.sin(th), y, -r * Math.cos(th)];
@@ -206,12 +209,13 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
       keyPos: [e[0] * rk, y + 1.6, e[1] * rk], keyYaw: -thd });
   }
   const byId = {};
-  rows.forEach((row, f) => row.cars.forEach((id, k) => { const b = bays[f * T.NB + k]; if (b && defs[id]) { b.id = id; byId[id] = b; } }));
+  // (v112: a row's cars in the middle of its floor, the free bays either side of them)
+  rows.forEach((row, f) => { const k0 = Math.max(0, Math.floor((T.NB - row.cars.length) / 2)); row.cars.forEach((id, k) => { const b = bays[f * T.NB + k0 + k]; if (b && defs[id]) { b.id = id; byId[id] = b; } }); });
   for (const id in defs) if (!byId[id]) { const b = bays.find((q) => !q.id); if (b) { b.id = id; byId[id] = b; } }
   const mats = {}, disposables = [];
-  let built = null, envTex = null, hallCube = null, hallCam = null;
+  let built = null, envTex = null, hallCube = null, hallCam = null, railMesh = null, railAng = 0;
   // the gallery's bays (between its columns): how many, and the angle of each column
-  const NG = 11, galStep = (2 * Math.PI - 2 * T.A) / NG, thGal = (i) => T.A + i * galStep;   // i = 0..NG (0 and NG are the bays' end fins)
+  const NG = Math.max(3, Math.round((2 * Math.PI - 2 * T.A) / (23 * D2R))), galStep = (2 * Math.PI - 2 * T.A) / NG, thGal = (i) => T.A + i * galStep;   // i = 0..NG (0 and NG are the bays' end fins)
 
   // ---- the light that is baked in: a lamp per bay (the two battens over the car), one per gallery bay, the shaft's rings
   let lights = [];
@@ -237,8 +241,11 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
         const y0 = h - (f + 1) * 128, row = rows[f] || { name: '', sub: '' };
         const gr = g.createLinearGradient(0, y0, 0, y0 + 128); gr.addColorStop(0, '#2c2f33'); gr.addColorStop(0.12, '#1c1e21'); gr.addColorStop(0.88, '#16181a'); gr.addColorStop(1, '#0c0d0e'); g.fillStyle = gr; g.fillRect(0, y0, w, 128);
         for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(255,255,255,${rnd(0.01, 0.05)})`; g.fillRect(rnd(0, w), y0 + rnd(0, 128), rnd(40, 300), 1); }
-        for (let x = 20; x < w; x += 41) for (const y of [y0 + 15, y0 + 113]) { const q = g.createRadialGradient(x - 1.5, y - 1.5, 0.5, x, y, 5.5); q.addColorStop(0, '#7b8088'); q.addColorStop(0.6, '#2b2e32'); q.addColorStop(1, '#0d0e10'); g.fillStyle = q; g.beginPath(); g.arc(x, y, 5.5, 0, 7); g.fill(); }
+        const sq = 5 / T.NB;   // (v112) the band now runs round eleven bays, not five: what is drawn on it is drawn narrower, to come out the same
+        for (let x = 20; x < w; x += 41 * sq) for (const y of [y0 + 15, y0 + 113]) { const q = g.createRadialGradient(x - 1.5, y - 1.5, 0.5, x, y, 5.5); q.addColorStop(0, '#7b8088'); q.addColorStop(0.6, '#2b2e32'); q.addColorStop(1, '#0d0e10'); g.fillStyle = q; g.beginPath(); g.arc(x, y, 5.5, 0, 7); g.fill(); }
         const name = (row.name || '').toUpperCase().split('').join(' '), sub = (row.sub || '').toUpperCase();
+        // the row's name over its cars in the middle, and again a third of the way round each side, so it is in sight whichever way you look
+        for (const cx of [0.5, 0.5 - 1 / 3, 0.5 + 1 / 3]) { g.save(); g.translate(w * cx, 0); g.scale(sq, 1); g.translate(-w / 2, 0);
         g.textBaseline = 'middle'; g.font = `700 70px ${displayFont}`; const wn = g.measureText(name).width; g.font = `500 42px ${displayFont}`; const ws = g.measureText(sub).width, gap = sub ? 70 : 0, x0 = (w - wn - gap - ws) / 2;
         // a dark plate edged in brass behind the words
         g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(x0 - 150, y0 + 28, wn + gap + ws + 300, 72); g.strokeStyle = '#a9854a'; g.lineWidth = 3; g.strokeRect(x0 - 150, y0 + 28, wn + gap + ws + 300, 72);
@@ -246,11 +253,12 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
         g.shadowBlur = 0; g.font = `500 42px ${displayFont}`; g.fillStyle = '#c9b48a'; g.fillText(sub, x0 + wn + gap, y0 + 68);
         if (sub) { g.fillStyle = '#d9b877'; g.fillRect(x0 + wn + gap / 2 - 2, y0 + 40, 4, 50); }
         g.font = `700 50px ${displayFont}`; g.fillStyle = '#d9b877'; g.textAlign = 'right'; g.fillText('L' + (f + 1), x0 - 60, y0 + 66); g.textAlign = 'left'; g.fillText('L' + (f + 1), x0 + wn + gap + ws + 60, y0 + 66);
+        g.restore(); }
       }
     });
   }
   // the bays' nameplates, all on one sheet: brushed brass, the car's name engraved, a line of small print under it
-  const PLATE = { cols: 4, rows: 8, w: 512, h: 128 };
+  const PLATE = { cols: 8, rows: Math.ceil(bays.length / 8), w: 512, h: 128 };   // (v112: room for 55)
   function plateTexture() {
     return canvasTex(PLATE.cols * PLATE.w, PLATE.rows * PLATE.h, (g) => {
       bays.forEach((b, i) => {
@@ -268,7 +276,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     });
   }
   // what is stencilled on the concrete: each bay's code, each gallery's floor number (5 by 6 cells, white spray paint)
-  const STEN = { cols: 5, rows: 6, w: 256, h: 128 };
+  const STEN = { cols: 8, rows: Math.ceil((bays.length + T.NF) / 8), w: 256, h: 128 };   // (v112: the bays' codes and the floors' numbers)
   function stencilTexture() {
     return canvasTex(STEN.cols * STEN.w, STEN.rows * STEN.h, (g) => {
       const cell = (i, text) => {
@@ -279,8 +287,8 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
         for (let k = 0; k < 420; k++) { g.fillStyle = `rgba(0,0,0,${rnd(0.2, 0.7)})`; g.fillRect(x0 + rnd(0, STEN.w), y0 + rnd(0, STEN.h), rnd(1, 4), rnd(1, 3)); }
         g.globalCompositeOperation = 'source-over';
       };
-      bays.forEach((b, i) => cell(i, b.code[0] + ' ' + b.code[1]));
-      for (let f = 0; f < T.NF; f++) cell(25 + f, 'L ' + (f + 1));
+      bays.forEach((b, i) => cell(i, b.code[0] + ' ' + b.code.slice(1)));   // (A 10, A 11: two figures)
+      for (let f = 0; f < T.NF; f++) cell(bays.length + f, 'L ' + (f + 1));
     });
   }
   const stenUV = (i) => [(i % STEN.cols) / STEN.cols, 1 - (Math.floor(i / STEN.cols) + 1) / STEN.rows, 1 / STEN.cols, 1 / STEN.rows];
@@ -369,7 +377,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
       for (let i = 0; i < NG; i++) {
         const th = thGal(i + 0.5), e = er(th), t = et(th);
         if (i % 2 === 1) win.grid(1, 1, (u, v) => { const a = (u - 0.5) * 2.5; return [e[0] * (T.RH - 0.04) + t[0] * a, y0 + 0.7 + v * 1.75, e[1] * (T.RH - 0.04) + t[1] * a, -e[0], 0, -e[1], u, v, 0.8]; });
-        else if (i === 0 || i === NG - 1 || i === 4 || i === 6) { const [su, sv, sw, sh] = stenUV(25 + f); sten.grid(1, 1, (u, v) => { const a = (u - 0.5) * 1.8; return [e[0] * (T.RH - 0.02) + t[0] * a, y0 + 1.25 + v * 0.9, e[1] * (T.RH - 0.02) + t[1] * a, -e[0], 0, -e[1], su + u * sw, sv + v * sh, 0]; }); }
+        else if (i === 0 || i === NG - 1 || i === 4 || i === 6) { const [su, sv, sw, sh] = stenUV(bays.length + f); sten.grid(1, 1, (u, v) => { const a = (u - 0.5) * 1.8; return [e[0] * (T.RH - 0.02) + t[0] * a, y0 + 1.25 + v * 0.9, e[1] * (T.RH - 0.02) + t[1] * a, -e[0], 0, -e[1], su + u * sw, sv + v * sh, 0]; }); }
       }
       // two service pipes under the decking, a cable tray, the gallery's lamps
       steel.push(...arcBand(T.RH - 0.22, A + 0.04, TAU - A - 0.04, y1 - 0.2, 0.09, 110, 0.09), ...arcBand(T.RH - 0.4, A + 0.04, TAU - A - 0.04, y1 - 0.16, 0.06, 110, 0.06));
@@ -390,7 +398,9 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     for (const r of [3.2, 6.4]) { ledW.push(new THREE.TorusGeometry(r, 0.05, 6, 96).rotateX(Math.PI / 2).translate(0, T.YT - 0.48, 0)); dark.push(new THREE.TorusGeometry(r, 0.1, 6, 96).rotateX(Math.PI / 2).translate(0, T.YT - 0.4, 0)); }
     // ---- the lift's shaft: four slim guide rails, set where, from across the hall, they line up with the columns behind them
     // (only on the bays' side, and no hoops: the camera now stands right beside the shaft, and rails on its own side, or hoops, cut across every car)
-    for (const d of [20, 64]) for (const sg of [-1, 1]) { const th = sg * d * D2R; steel.push(beam(P(T.TUBE, th, T.Y0), P(T.TUBE, th, T.YT), 0.045, 0.045)); }
+    // (v112: the four rails are a piece of their own, turned with the camera (setView): the overview now turns round the shaft to take in
+    // floors 242 degrees long, and rails fixed where they line up from straight ahead cut across the cars from anywhere else)
+    const shaftRails = []; for (const d of [20, 64]) for (const sg of [-1, 1]) { const th = sg * d * D2R; shaftRails.push(beam(P(T.TUBE, th, T.Y0), P(T.TUBE, th, T.YT), 0.045, 0.045)); }
 
     const tex = { floor: floorTexture(), wall: wallTexture(), back: backTexture(), steel: steelTexture(), chan: channelTexture(), brass: brassTexture(), tread: treadTexture(), ceil: deckingTexture(), haz: hazardTexture(), win: windowTexture(), fascia: fasciaTexture(), plates: plateTexture(), sten: stencilTexture(), blob: blobTexture(), white: whitePixel() };
     disposables.push(...Object.values(tex));
@@ -416,7 +426,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
     const add = (geo, mat, order = 0) => { if (!geo) return null; const m = new THREE.Mesh(geo, mat); m.renderOrder = order; m.castShadow = m.receiveShadow = false; m.layers.enable(2); group.add(m); meshes.push(m); return m; };
     for (const [acc, mat] of [[deck, mats.deck], [wall, mats.wall], [back, mats.back], [ceil, mats.ceil], [fascia, mats.fascia], [chan, mats.chan], [plates, mats.plates], [tread, mats.tread], [haz, mats.haz], [win, mats.win]]) if (!acc.empty) add(acc.geo(), mat);
     const flat = (list) => (list.length ? mergeGeometries(list.map((g) => (g.index ? g.toNonIndexed() : g))) : null);
-    add(flat(ledW), mats.ledW); add(flat(ledR), mats.ledR); add(flat(steel), mats.steel); add(flat(brass), mats.brass); add(flat(dark), mats.dark);
+    add(flat(ledW), mats.ledW); add(flat(ledR), mats.ledR); add(flat(steel), mats.steel); railMesh = add(flat(shaftRails), mats.steel); railMesh.rotation.y = railAng; add(flat(brass), mats.brass); add(flat(dark), mats.dark);
     { const m = add(blobs.empty ? null : blobs.geo(), mats.blob, 1); if (m) m.layers.disable(2); }
     { const m = add(sten.empty ? null : sten.geo(), mats.sten, 1); if (m) m.layers.disable(2); }
     // (no glass round the shaft any more: seen from beside it, even a faint sheet of it laid a pale band over the middle bays)
@@ -609,6 +619,8 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
       lift.pallet.visible = !!pallet; if (pallet) { lift.pallet.position.set(pallet[0], pallet[1], pallet[2]); lift.pallet.rotation.y = pallet[3]; }
       lift.rails.visible = rail > 0.01; if (lift.rails.visible) { const e = er(th); lift.rails.position.set(e[0] * 3.2, y, e[1] * 3.2); lift.rails.rotation.y = Math.atan2(e[0], e[1]); lift.rails.scale.z = rail; }
     },
+    // (v112) the shaft's rails turned to an angle round it (radians, as the overview's turn; a bay's view: minus the bay's angle)
+    setView(a) { railAng = a; if (railMesh) railMesh.rotation.y = a; },
     hideCar(id, hide) { const b = byId[id]; if (b && b.holder) b.holder.visible = !hide; },
   };
   return api;
