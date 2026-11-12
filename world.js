@@ -32,6 +32,7 @@ const U_IN = 1.5, U_OUT = U_IN + LANE * LANES;      // inside (yellow) and outsi
 const U_PAVE = 19.6;                                // edge of the pavement = face of the outer barriers
 const MED_HALF = 0.305, MED_H = 1.07;               // New Jersey barrier on the median
 const POLE_EVERY = 60, POLE_H = 11.6, ARM = 2.75;
+let DARK_LAMPS = null;   // (v98) the lamps round an exit on a highway that has none of its own; set once SODIUM exists
 // Tunnels (v44, the user's ask): a 'tunnel' zone is a deep rock cut on both sides with the middle of it roofed over.
 // TUN_W: where the tube's walls stand (just behind the outer barriers); TUN_H: its ceiling above the road;
 // TUN_LID: the ground on top of it at the portals (it climbs to the full height of the hill further in).
@@ -52,6 +53,7 @@ export const LANE_CENTERS = [0, 1, 2, 3].map((k) => U_IN + LANE * (k + 0.5));
 export const LIMITS = { inner: MED_HALF + 0.06, outer: U_PAVE - 0.05 };
 export const ROAD_DS = DS;
 const SODIUM = new THREE.Color(1.0, 0.62, 0.32), LED = new THREE.Color(0.86, 0.9, 1.0), LANTERN = new THREE.Color(1.0, 0.82, 0.58);
+DARK_LAMPS = { c: SODIUM, every: POLE_EVERY, I: 620 };
 
 // ---------------------------------------------------------------- helpers
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -63,28 +65,77 @@ const bump = (a, a0, a1, a2) => (a < a1 ? sstep(a0, a1, a) : 1 - sstep(a1, a2, a
 // (s along, u across) the ramp lane's centre c(s) eases in from 46 m out to the hard shoulder, which becomes its
 // acceleration lane. Before the nose of the gore the ramp is its own road between two guardrails; after the nose
 // the pavement joins up and the ramp's right rail closes in until it is the highway's rail again.
-export const RAMP = { sA: 640, sM: 1080, cA: 46, cM: (U_OUT + U_PAVE) / 2, hl: LANE / 2, sh: 1.175, sN: 0 };
+// v98, the owner: "add exit ramps ... that will take you onto a new highway". A ramp is an object now, and a road has
+// several: the entrance every road starts with (RAMP: its far end sA comes first, it joins at sM) and its exits, which
+// are the same shape run the other way (they leave at sM and reach their far end sA further on, then carry on beside
+// the highway for `run` metres: somewhere along there the game moves the car to the next highway). `back` is how far
+// the entrance's own road reaches behind sA: 4 m to a closed end on a new run, 150 m of open road when the car has just
+// come off another highway's exit.
+export const RAMP = { kind: 'on', sA: 640, sM: 1080, cA: 46, cM: (U_OUT + U_PAVE) / 2, hl: LANE / 2, sh: 1.175, sN: 0, back: 4, run: 0 };
 const smoother = (t) => { t = clamp(t, 0, 1); return t * t * t * (t * (t * 6 - 15) + 10); };
-export function rampC(s) { return RAMP.cM + (RAMP.cA - RAMP.cM) * (1 - smoother((s - RAMP.sA) / (RAMP.sM - RAMP.sA))); }
+export function rampC(s, rp = RAMP) { return rp.cM + (rp.cA - rp.cM) * (1 - smoother((s - rp.sA) / (rp.sM - rp.sA))); }
 // dc/ds: how fast the ramp drifts across (negative = towards the highway)
-export function rampSlope(s) { const L = RAMP.sM - RAMP.sA, t = clamp((s - RAMP.sA) / L, 0, 1); return -(RAMP.cA - RAMP.cM) * 30 * t * t * (1 - t) * (1 - t) / L; }
+export function rampSlope(s, rp = RAMP) { const L = rp.sM - rp.sA, t = clamp((s - rp.sA) / L, 0, 1); return -(rp.cA - rp.cM) * 30 * t * t * (1 - t) * (1 - t) / L; }
 // lane centre, the left pavement edge (the left rail's face before the nose) and the right rail's face
-export function rampEdges(s) {
-  const c = rampC(s), sh = RAMP.sh - (RAMP.sh + 0.05) * sstep(RAMP.sN, RAMP.sM, s);
-  return { c, left: c - RAMP.hl - RAMP.sh, right: c + RAMP.hl + sh };
+export function rampEdges(s, rp = RAMP) {
+  s = clamp(s, Math.min(rp.sA, rp.sM), Math.max(rp.sA, rp.sM));
+  const c = rampC(s, rp), sh = rp.sh - (rp.sh + 0.05) * sstep(rp.sN, rp.sM, s);
+  return { c, left: c - rp.hl - rp.sh, right: c + rp.hl + sh };
 }
-RAMP.sN = (() => { for (let s = RAMP.sA; s < RAMP.sM; s += 0.5) if (rampEdges(s).left < 21.3) return s; return RAMP.sM; })();
-export const onRampS = (s) => s > RAMP.sA - 6 && s < RAMP.sM;
+// fills in the rest of a ramp: its direction (+1 an entrance, -1 an exit), the stretch of road it covers (lo..hi) and
+// the nose of its gore (sN: the highway's rail and the ramp's own are apart from there to the far end)
+function finishRamp(rp) {
+  rp.dir = Math.sign(rp.sM - rp.sA);
+  rp.lo = Math.min(rp.sA, rp.sM) - (rp.dir > 0 ? rp.back : 0); rp.hi = Math.max(rp.sA, rp.sM) + (rp.dir < 0 ? rp.run : 0);
+  rp.sN = rp.sM;
+  for (let s = rp.sA; (rp.sM - s) * rp.dir > 0; s += 0.5 * rp.dir) if (rampEdges(s, rp).left < 21.3) { rp.sN = s; break; }
+  return rp;
+}
+finishRamp(RAMP);
+// between the far end and the nose the ramp is a road of its own; from the nose to sM its pavement is the highway's
+const rampApart = (rp, s) => (rp.sN - s) * rp.dir > 0;
+const rampJoined = (rp, s) => (s - rp.sN) * rp.dir >= 0 && (rp.sM - s) * rp.dir > 0;
+export const onRampS = (s, rp = RAMP) => s > rp.lo - 2 && s < rp.hi;
 // the terrain is cut down to just below the ramp, with a 1:1.4 slope back up to the natural ground
-function rampCutY(s, a, y) {
-  if (s < RAMP.sA - 60 || s > RAMP.sM + 20) return Infinity;
-  const e = rampEdges(clamp(s, RAMP.sA, RAMP.sM));
-  const lo = s < RAMP.sN ? e.left - 1.0 : U_PAVE, hi = e.right + 1.0;
+function rampCutY(s, a, y, rp = RAMP) {
+  if (s < rp.lo - 56 || s > rp.hi + 20) return Infinity;
+  const e = rampEdges(s, rp);
+  const lo = rampApart(rp, s) ? e.left - 1.0 : U_PAVE, hi = e.right + 1.0;
   const dLat = a < lo ? lo - a : a > hi ? a - hi : 0;
-  const dLon = Math.max(0, RAMP.sA - 8 - s, s - RAMP.sM - 4);
+  const dLon = Math.max(0, rp.lo - 4 - s, s - rp.hi - 4);
   // in the gore (between the highway's rail and the ramp's) the ground may rise, but only gently
   return y - 0.32 + Math.hypot(dLat, dLon) / (a < lo ? 2.2 : 1.4);
 }
+// ---------------------------------------------------------------- the highways (v98)
+// The owner: "the newer highways should just be different you need to come up with how this is". Five roads, each with
+// its own country (which kinds of stretch come up, and how often), its own bends, lighting, road surface, weather,
+// traffic and speed limit. A run starts on one picked at random; every exit leads to one of the others.
+//   bag: the kinds of stretch, shuffled and dealt out again and again   straight: how often a piece of road is straight
+//   radius: bends are this much wider (or tighter)                       light: the median's lamps (colour, spacing; null = none)
+//   pave: 0 asphalt, 1 concrete                                          fog: how thick the mist is
+//   traffic: how busy (x the Settings level)   trucks: how many of them are lorries   closures: how often a lane is shut
+export const HIGHWAYS = [
+  { id: 'i95', name: 'Interstate 95', label: 'I-95', route: 95, shield: 'interstate', tag: 'The interstate: a bit of everything',
+    bag: ['forest', 'forest', 'fields', 'cut', 'cut', 'embank', 'river', 'river', 'lake', 'fields', 'tunnel', 'city', 'mountain'],
+    straight: 0.42, radius: 1, light: { c: SODIUM, every: 60, I: 620 }, pave: 0, fog: 1, traffic: 1, trucks: 1, closures: 1, limit: 65 },
+  { id: 'shore', name: 'Shoreline Causeway', label: 'US 1', route: 1, shield: 'us', tag: 'Long bridges over open water, white lights, sea mist',
+    bag: ['lake', 'river', 'fields', 'lake', 'river', 'embank', 'fields', 'forest', 'lake'],
+    straight: 0.5, radius: 1.7, light: { c: LED, every: 60, I: 560 }, pave: 1, fog: 1.55, traffic: 0.8, trucks: 0.6, closures: 0.7, limit: 55 },
+  { id: 'pass', name: 'Skyline Pass', label: 'Route 44', route: 44, shield: 'state', tag: 'Mountain road: tight bends, rock cuts and tunnels, no street lights',
+    bag: ['mountain', 'cut', 'tunnel', 'forest', 'mountain', 'cut', 'forest', 'tunnel', 'river'],
+    straight: 0.22, radius: 0.72, light: null, pave: 0, fog: 0.8, traffic: 0.55, trucks: 0.25, closures: 0.5, limit: 50 },
+  { id: 'metro', name: 'Metro Expressway', label: 'I-278', route: 278, shield: 'interstate', tag: 'Downtown: viaducts between the towers, bright lights, heavy traffic, road works',
+    bag: ['city', 'tunnel', 'city', 'cut', 'river', 'city', 'embank', 'tunnel', 'forest'],
+    straight: 0.45, radius: 1.15, light: { c: LED, every: 40, I: 520 }, pave: 1, fog: 0.9, traffic: 1.35, trucks: 0.8, closures: 2, limit: 55 },
+  { id: 'pike', name: 'Pine Barrens Turnpike', label: 'Route 72', route: 72, shield: 'state', tag: 'Flat out through the woods: long straights, dark, lorries',
+    bag: ['forest', 'fields', 'forest', 'fields', 'embank', 'forest', 'cut', 'river', 'forest'],
+    straight: 0.68, radius: 2.1, light: null, pave: 0, fog: 1.1, traffic: 0.7, trucks: 1.7, closures: 0.8, limit: 75 },
+];
+export const highwayById = (id) => HIGHWAYS.find((h) => h.id === id) || HIGHWAYS[0];
+// an exit: the ramp leaves the shoulder EXIT_IN metres into its stretch of road, is EXIT_LEN long and then runs on
+// beside the highway for EXIT_RUN; the game takes the car to the next highway EXIT_GO metres past the ramp's far end
+const EXIT_IN = 140, EXIT_LEN = 540, EXIT_RUN = 320;   // (540 m: the gore's nose is 160 m after the ramp starts to leave, room to move across at speed)
+export const EXIT_GO = 36;
 const TERRAIN_A_RAMP = (() => { const A = new Set(TERRAIN_A.filter((a) => a < 23 || a > 72)); for (let a = 23; a <= 72; a += 1.4) A.add(Math.round(a * 10) / 10); for (const a of TERRAIN_A) if (a < 75) A.add(a); return [...A].sort((x, y) => x - y); })();
 
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -110,31 +161,39 @@ const CITIES = ['New Haven', 'Bridgeport', 'Stamford', 'New Rochelle', 'Providen
 
 // ---------------------------------------------------------------- the road: a sampled centreline with zones, rivers and lakes
 class Road {
-  constructor(seed) {
+  // theme: one of HIGHWAYS. entry: true when the car arrives off another highway's exit (the entrance ramp is then an
+  // open road behind the car instead of a closed end). exitNo: the number the last highway's exits had reached.
+  constructor(seed, theme = HIGHWAYS[0], { entry = false, exitNo = null } = {}) {
     this.rng = mulberry32(seed);
-    this.seed = seed;
+    this.seed = seed; this.theme = theme; this.entry = entry;
+    this.onRamp = finishRamp({ ...RAMP, back: entry ? 150 : 4 });
+    this.ramps = [this.onRamp]; this.exits = []; this.closures = [];
     // per sample (every DS metres): position, heading, grade, curvature, zone blend
     this.X = []; this.Z = []; this.Y = []; this.T = []; this.G = []; this.K = []; this.ZA = []; this.ZB = []; this.ZT = []; this.BR = [];
     this.zones = []; this.rivers = []; this.lakes = []; this.tunnels = []; this.cities = []; this.mountains = []; this.events = []; this.zoneEnd = 0;
     this.st = { x: 0, z: 0, y: 0, th: 0, k: 0, g: 0, kT: 0, gT: 0, gLeft: 700, pLeft: 520, pieceS: 0 };
-    this.exitNo = 9 + Math.floor(this.rng() * 8); this.mile = 0;
+    this.exitNo = exitNo ?? 9 + Math.floor(this.rng() * 8); this.mile = 0;
+    // (v98) the first exit comes up two to three kilometres in, the first lane closure a little before or after it
+    this.nextExit = 2300 + this.rng() * 900; this.nextClosure = 1500 + this.rng() * 1700;
     this.planZone(true);
   }
   get length() { return this.X.length; }
   sAt(i) { return i * DS; }
   planZone(first = false) {
-    const r = this.rng, s0 = this.zoneEnd;
-    let type, len;
+    const r = this.rng, s0 = this.zoneEnd, hw = this.theme;
+    let type, len, exit = false;
+    // v98, the owner: "the roads need to always be random, whether a tunnel comes up is random ... and whether you pass
+    // through a city is random". Until now every run began forest, river, tunnel, city, mountain, on one fixed road.
+    // Only the first stretch is fixed (woods, for the entrance ramp); the rest is dealt from the highway's own bag.
     if (first) { type = 'forest'; len = 1100; }
-    else if (this.zones.length === 1) type = 'river';    // a bridge early on
-    else if (this.zones.length === 2) type = 'tunnel';   // and a tunnel soon after it
-    else if (this.zones.length === 3) type = 'city';     // v91: then the city viaduct
-    else if (this.zones.length === 4) type = 'mountain'; // and the mountain pass
-    else {
+    else if (s0 >= this.nextExit) {
+      // an exit is due: a plain stretch of woods or fields, long enough for the ramp and the road it runs on to
+      type = r() < 0.6 ? 'forest' : 'fields'; len = EXIT_IN + EXIT_LEN + EXIT_RUN + 160 + r() * 240; exit = true;
+    } else {
       // a shuffled bag keeps the mix varied: no repeats, never water straight after water
       const prev = this.zones[this.zones.length - 1].type, isWater = (t) => t === 'river' || t === 'lake';
       if (!this.bag || !this.bag.length) {
-        this.bag = ['forest', 'forest', 'fields', 'cut', 'cut', 'embank', 'river', 'river', 'lake', 'fields', 'tunnel', 'city', 'mountain'];
+        this.bag = hw.bag.slice();
         for (let k = this.bag.length - 1; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [this.bag[k], this.bag[j]] = [this.bag[j], this.bag[k]]; }
       }
       let k = this.bag.findIndex((t) => t !== prev && !(isWater(t) && isWater(prev)));
@@ -194,7 +253,44 @@ class Road {
     }
     z.s1 = s0 + len;
     this.zones.push(z); this.zoneEnd = z.s1;
+    if (exit) {
+      // the ramp leaves the shoulder at sM and reaches its far end at sA; it leads to one of the other highways
+      const sM = s0 + EXIT_IN, rp = finishRamp({ ...RAMP, kind: 'off', sA: sM + EXIT_LEN, sM, back: 0, run: EXIT_RUN });
+      const others = HIGHWAYS.filter((h) => h.id !== hw.id);
+      rp.to = others[(r() * others.length) | 0]; rp.no = ++this.exitNo; rp.city = CITIES[(r() * CITIES.length) | 0];
+      this.ramps.push(rp); this.exits.push(rp); z.exit = rp;
+      const thru = CITIES[(r() * CITIES.length) | 0];
+      this.events.push({ s: sM - 1600, type: 'exitAdvance', exit: rp.no, dist: '1 MILE', to: rp.to });
+      this.events.push({ s: sM - 800, type: 'gantry', exit: rp.no, city: thru, to: rp.to, dist: '1/2 MILE' });
+      this.events.push({ s: sM - 40, type: 'gantry', exit: rp.no, city: thru, to: rp.to, dist: null });
+      this.nextExit = z.s1 + 2000 + r() * 2200;
+    } else if (!first && s0 >= this.nextClosure && ['forest', 'fields', 'cut', 'embank', 'city'].includes(type) && len >= 900) {
+      // v98, the owner: "lanes should close down and narrow sometimes". Road works: one or two lanes on one side shut
+      // behind a line of drums. A taper of drums (110 m a lane) leads traffic across from s0; the lanes are shut to s1.
+      const right = r() < 0.6, n = r() < 0.4 ? 2 : 1;
+      const lead = type === 'city' ? 420 : 170, L = Math.min(280 + r() * 420, len - lead - 110 * n - 300), a = Math.round((s0 + lead + r() * Math.max(0, len - L - 110 * n - lead - 300)) / DS) * DS;
+      const lanes = right ? (n === 2 ? [2, 3] : [3]) : (n === 2 ? [0, 1] : [0]);
+      const cl = { s0: a, s1: a + L + 110 * n, taper: 110 * n, lanes, open: [0, 1, 2, 3].filter((k) => !lanes.includes(k)), side: right ? 1 : -1, n, seed: (r() * 1e9) | 0 };
+      // the line the drums stand on once the taper is over (just inside the shut lanes), and the road's edge they start from
+      cl.uLine = right ? U_IN + LANE * lanes[0] + 0.4 : U_IN + LANE * (lanes[n - 1] + 1) - 0.4;
+      cl.uEdge = right ? U_OUT + 1.7 : U_IN - 0.75;
+      cl.uMid = (U_IN + LANE * lanes[0] + U_IN + LANE * (lanes[n - 1] + 1)) / 2;   // the middle of the shut lanes
+      cl.board = { s: a + cl.taper + 14, u: cl.uMid };                              // the flashing arrow board, in the shut lanes behind the taper
+      cl.truck = { s: Math.round(a + cl.taper + 60 + r() * Math.max(20, L - 150)), u: right ? U_IN + LANE * 3.5 : U_IN + LANE * 0.5 };   // a works pick-up parked further in
+      this.closures.push(cl); z.closure = cl;
+      const which = `${right ? 'RIGHT' : 'LEFT'} ${n === 2 ? '2 LANES' : 'LANE'}`;
+      this.events.push({ s: a - 900, type: 'work', text: ['ROAD', 'WORK', 'AHEAD'] });
+      this.events.push({ s: a - 520, type: 'work', text: [which, 'CLOSED', 'AHEAD'] });
+      this.events.push({ s: a - 230, type: 'work', merge: right ? 1 : -1 });
+      this.events.push({ s: cl.s1 + 70, type: 'work', text: ['END', 'ROAD', 'WORK'] });
+      this.nextClosure = z.s1 + (1900 + r() * 2600) / hw.closures;
+    }
   }
+  // the ramp (entrance or exit) that covers s, give or take pad metres; the lane closure at s (or coming up within `ahead` metres)
+  rampAt(s, pad = 0) { for (let k = this.ramps.length - 1; k >= 0; k--) { const rp = this.ramps[k]; if (s >= rp.lo - pad && s <= rp.hi + pad) return rp; } return null; }
+  closureAt(s, ahead = 0, behind = 0) { for (let k = this.closures.length - 1; k >= 0; k--) { const c = this.closures[k]; if (s > c.s1 + behind) break; if (s >= c.s0 - ahead) return c; } return null; }
+  // the next exit whose ramp has not been passed yet
+  nextExitAfter(s) { for (const rp of this.exits) if (rp.sN > s) return rp; return null; }
   // the tunnel whose tube covers s (pad: metres either side of it that count too), or null
   tunnelAt(s, pad = 0) {
     for (let k = this.tunnels.length - 1; k >= 0; k--) { const t = this.tunnels[k]; if (s > t.s1 + pad) break; if (s >= t.s0 - pad) return t; }
@@ -215,7 +311,8 @@ class Road {
   }
   flatRegions() { return [...this.rivers.map((r) => [r.flatA, r.flatB]), ...this.lakes.map((l) => [l.flatA, l.flatB])]; }
   pickPiece(s) {
-    const r = this.rng, regions = this.flatRegions();
+    // (v98) the road also runs straight where an exit leaves it (but keeps whatever grade it has)
+    const r = this.rng, hw = this.theme, regions = [...this.flatRegions(), ...this.exits.map((x) => [x.sM - 90, x.hi + 10])];
     for (const [a, b] of regions) if (s >= a - 1 && s < b) return { kT: 0, len: b - s + 2, straight: true };
     let room = Infinity;
     for (const [a] of regions) if (a > s) room = Math.min(room, a - s);
@@ -225,7 +322,7 @@ class Road {
       // the pass: short straights and tight bends, mostly one way then the other. The road's heading is kept within
       // about 80 degrees of the way it came in, so it never doubles back on itself.
       const m = zc.mtn;
-      if (m.th0 === null) m.th0 = this.st.th;
+      if (m.th0 === null) m.th0 = clamp(this.st.th, -0.45, 0.45);   // (v98: measured from near the road's first heading, so pass after pass cannot wind it round on itself)
       if (r() < 0.16) return { kT: 0, len: 70 + r() * 130, straight: true };
       const R = r() < 0.6 ? 330 + r() * 150 : 480 + r() * 320, ang = (36 + r() * 52) * Math.PI / 180, off = this.st.th - m.th0;
       let sign = m.sign && r() < 0.75 ? -m.sign : (r() < 0.5 ? -1 : 1);
@@ -236,15 +333,23 @@ class Road {
     if (zt === 'city' && room >= 300) {
       // the viaduct: long straights and wide sweeps between the towers
       if (r() < 0.4) return { kT: 0, len: Math.min(room - 30, 220 + r() * 420), straight: true };
-      const R = 900 + r() * 900, ang = (14 + r() * 24) * Math.PI / 180, sign = r() < 0.5 ? -1 : 1;
+      const R = 900 + r() * 900, ang = (14 + r() * 24) * Math.PI / 180, sign = this.bendSign();
       return { kT: sign / R, len: Math.min(room - 30, R * ang + 110), R, sign };
     }
-    if (r() < (zt === 'cut' ? 0.25 : 0.42) || room < 300) return { kT: 0, len: Math.min(room - 30, 160 + r() * 520), straight: true };
+    // (v98) each highway has its own share of straights and its own width of bend
+    if (r() < (zt === 'cut' ? Math.min(0.25, hw.straight) : hw.straight) || room < 300) return { kT: 0, len: Math.min(room - 30, (160 + r() * 520) * (hw.straight > 0.6 ? 1.7 : 1)), straight: true };
     const roll = r();
-    const R = roll < 0.27 ? 430 + r() * 380 : roll < 0.72 ? 800 + r() * 700 : 1500 + r() * 1500;
-    const ang = (14 + r() * (R < 820 ? 70 : 46)) * Math.PI / 180, sign = r() < 0.5 ? -1 : 1;
-    return { kT: sign / R, len: Math.min(room - 30, R * ang + 110), R, sign };
+    const R = Math.max(380, (roll < 0.27 ? 430 + r() * 380 : roll < 0.72 ? 800 + r() * 700 : 1500 + r() * 1500) * hw.radius);
+    const ang = (14 + r() * (R < 820 ? 70 : 46)) * Math.PI / 180, sign = this.bendSign();
+    // (v98: never longer than the road is planned ahead, so a wide bend cannot run on into an exit or a bridge that
+    // had not been planned when the bend was picked)
+    return { kT: sign / R, len: Math.min(room - 30, R * ang + 110, 3400), R, sign };
   }
+  // Which way the next bend goes: left or right at random (v98, the owner: "it should also have the ability to turn
+  // left and stay straight"; it always could, but the one fixed road hid it). Once the road has swung more than about
+  // 65 degrees from the way it set out, the next bend brings it back, so over a long run it can never loop round and
+  // cross itself.
+  bendSign() { const th = this.st.th; return Math.abs(th) > 1.15 ? -Math.sign(th) : this.rng() < 0.5 ? -1 : 1; }
   gen() {
     const st = this.st, r = this.rng, i = this.X.length, s = i * DS;
     while (this.zoneEnd < s + 4000) this.planZone();
@@ -290,16 +395,12 @@ class Road {
     for (const rv of this.rivers) if (rv.levelY === null && s >= rv.flatA + 150) { rv.deckY = st.y; rv.levelY = st.y - rv.clear; this.riverSigns(rv); }
     for (const lk of this.lakes) if (lk.levelY === null && s >= lk.flatA + 150) { lk.deckY = st.y; lk.levelY = st.y - 5.2; this.lakeSigns(lk); }
     // regular signs
-    if (i > 0 && s % 2600 === 900) this.events.push({ s, type: 'speed', mph: 65 });
+    if (i > 0 && s % 2600 === 900) this.events.push({ s, type: 'speed', mph: this.theme.limit });
     if (i > 0 && s % 2600 === 2100) this.events.push({ s, type: 'reg', k: this.regK = ((this.regK ?? -1) + 1) % 4 });
     const mileS = Math.round((this.mile + 1) * 1609.344 / DS) * DS;
     if (s >= mileS) { this.mile++; this.events.push({ s, type: 'mile', n: this.mile + 14 }); }
-    if (i > 0 && s % 3300 === 2100) {
-      this.exitNo++;
-      const city = CITIES[(r() * CITIES.length) | 0], city2 = CITIES[(r() * CITIES.length) | 0];
-      this.events.push({ s: s - 1609, type: 'exitAdvance', exit: this.exitNo, dist: '1 MILE' });
-      this.events.push({ s, type: 'gantry', exit: this.exitNo, city, city2, route: 1 + ((r() * 300) | 0) });
-    }
+    // (v98: the exit signs used to come up every 3.3 km for exits that were not there; now planZone puts them up
+    // for the real ones)
     if (i > 0 && s % 1900 === 1300 && r() < 0.55) this.events.push({ s, type: 'billboard', k: (r() * 8) | 0, side: r() < 0.7 ? 1 : -1 });
     if (i > 0 && s % 4100 === 3000) this.events.push({ s, type: 'reflectors' });
     this.BR.push(undefined);
@@ -436,7 +537,7 @@ class Road {
     if (!bridge) {
       const y = this.Y[i] - 0.12, da = Math.max(0, a - 20.1);
       h = clamp(h, y - da / 1.6, y + da * 2.6);
-      if (side > 0) h = Math.min(h, rampCutY(i * DS, a, this.Y[i]));
+      if (side > 0) { const rp = this.rampAt(i * DS, 58); if (rp) h = Math.min(h, rampCutY(i * DS, a, this.Y[i], rp)); }
     }
     return h;
   }
@@ -502,6 +603,8 @@ export const SHARED = {
   uRefl: { value: null }, uReflMatrix: { value: new THREE.Matrix4() }, uReflOn: { value: 0 },
   uWaterRefl: { value: null }, uWaterReflMatrix: { value: new THREE.Matrix4() }, uWaterReflOn: { value: 0 },
   uTime: { value: 0 }, uNoise: { value: null }, uRain: { value: 0 },
+  uPave: { value: 0 },   // (v98) the highway's surface: 0 asphalt, 1 concrete
+  uRetroK: { value: 1 },  // (v98) how brightly the road's paint returns the headlights (more on the highways with no lamps)
 };
 const RETRO_GLSL = /* glsl */`
 uniform vec3 uHeadPos; uniform vec3 uHeadDir; uniform float uHeadOn;
@@ -544,7 +647,7 @@ function roadMaterial(tex) {
     Object.assign(shader.uniforms, {
       tAsphalt: { value: tex.asphalt }, tConcrete: { value: tex.concreteRoad }, tNoise: SHARED.uNoise,
       uRefl: SHARED.uRefl, uReflMatrix: SHARED.uReflMatrix, uReflOn: SHARED.uReflOn,
-      uHeadPos: SHARED.uHeadPos, uHeadDir: SHARED.uHeadDir, uHeadOn: SHARED.uHeadOn, uRain: SHARED.uRain, uTime: SHARED.uTime,
+      uHeadPos: SHARED.uHeadPos, uHeadDir: SHARED.uHeadDir, uHeadOn: SHARED.uHeadOn, uRain: SHARED.uRain, uTime: SHARED.uTime, uPave: SHARED.uPave, uRetroK: SHARED.uRetroK,
     });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>
@@ -556,7 +659,7 @@ attribute float aDeck; varying vec2 vRoad; varying float vDeck; varying vec3 vWP
       .replace('#include <common>', `#include <common>
 varying vec2 vRoad; varying float vDeck; varying vec3 vWP; varying vec4 vReflC;
 uniform sampler2D tAsphalt; uniform sampler2D tConcrete; uniform sampler2D tNoise; uniform sampler2D uRefl; uniform float uReflOn;
-uniform float uRain; uniform float uTime;
+uniform float uRain; uniform float uTime; uniform float uPave; uniform float uRetroK;
 ${RETRO_GLSL}
 float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0.5 - aa, w * 0.5 + aa, abs(x - c)); }`)
       .replace('#include <map_fragment>', `#include <map_fragment>
@@ -565,7 +668,7 @@ float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0
   vec3 con = texture2D(tConcrete, vec2(ru, rs) / 7.5).rgb;
   vec3 nzA = texture2D(tNoise, vec2(ru, rs) / 30.0).rgb, nzB = texture2D(tNoise, vec2(ru, rs) / 7.5 + 0.37).rgb;
   // aDeck: 0 asphalt, 1 concrete bridge deck, 2 the entrance ramp (its u is measured from the ramp lane's centre)
-  float isRamp = step(1.5, vDeck), deckF = vDeck * (1.0 - isRamp);
+  float isRamp = step(1.5, vDeck), deckF = max(vDeck * (1.0 - isRamp), uPave);
   vec3 baseC = mix(asp * vec3(0.62, 0.62, 0.64), con * 0.78, deckF);
   // tyre-polished lane centres and darker oil strips between the wheel tracks
   float lanePos = mix(fract((au - 1.5) / 3.65), fract((ru + 1.825) / 3.65), isRamp);
@@ -606,7 +709,7 @@ float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0
   roughnessFactor = mix(roughnessFactor, 0.45, paint * (1.0 - roadWet));`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
   { float rr = retro(vWP);
-    totalEmissiveRadiance += paintC * paint * rr * 0.05 + vec3(1.0) * mW * rr * 1.6 + vec3(1.0, 0.62, 0.12) * mY * rr * 1.6; }`)
+    totalEmissiveRadiance += paintC * paint * rr * 0.05 * uRetroK + vec3(1.0) * mW * rr * 1.6 + vec3(1.0, 0.62, 0.12) * mY * rr * 1.6; }`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
   #if defined( RE_IndirectSpecular )
   if (uReflOn > 0.5) {
@@ -625,7 +728,7 @@ float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0
   } else radiance *= 0.3;
   #endif`);
   };
-  m.customProgramCacheKey = () => 'nr-road';
+  m.customProgramCacheKey = () => 'nr-road3';
   return m;
 }
 
@@ -901,8 +1004,19 @@ function fitText(g, text, maxW, size, weight = 600) {
   while (g.measureText(text).width > maxW && s > 8) { s -= 2; g.font = `${weight} ${s}px ${SIGN_FONT}`; }
   return s;
 }
-function shield(g, cx, cy, w, num) {
+function shield(g, cx, cy, w, num, kind = 'interstate') {
   const h = w * 1.05;
+  if (kind !== 'interstate') {
+    // (v98) a US route (the white shield with a black number) or a state route (a white disc), each on its black plate
+    g.save(); g.translate(cx - w / 2, cy - h / 2);
+    roundRect(g, 0, 0, w, h, w * 0.08); g.fillStyle = '#0c0c0c'; g.fill();
+    g.fillStyle = '#f6f6f2';
+    if (kind === 'us') { g.beginPath(); g.moveTo(w * 0.12, h * 0.1); g.quadraticCurveTo(w * 0.3, h * 0.17, w * 0.5, h * 0.08); g.quadraticCurveTo(w * 0.7, h * 0.17, w * 0.88, h * 0.1); g.quadraticCurveTo(w * 0.98, h * 0.42, w * 0.84, h * 0.66); g.quadraticCurveTo(w * 0.7, h * 0.86, w * 0.5, h * 0.94); g.quadraticCurveTo(w * 0.3, h * 0.86, w * 0.16, h * 0.66); g.quadraticCurveTo(w * 0.02, h * 0.42, w * 0.12, h * 0.1); g.closePath(); g.fill(); }
+    else { g.beginPath(); g.ellipse(w / 2, h / 2, w * 0.44, h * 0.42, 0, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#0c0c0c'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `700 ${w * (String(num).length > 2 ? 0.4 : 0.5)}px ${SIGN_FONT}`; g.fillText(String(num), w * 0.5, h * 0.51);
+    g.restore(); return;
+  }
   g.save(); g.translate(cx - w / 2, cy - h / 2);
   const path = () => { g.beginPath(); g.moveTo(w * 0.08, h * 0.02); g.quadraticCurveTo(w * 0.5, h * 0.1, w * 0.92, h * 0.02); g.quadraticCurveTo(w * 1.02, h * 0.45, w * 0.86, h * 0.72); g.quadraticCurveTo(w * 0.7, h * 0.95, w * 0.5, h); g.quadraticCurveTo(w * 0.3, h * 0.95, w * 0.14, h * 0.72); g.quadraticCurveTo(-w * 0.02, h * 0.45, w * 0.08, h * 0.02); g.closePath(); };
   g.fillStyle = '#fff'; path(); g.fill();
@@ -911,7 +1025,7 @@ function shield(g, cx, cy, w, num) {
   g.fillStyle = '#003f87'; g.fillRect(0, h * 0.27 + 2, w, h);
   g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.font = `700 ${w * 0.11}px ${SIGN_FONT}`; g.fillText('INTERSTATE', w * 0.5, h * 0.155);
-  g.font = `700 ${w * 0.46}px ${SIGN_FONT}`; g.fillText(String(num), w * 0.5, h * 0.6);
+  g.font = `700 ${w * (String(num).length > 2 ? 0.38 : 0.46)}px ${SIGN_FONT}`; g.fillText(String(num), w * 0.5, h * 0.6);
   g.restore(); g.restore();
 }
 // Halo sprites. GPUs clamp point sizes (often to 255 or 511 px), so a halo that should be bigger than that
@@ -958,7 +1072,7 @@ function signTexture(key, w, h, draw) {
   signCache.set(key, t);
   return t;
 }
-const GREEN = '#006b45', AMBER = '#f3b31b';
+const GREEN = '#006b45', AMBER = '#f3b31b', WORK = '#f47b20';
 const SIGNS = {
   speed: (mph) => signTexture('speed' + mph, 256, 320, (g, w, h) => {
     g.fillStyle = '#111'; g.fillRect(0, 0, w, h); roundRect(g, 6, 6, w - 12, h - 12, 14); g.fillStyle = '#f4f4f0'; g.fill();
@@ -966,9 +1080,9 @@ const SIGNS = {
     g.fillStyle = '#111'; g.textAlign = 'center'; g.font = `600 52px ${SIGN_FONT}`; g.fillText('SPEED', w / 2, 76); g.fillText('LIMIT', w / 2, 130);
     g.font = `700 140px ${SIGN_FONT}`; g.fillText(String(mph), w / 2, 270);
   }),
-  mile: (n) => signTexture('mile' + n, 128, 384, (g, w, h) => {
+  mile: (n, route = 95) => signTexture('mile' + route + '_' + n, 128, 384, (g, w, h) => {
     roundRect(g, 4, 4, w - 8, h - 8, 10); g.fillStyle = GREEN; g.fill(); g.strokeStyle = '#eee'; g.lineWidth = 5; g.stroke();
-    g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.font = `600 34px ${SIGN_FONT}`; g.fillText('95', w / 2, 52); g.fillText('MILE', w / 2, 150);
+    g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.font = `600 34px ${SIGN_FONT}`; g.fillText(String(route), w / 2, 52); g.fillText('MILE', w / 2, 150);
     g.font = `700 ${n > 99 ? 64 : 84}px ${SIGN_FONT}`; g.fillText(String(n), w / 2, 260);
   }),
   diamond: (key, drawInner) => signTexture('dia' + key, 256, 256, (g, w, h) => {
@@ -999,18 +1113,46 @@ const SIGNS = {
     roundRect(g, 4, 4, w - 8, h - 8, 18); g.fillStyle = GREEN; g.fill(); g.strokeStyle = '#eee'; g.lineWidth = 7; roundRect(g, 14, 14, w - 28, h - 28, 12); g.stroke();
     g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.textBaseline = 'middle'; fitText(g, text, w - 80, 96, 600); g.fillText(text, w / 2, h / 2 + 4);
   }),
-  exitAdvance: (exit, dist) => signTexture('exa' + exit, 640, 384, (g, w, h) => {
+  // (v98) the board a mile before an exit: its number, the highway it leads to (shield and name), and the distance
+  exitAdvance: (exit, dist, to) => signTexture('exa' + exit + (to ? to.id : ''), 640, 384, (g, w, h) => {
     roundRect(g, 4, 4, w - 8, h - 8, 18); g.fillStyle = GREEN; g.fill(); g.strokeStyle = '#eee'; g.lineWidth = 7; roundRect(g, 14, 14, w - 28, h - 28, 12); g.stroke();
     g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = `600 96px ${SIGN_FONT}`; g.fillText(`EXIT ${exit}`, w / 2, 122); g.font = `600 84px ${SIGN_FONT}`; g.fillText(dist, w / 2, 262);
+    if (!to) { g.font = `600 96px ${SIGN_FONT}`; g.fillText(`EXIT ${exit}`, w / 2, 122); g.font = `600 84px ${SIGN_FONT}`; g.fillText(dist, w / 2, 262); return; }
+    g.font = `600 70px ${SIGN_FONT}`; g.fillText(`EXIT ${exit}`, w / 2, 74);
+    shield(g, 112, 208, 132, to.route, to.shield);
+    g.textAlign = 'left'; fitText(g, to.name, w - 240, 62, 600); g.fillText(to.name, 196, 208);
+    g.textAlign = 'center'; g.font = `600 66px ${SIGN_FONT}`; g.fillText(dist, w / 2, 322);
   }),
-  guide: (key, lines, shieldNum, exitTab) => signTexture('guide' + key, 1024, 512, (g, w, h) => {
+  // (v98) road works: black on orange, a diamond like the yellow warnings. work: three short lines; workMerge: the
+  // lane-ends picture (dir +1: the right lane ends, -1 the left)
+  work: (text) => signTexture('work' + text.join('|'), 256, 256, (g, w, h) => {
+    g.translate(w / 2, h / 2); g.rotate(Math.PI / 4);
+    roundRect(g, -88, -88, 176, 176, 12); g.fillStyle = WORK; g.fill(); g.strokeStyle = '#111'; g.lineWidth = 6; roundRect(g, -80, -80, 160, 160, 9); g.stroke();
+    g.rotate(-Math.PI / 4); g.fillStyle = '#111'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    text.forEach((t, j) => { fitText(g, t, 150 - Math.abs(j - 1) * 46, 34, 700); g.fillText(t, 0, (j - 1) * 36 + 2); });
+  }),
+  workMerge: (dir) => signTexture('workmerge' + dir, 256, 256, (g, w, h) => {
+    g.translate(w / 2, h / 2); g.rotate(Math.PI / 4);
+    roundRect(g, -88, -88, 176, 176, 12); g.fillStyle = WORK; g.fill(); g.strokeStyle = '#111'; g.lineWidth = 6; roundRect(g, -80, -80, 160, 160, 9); g.stroke();
+    g.rotate(-Math.PI / 4); g.scale(dir > 0 ? 1 : -1, 1); g.strokeStyle = '#111'; g.lineWidth = 11; g.lineCap = 'butt';
+    g.beginPath(); g.moveTo(-22, 62); g.lineTo(-22, -62); g.stroke();                                        // the lane that carries on
+    g.beginPath(); g.moveTo(24, 62); g.lineTo(24, 14); g.quadraticCurveTo(24, -16, 2, -34); g.lineTo(2, -62); g.stroke();   // the one that ends, bending in
+  }),
+  // (v98) the sign in the gore where an exit leaves: EXIT, its number, and an arrow up and to the right
+  gore: (exit) => signTexture('gore' + exit, 256, 320, (g, w, h) => {
+    roundRect(g, 4, 4, w - 8, h - 8, 16); g.fillStyle = GREEN; g.fill(); g.strokeStyle = '#eee'; g.lineWidth = 6; roundRect(g, 13, 13, w - 26, h - 26, 11); g.stroke();
+    g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `600 78px ${SIGN_FONT}`; g.fillText('EXIT', w / 2, 70);
+    g.font = `700 84px ${SIGN_FONT}`; g.fillText(String(exit), w / 2 - 40, 190);
+    g.strokeStyle = '#f4f4f0'; g.lineWidth = 17; g.lineCap = 'butt'; g.beginPath(); g.moveTo(150, 250); g.lineTo(206, 172); g.stroke();
+    g.beginPath(); g.moveTo(226, 144); g.lineTo(222, 214); g.lineTo(172, 178); g.closePath(); g.fill();
+  }),
+  guide: (key, lines, shieldNum, exitTab, shieldKind = 'interstate') => signTexture('guide' + key, 1024, 512, (g, w, h) => {
     const top = exitTab ? 92 : 0;
     if (exitTab) { roundRect(g, w - 420, 0, 410, 112, 14); g.fillStyle = GREEN; g.fill(); g.strokeStyle = '#eee'; g.lineWidth = 6; roundRect(g, w - 410, 10, 390, 92, 10); g.stroke(); g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `600 64px ${SIGN_FONT}`; g.fillText(exitTab, w - 215, 60); }
     roundRect(g, 4, top + 4, w - 8, h - top - 8, 20); g.fillStyle = GREEN; g.fill(); g.strokeStyle = '#eee'; g.lineWidth = 8; roundRect(g, 16, top + 16, w - 32, h - top - 32, 14); g.stroke();
     g.fillStyle = '#f4f4f0'; g.textAlign = 'center'; g.textBaseline = 'middle';
     let y = top + 70;
-    if (shieldNum) { shield(g, w / 2, top + 108, 150, shieldNum); y = top + 230; }
+    if (shieldNum) { shield(g, w / 2, top + 108, 150, shieldNum, shieldKind); y = top + 230; }
     for (const [text, size] of lines) { fitText(g, text, w - 90, size, 600); g.fillText(text, w / 2, y); y += size * 1.12; }
   }),
   closed: () => signTexture('closed', 512, 256, (g, w, h) => {
@@ -1160,9 +1302,11 @@ class PlanarReflection {
 
 // ---------------------------------------------------------------- the world
 export class World {
-  constructor({ renderer, scene, camera, seed = 95, base = './' }) {
+  // (v98) seed: a different road every time unless one is asked for; highway: the id of one of HIGHWAYS (else one at random)
+  constructor({ renderer, scene, camera, seed = (Math.random() * 2 ** 31) | 0, highway = null, base = './' }) {
     Object.assign(this, { renderer, scene, camera, base });
-    this.road = new Road(seed);
+    this.road = new Road(seed, highway ? highwayById(highway) : HIGHWAYS[(Math.random() * HIGHWAYS.length) | 0]);
+    this.flying = [];                   // drums knocked over at a lane closure, in flight
     this.shared = SHARED;
     this.offset = { x: 0, z: 0 };      // render coordinates = absolute - offset
     this.chunks = new Map();
@@ -1181,6 +1325,7 @@ export class World {
     this.waterRefl = new PlanarReflection(renderer, 0.35, 1);
     SHARED.uRefl.value = this.refl.rt.texture; SHARED.uWaterRefl.value = this.waterRefl.rt.texture;
     this.initProbe();
+    this.applyHighway();
     this.road.ensure(2200 / DS);
     // The city's and the valley's materials are first needed minutes into a run, and building a shader the first time
     // it is drawn froze the game for a third of a second as the skyline came into view. One speck of each, deep
@@ -1261,6 +1406,34 @@ export class World {
     this.navGeo = new THREE.SphereGeometry(0.18, 8, 6);
     this.lanternGeo = this.buildLanternGeo();
     this.sharedGeo = new Set([this.treeGeo, this.coneGeo, this.poleGeo, this.headGeo, this.lensGeo, this.postGeo, this.lanternGeo, this.delGeo, this.lanternBulbGeo, this.navGeo]);
+  }
+  // ---- a new road (v98): a new run, or the highway an exit leads to. Everything built for the old one is dropped.
+  // seed: any whole number (a random one if left out); highway: one of HIGHWAYS, or its id (the same one again if left
+  // out); opts.entry: the car is coming off another highway's exit, so the entrance ramp is open road behind it.
+  newRoad(seed = (Math.random() * 2 ** 31) | 0, highway = this.road.theme, opts = {}) {
+    for (const [c, ch] of [...this.chunks]) this.disposeChunk(c, ch);
+    for (const ft of this.features.values()) { this.group.remove(ft.group); ft.disposables.forEach((d) => d.dispose()); }
+    this.features.clear(); this.emitters = []; this.pending = null; this.flying = [];
+    this.offset.x = this.offset.z = 0; this.hint = 0; this.lastLoc = null; this.onRamp = true; this.onExit = null; this.probeRebase = null;
+    this.road = new Road(seed, typeof highway === 'string' ? highwayById(highway) : highway, opts);
+    this.applyHighway();
+    this.road.ensure(2200 / DS);
+    this.sweepSigns();
+    return this.road;
+  }
+  // the highway's own look: the colour of its lamps, its surface, how thick the mist is, and a little more moonlight
+  // on the roads that have no street lights at all
+  applyHighway() {
+    const hw = this.road.theme, c = hw.light ? hw.light.c : SODIUM;
+    this.mat.lampSodium.color.copy(c).multiplyScalar(1.1);
+    this.mat.pool.color.copy(c).multiplyScalar(0.42);
+    SHARED.uPave.value = hw.pave;
+    this.fogK = hw.fog;
+    // (the game sets the two lights from these every frame: a road with no lamps gets a brighter moon, and its paint
+    // throws more of the headlights back, or there is nothing to steer by)
+    this.nightHemi = hw.light ? 0.6 : 1.5; this.nightMoon = hw.light ? 0.32 : 1.15;
+    this.hemi.intensity = this.nightHemi; this.moon.intensity = this.nightMoon;
+    SHARED.uRetroK.value = hw.light ? 1 : 5;
   }
   buildPoleGeo() {
     // davit pole on the median barrier with two arms reaching over the inside lanes
@@ -1351,7 +1524,7 @@ export class World {
   updateWeather(dt) {
     const target = this.weather === 'rain' ? 1 : 0, r = SHARED.uRain;
     r.value += Math.sign(target - r.value) * Math.min(Math.abs(target - r.value), dt * 0.5);
-    this.scene.fog.density = 0.00125 + 0.0011 * r.value;
+    this.scene.fog.density = (0.00125 + 0.0011 * r.value) * (this.fogK ?? 1);   // (v98: fogK, the highway's own mist)
     (this.fogClear ||= new THREE.Color(0x0e1026)); (this.fogRain ||= new THREE.Color(0x15152a));
     this.scene.fog.color.copy(this.fogClear).lerp(this.fogRain, r.value);
     this.mat.cone.uniforms.uStrength.value = 0.034 * (1 + 1.4 * r.value);
@@ -1404,10 +1577,11 @@ export class World {
   }
   laneReset(x, z) {
     const L = this.locate(x, z), i = Math.round(L.fi);
-    // back onto the ramp if that is where the car is
-    if (onRampS(L.s)) {
-      const e = rampEdges(clamp(L.s, RAMP.sA, RAMP.sM));
-      if ((L.s < RAMP.sN && L.u > (19.78 + e.left) / 2) || (L.s >= RAMP.sN && L.u > U_OUT + 0.6)) { const p = this.rampPose(clamp(L.s, RAMP.sA + 4, RAMP.sM - 2)); return { x: p.x, z: p.z, yaw: p.yaw }; }
+    // back onto the ramp (the entrance, or an exit) if that is where the car is
+    const rp = this.road.rampAt(L.s, 2);
+    if (rp) {
+      const e = rampEdges(L.s, rp);
+      if ((rampApart(rp, L.s) && L.u > (19.78 + e.left) / 2) || (rampJoined(rp, L.s) && L.u > U_OUT + 0.6)) { const p = this.rampPose(clamp(L.s, Math.min(rp.sA, rp.sM) + 4, Math.max(rp.sA, rp.sM) - 2), rp); return { x: p.x, z: p.z, yaw: p.yaw }; }
     }
     const lane = LANE_CENTERS.reduce((b, c, k) => (Math.abs(c - L.u) < Math.abs(LANE_CENTERS[b] - L.u) ? k : b), 0);
     const p = this.road.point(i, LANE_CENTERS[lane]);
@@ -1422,21 +1596,24 @@ export class World {
     const sy = Math.sin(car.yaw), cy = Math.cos(car.yaw), fs = Math.sin(th), fc = Math.cos(th);
     let worst = 0, side = 0, cx = 0, cz = 0;
     // on the ramp before the nose of the gore the car is between the ramp's own rails
-    const nearRamp = onRampS(L.s) || (L.s > RAMP.sA - 12 && L.s < RAMP.sM + 6);
-    const onRamp = nearRamp && L.s < RAMP.sN && L.u > (19.78 + rampEdges(clamp(L.s, RAMP.sA, RAMP.sM)).left) / 2;
-    this.onRamp = onRamp;
+    // (v98: any ramp, the entrance or an exit; onExit is the exit whose own road the car is on, for the game)
+    const rp = this.road.rampAt(L.s, 10), nearRamp = !!rp;
+    const onRamp = nearRamp && rampApart(rp, L.s) && L.u > (19.78 + rampEdges(L.s, rp).left) / 2;
+    this.onRamp = onRamp; this.onExit = onRamp && rp.kind === 'off' ? rp : null;
     for (const [lx, lz] of [[dims.hw, dims.front], [-dims.hw, dims.front], [dims.hw, -dims.rear], [-dims.hw, -dims.rear]]) {
       const ox = cy * lx + sy * lz, oz = -sy * lx + cy * lz;
       const u = L.u + ox * rx + oz * rz;
       let lo = LIMITS.inner, hi = LIMITS.outer;
       if (nearRamp) {
         // each corner is judged where it is: on the ramp (between its rails), on the highway, or past the nose
-        const sc = L.s + ox * fs + oz * fc, e = rampEdges(clamp(sc, RAMP.sA, RAMP.sM));
-        const cornerOnRamp = sc < RAMP.sN && u > (19.78 + e.left) / 2;
+        const sc = L.s + ox * fs + oz * fc, e = rampEdges(sc, rp);
+        const cornerOnRamp = rampApart(rp, sc) && u > (19.78 + e.left) / 2;
         if (cornerOnRamp) { lo = e.left + 0.05; hi = e.right - 0.05; }
-        else if (sc >= RAMP.sN && sc < RAMP.sM) hi = Math.max(hi, e.right - 0.05);
-        // the closed end of the ramp behind the start
-        if (cornerOnRamp) { const back = Math.ceil((RAMP.sA - 4) / DS) * DS - sc; if (back > worst) { worst = back; side = 2; cx = ox; cz = oz; } }
+        else if (rampJoined(rp, sc)) hi = Math.max(hi, e.right - 0.05);
+        // the closed end of the entrance behind the start, and the end of an exit's road (the game has moved the car
+        // on to the next highway long before that)
+        if (cornerOnRamp && rp.dir > 0) { const back = Math.ceil(rp.lo / DS) * DS - sc; if (back > worst) { worst = back; side = 2; cx = ox; cz = oz; } }
+        if (cornerOnRamp && rp.dir < 0) { const fwd = sc - (rp.hi - 3); if (fwd > worst) { worst = fwd; side = -2; cx = ox; cz = oz; } }
       }
       const pin = lo - u, pout = u - hi;
       if (pin > worst) { worst = pin; side = 1; cx = ox; cz = oz; }
@@ -1453,7 +1630,7 @@ export class World {
     }
     if (worst <= 0) return null;
     // push out along the road's right vector (or forward at the closed start), then an impulse at the contact corner
-    const nx = side === 2 ? Math.sin(th) : rx * side, nz = side === 2 ? Math.cos(th) : rz * side;
+    const nx = side === 2 ? Math.sin(th) : side === -2 ? -Math.sin(th) : rx * side, nz = side === 2 ? Math.cos(th) : side === -2 ? -Math.cos(th) : rz * side;
     car.x += nx * worst; car.z += nz * worst;
     const m = dims.mass, I = dims.Iz;
     let Vx = sy * car.vx + cy * car.vy, Vz = cy * car.vx - sy * car.vy, w = car.r;
@@ -1504,6 +1681,9 @@ export class World {
     }
     for (const [c, ch] of this.chunks) if (c < c0 - 3 || c > c1 + 4) this.disposeChunk(c, ch);
     this.updateFeatures(sCar);
+    // (v98) road works: drums knocked flying, and the arrow boards flashing (on for 0.6 s of every 1.1)
+    if (this.flying.length) this.updateDrums(dt);
+    if (this.mat.arrowLamp) { const on = SHARED.uTime.value % 1.1 < 0.6; if (on !== this.arrowOn) { this.arrowOn = on; this.mat.arrowLamp.color.setRGB(on ? 2.6 : 0.05, on ? 1.5 : 0.028, on ? 0.2 : 0.004); } }
     // floating origin is handled by the game calling maybeRebase()
     this.horizon.position.set(st.camX, 0, st.camZ);
     this.sky.position.set(st.camX, st.camY, st.camZ);
@@ -1708,7 +1888,8 @@ export class World {
     // signs
     this.buildSigns(ch, add, i0, i1, ox, oy, oz, isB);
     if (c === 0) this.buildRoadEnd(add, ox, oy, oz);
-    if (i1 * DS > RAMP.sA - 10 && i0 * DS < RAMP.sM) this.buildRamp(ch, add, i0, i1, ox, oy, oz);
+    for (const rp of R.ramps) if (i1 * DS > rp.lo - 10 && i0 * DS < rp.hi) this.buildRamp(rp, ch, add, i0, i1, ox, oy, oz);
+    for (const cl of R.closures) if (i1 * DS > cl.s0 - 2 && i0 * DS < cl.s1 + 2) this.buildClosure(cl, ch, add, i0, i1, ox, oy, oz);
     yield;
     // small and mid-size parts go under distance switches measured from the middle of the chunk
     const im = i0 + (CHUNK >> 1);
@@ -1719,6 +1900,7 @@ export class World {
     this.group.add(group);
     this.chunks.set(c, ch);
     for (const e of ch.emitters) this.emitters.push(e);
+    if (ch.drums) this.drumChunks = (this.drumChunks || 0) + 1;
   }
   // which distance tier (see DetailLOD) a chunk's top-level part belongs to: 0 small, 1 mid-size, -1 always drawn
   detailTier(o) {
@@ -1726,7 +1908,7 @@ export class World {
     const m = o.material, M = this.mat;
     if (!(o.isMesh || o.isInstancedMesh) || !m || Array.isArray(m)) return -1;
     if (m === M.delinW || m === M.delinY || m === M.lampHead || m === M.navRed || m === M.floodBar) return 0;
-    if (m === M.pole || m === M.concrete || m === M.steel || m === M.green || m === M.barrier || m === M.lampSodium || m === M.lampLantern || m === M.stone || m === M.underside || m === M.darkSteel || m === M.signBack) return 1;
+    if (m === M.drum || m === M.pole || m === M.concrete || m === M.steel || m === M.green || m === M.barrier || m === M.lampSodium || m === M.lampLantern || m === M.stone || m === M.underside || m === M.darkSteel || m === M.signBack) return 1;
     return -1;
   }
   splitDetail(ch, mid) {
@@ -1744,6 +1926,7 @@ export class World {
     this.group.remove(ch.group);
     ch.group.traverse((o) => { if (o.geometry && !this.sharedGeo.has(o.geometry)) o.geometry.dispose(); if (o.isInstancedMesh) o.dispose(); });
     if (ch.emitters.length) { const set = new Set(ch.emitters); this.emitters = this.emitters.filter((e) => !set.has(e)); }
+    if (ch.drums) { this.drumChunks--; this.flying = this.flying.filter((f) => f.ch !== ch); }
     this.chunks.delete(c);
     if (signCache.size > 36) this.sweepSigns();
   }
@@ -1752,7 +1935,7 @@ export class World {
   sweepSigns() {
     const live = new Set();
     for (const ch of this.chunks.values()) ch.group.traverse((o) => { const m = o.material; if (m && !Array.isArray(m)) { if (m.map) live.add(m.map); if (m.alphaMap) live.add(m.alphaMap); } });
-    for (const [k, t] of signCache) if (/^(mile|name|exa|guide)/.test(k) && !live.has(t)) { t.dispose(); signCache.delete(k); }
+    for (const [k, t] of signCache) if (/^(mile|name|exa|guide|gore)/.test(k) && !live.has(t)) { t.dispose(); signCache.delete(k); }
     const kept = new Set(signCache.values());
     for (const [k, m] of this.signMats) { const t = m.map || m.alphaMap; if (t && !kept.has(t)) { m.dispose(); this.signMats.delete(k); } }
   }
@@ -1760,7 +1943,7 @@ export class World {
     const R = this.road;
     const zoneAt = (i) => R.zones[R.ZA[i]];
     const kind = (i, side) => {
-      if (side > 0 && i * DS > RAMP.sN && i * DS < RAMP.sM) return 'none';   // where the ramp joins
+      if (side > 0) { const rp = R.rampAt(i * DS); if (rp && rampJoined(rp, i * DS) && i * DS !== rp.sN) return 'none'; }   // where a ramp joins or leaves
       if (isB(i)) return 'parapet';
       const z = zoneAt(i);
       if ((z.type === 'cut' || z.type === 'tunnel' || z.type === 'mountain') && (side > 0 ? z.cutR : z.cutL) > 0) return 'jersey';
@@ -1818,7 +2001,7 @@ export class World {
     const gb = new GeoBuilder();
     // where the ramp cuts through, the right side gets dense columns so the cut follows the ramp's edges; rows at
     // the ends of that stretch take their extra columns from the coarse ones so they meet the next chunk exactly
-    const rampChunk = i1 * DS > RAMP.sA - 40 && i0 * DS < RAMP.sM + 20;
+    const rpT = R.ramps.find((rp) => i1 * DS > rp.lo - 36 && i0 * DS < rp.hi + 20), rampChunk = !!rpT;
     const urban = [], far = this.mtnChunk(i0, i1);
     for (const side of [-1, 1]) {
       const dense = side > 0 && rampChunk, A = dense ? TERRAIN_A_RAMP : far ? TERRAIN_A_FAR : TERRAIN_A, na = A.length;
@@ -1827,7 +2010,7 @@ export class World {
       for (let i2 = i0 - 1; i2 <= i1 + 1; i2++) {
         const i = Math.max(0, i2), th = R.T[i], rx = -Math.cos(th), rz = Math.sin(th), b = isB(i);
         const row = [], prow = [];
-        const coarse = dense && (i * DS <= RAMP.sA - 40 || i * DS >= RAMP.sM + 20);
+        const coarse = dense && (i * DS <= rpT.lo - 36 || i * DS >= rpT.hi + 20);
         for (const a0 of A) {
           const a = far ? R.reachA(i, side, a0) : a0;
           const wx = R.X[i] + rx * side * a, wz = R.Z[i] + rz * side * a;
@@ -1878,7 +2061,7 @@ export class World {
       for (let s = i0 * DS; s < i1 * DS; s += 6.5) {
         for (let a = 27; a < aMax; a += 6.5 + a * 0.02) {
           const ss = s + (rnd() - 0.5) * 5.5, aa = a + (rnd() - 0.5) * 5;
-          if (side > 0 && ss > RAMP.sA - 30 && ss < RAMP.sM + 10) { const e = rampEdges(clamp(ss, RAMP.sA, RAMP.sM)); if (aa > (ss < RAMP.sN ? e.left - 7 : 19) && aa < e.right + 8) continue; }
+          if (side > 0) { const rp = R.rampAt(ss, 26); if (rp) { const e = rampEdges(ss, rp); if (aa > (rampApart(rp, ss) ? e.left - 7 : 19) && aa < e.right + 8) continue; } }
           const fi = ss / DS, i = clamp(Math.round(fi), i0, i1);
           const z = R.zones[rnd() < R.ZT[i] ? R.ZB[i] : R.ZA[i]];
           let dens = { forest: 0.8, fields: 0.07, cut: 0.62, tunnel: 0.62, embank: 0.22, river: 0.55, lake: 0.35, city: 0.6, mountain: 0.74 }[z.type];
@@ -1922,16 +2105,19 @@ export class World {
     add(im, false, false);
   }
   buildLights(ch, add, i0, i1, ox, oy, oz, isB) {
-    const R = this.road, poles = [], heads = [], lanterns = [], cones = [];
+    const R = this.road, hw = R.theme, poles = [], heads = [], lanterns = [], cones = [];
     for (let i = i0; i < i1; i++) {
       const s = i * DS;
-      if (s % POLE_EVERY === 0 && !R.tunnelAt(s, 8) && !R.overAt(s, 13)) {
+      // (v98) each highway has its own lamps (hw.light: colour, spacing, strength). The two with none are dark but
+      // for the stretch round an exit, which is lit like any junction.
+      const lt = hw.light || (R.rampAt(s, 240) && s > 300 ? DARK_LAMPS : null);
+      if (lt && s % lt.every === 0 && !R.tunnelAt(s, 8) && !R.overAt(s, 13)) {
         poles.push([R.X[i], R.Y[i], R.Z[i], R.T[i]]);
         for (const side of [-1, 1]) {
           const p = R.point(i, side * ARM);
           heads.push([p.x, p.y + POLE_H, p.z, R.T[i]]);
-          ch.emitters.push({ x: p.x, y: p.y + POLE_H - 0.3, z: p.z, c: SODIUM, I: 620, range: 58 });
-          cones.push([p.x, p.y, p.z, POLE_H - 0.2, SODIUM]);
+          ch.emitters.push({ x: p.x, y: p.y + POLE_H - 0.3, z: p.z, c: lt.c, I: lt.I, range: 58 });
+          cones.push([p.x, p.y, p.z, POLE_H - 0.2, lt.c]);
         }
       }
       if (isB(i) && (s + 16) % 32 === 0 && !R.overAt(s, 11)) {
@@ -2114,20 +2300,22 @@ export class World {
       const q = R.point(0, u); sgn.position.set(q.x + Math.sin(th) * 1.25 - ox, q.y + 1.9 - oy, q.z + Math.cos(th) * 1.25 - oz); sgn.rotation.y = th; add(sgn);
     }
   }
-  // ---- the entrance ramp: pavement, rails, lights, the closed end behind the start and the crash cushion at the nose
-  buildRamp(ch, add, i0, i1, ox, oy, oz) {
-    const R = this.road, sBase = Math.floor(i0 * DS / S_WRAP) * S_WRAP;
-    const iA = Math.ceil((RAMP.sA - 4) / DS), iM = Math.floor(RAMP.sM / DS), iN = Math.floor(RAMP.sN / DS);
-    const j0 = Math.max(i0, iA), j1 = Math.min(i1, iM);
+  // ---- a ramp (the entrance, or an exit: v98): pavement, rails, lights, the closed end behind the start of a run, the
+  // crash cushion at the nose and, on an exit, the EXIT sign in the gore
+  buildRamp(rp, ch, add, i0, i1, ox, oy, oz) {
+    const R = this.road, hw = R.theme, sBase = Math.floor(i0 * DS / S_WRAP) * S_WRAP;
+    const iLo = Math.ceil(rp.lo / DS), iHi = Math.floor(rp.hi / DS), iN = Math.round(rp.sN / DS), iA = Math.ceil((RAMP.sA - 4) / DS);
+    const j0 = Math.max(i0, iLo), j1 = Math.min(i1, iHi);
     if (j1 <= j0) return;
-    const E = (i) => rampEdges(clamp(i * DS, RAMP.sA, RAMP.sM));
+    const E = (i) => rampEdges(i * DS, rp), apart = (i) => rampApart(rp, i * DS);
+    const lampC = hw.light ? hw.light.c : SODIUM, lampI = hw.light ? hw.light.I : 620;
     // pavement: before the nose it is a road of its own, after it the pavement runs on from the highway's edge
     {
       const gb = new GeoBuilder(), deck = [], NC = 5;
       for (let i = j0; i <= j1; i++) {
         const s = i * DS, e = E(i), th = R.T[i], rx = -Math.cos(th), rz = Math.sin(th), g = R.G[i];
         const nl = Math.hypot(g, 1), nx = -Math.sin(th) * g / nl, ny = 1 / nl, nz = -Math.cos(th) * g / nl;
-        const L = i < iN ? e.left - 0.3 : U_PAVE + 0.3, Rr = Math.max(L, e.right + 0.3);
+        const L = apart(i) ? e.left - 0.3 : U_PAVE + 0.3, Rr = Math.max(L, e.right + 0.3);
         for (let k = 0; k < NC; k++) { const u = lerp(L, Rr, k / (NC - 1)); gb.v(R.X[i] + rx * u - ox, R.Y[i] + 0.003 - oy, R.Z[i] + rz * u - oz, nx, ny, nz, u - e.c, s - sBase); deck.push(2); }
       }
       for (let r = 0; r < j1 - j0; r++) for (let k = 0; k < NC - 1; k++) { const a = r * NC + k; gb.quad(a, a + 1, a + NC + 1, a + NC); }
@@ -2139,24 +2327,24 @@ export class World {
     {
       const gb = new GeoBuilder();
       extrudeOffset(gb, R, j0, j1, ox, oy, oz, railR.slice().reverse().map(([u, y]) => [u - 19.62, y]), (i) => E(i).right);
-      if (j0 < iN) extrudeOffset(gb, R, j0, Math.min(j1, iN), ox, oy, oz, railR.map(([u, y]) => [19.62 - u, y]), (i) => E(i).left);
+      extrudeOffset(gb, R, j0, j1, ox, oy, oz, railR.map(([u, y]) => [19.62 - u, y]), (i) => E(i).left, { keep: (i) => apart(i) || apart(i - rp.dir) });
       const m = add(new THREE.Mesh(gb.build(), this.mat.steel)); m.castShadow = true; m.receiveShadow = true;
     }
-    const posts = [], delW = [], delY = [], poles = [], heads = [], cones = [];
+    const posts = [], delW = [], delY = [], poles = [], heads = [], cones = [], sFar = Math.min(rp.sA, rp.sM);
     for (let i = j0; i < j1; i++) {
       const s = i * DS, e = E(i), th = R.T[i];
       const pr = R.point(i, e.right + 0.24); posts.push([pr.x, pr.y - 0.15, pr.z, th]);
-      if (i < iN) { const pl = R.point(i, e.left - 0.24); posts.push([pl.x, pl.y - 0.15, pl.z, th]); }
+      if (apart(i)) { const pl = R.point(i, e.left - 0.24); posts.push([pl.x, pl.y - 0.15, pl.z, th]); }
       if (s % 24 === 0) {
         const w = R.point(i, e.right + 0.08); delW.push([w.x, w.y + 0.92, w.z, th]);
-        if (i < iN) { const y = R.point(i, e.left - 0.08); delY.push([y.x, y.y + 0.92, y.z, th]); }
+        if (apart(i)) { const y = R.point(i, e.left - 0.08); delY.push([y.x, y.y + 0.92, y.z, th]); }
       }
       // ramp lights: davit poles behind the right rail, one lamp out over the lane
-      if ((s - RAMP.sA - 30) % 60 === 0 && s < RAMP.sN - 20) {
+      if ((s - sFar) % 60 === 30 && apart(i) && Math.abs(s - rp.sN) > 20) {
         const p = R.point(i, e.right + 1.1), h = R.point(i, e.right + 1.1 - ARM), base = p.y - MED_H - 0.3;
         poles.push([p.x, base, p.z, th]);
         heads.push([h.x, base + POLE_H, h.z, th]);
-        ch.emitters.push({ x: h.x, y: base + POLE_H - 0.3, z: h.z, c: SODIUM, I: 620, range: 58 });
+        ch.emitters.push({ x: h.x, y: base + POLE_H - 0.3, z: h.z, c: lampC, I: lampI, range: 58 });
         cones.push([h.x, p.y, h.z, POLE_H - MED_H - 0.5]);
       }
     }
@@ -2167,45 +2355,163 @@ export class World {
       this.instances(add, this.poleGeo, this.mat.pole, poles, ox, oy, oz, { cast: true });
       this.instances(add, this.headGeo, this.mat.lampHead, heads, ox, oy, oz);
       this.instances(add, this.lensGeo, this.mat.lampSodium, heads, ox, oy, oz);
-      const pos = [], col = [];
-      for (const [x, y, z] of heads) { pos.push(x - ox, y - 0.15 - oy, z - oz); col.push(SODIUM.r * 1.05, SODIUM.g * 1.05, SODIUM.b * 1.05); }
       const im = new THREE.InstancedMesh(this.coneGeo, this.mat.cone, cones.length), mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3();
       const cc = new Float32Array(cones.length * 3);
-      cones.forEach(([x, y, z, hh], k) => { pv.set(x - ox, y - oy, z - oz); sc.set(1, hh, 1); mtx.compose(pv, q, sc); im.setMatrixAt(k, mtx); cc.set([SODIUM.r, SODIUM.g, SODIUM.b], k * 3); });
+      cones.forEach(([x, y, z, hh], k) => { pv.set(x - ox, y - oy, z - oz); sc.set(1, hh, 1); mtx.compose(pv, q, sc); im.setMatrixAt(k, mtx); cc.set([lampC.r, lampC.g, lampC.b], k * 3); });
       im.geometry = this.coneGeo.clone(); im.geometry.setAttribute('aColor', new THREE.InstancedBufferAttribute(cc, 3));
       im.computeBoundingSphere(); im.renderOrder = 5; add(im, false, false);
     }
     const grp = new THREE.Group();
-    // the closed end behind the start, with the "road closed" boards facing up the ramp
-    if (iA >= i0 && iA < i1) {
+    // the entrance: the closed end behind the start with its "road closed" boards facing up the ramp (not when the
+    // car has just come off another highway: the ramp is open road behind it then), and a guide sign a little way up
+    if (rp.kind === 'on' && iA >= i0 && iA < i1 && !R.entry) {
       const i = iA, th = R.T[i], e = E(i), mid = (e.left + e.right) / 2, p = R.point(i, mid), gb = new GeoBuilder();
       boxInto(gb, p.x - Math.sin(th) * 0.3 - ox, p.y + 0.55 - oy, p.z - Math.cos(th) * 0.3 - oz, e.right - e.left + 0.8, 1.1, 0.6, th, 0.5);
       const wall = new THREE.Mesh(gb.build(), this.mat.barrier); wall.castShadow = true; grp.add(wall);
       const tex = SIGNS.closed();
       const sgn = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), this.signMaterial(tex, 1.2, 0.08));
       sgn.position.set(p.x + Math.sin(th) * 0.02 - ox, p.y + 1.9 - oy, p.z + Math.cos(th) * 0.02 - oz); sgn.rotation.y = th; grp.add(sgn);
-      // and a guide sign a little way up the ramp
-      const k = i + 25, eg = E(k), q = R.point(k, eg.right + 1.7);
-      const guide = this.postSign(SIGNS.guide('rampN', [['NORTH', 54], ['New Haven', 76]], 95, null), 3.0, 1.5, 2.1, { posts: 2, postR: 0.06 });
+    }
+    if (rp.kind === 'on' && iA + 25 >= i0 && iA + 25 < i1) {
+      const k = iA + 25, eg = E(k), q = R.point(k, eg.right + 1.7);
+      const guide = this.postSign(SIGNS.guide('rampN' + hw.id, [['NORTH', 54], [hw.name, 70]], hw.route, null, hw.shield), 3.0, 1.5, 2.1, { posts: 2, postR: 0.06 });
       guide.position.set(q.x - ox, q.y - oy, q.z - oz); guide.rotation.y = R.T[k] + Math.PI; grp.add(guide);
     }
-    // crash cushion at the nose of the gore
-    if (iN >= i0 && iN < i1) {
-      const i = iN - 1, th = R.T[i], e = E(i), mid = (19.78 + e.left - 0.16) / 2, p = R.point(i, mid), gb = new GeoBuilder();
+    // crash cushion at the nose of the gore (it stands on the ramp's side of the nose)
+    const iC = iN - rp.dir;
+    if (iC >= i0 && iC < i1) {
+      const i = iC, th = R.T[i], e = E(i), mid = (19.78 + e.left - 0.16) / 2, p = R.point(i, mid), gb = new GeoBuilder();
       boxInto(gb, p.x - ox, p.y + 0.45 - oy, p.z - oz, Math.max(0.6, e.left - 0.16 - 19.78 - 0.1), 0.9, 3.4, th, 1);
       const tex = signTexture('cushion', 128, 128, (g2, w, h) => { g2.fillStyle = '#f3b31b'; g2.fillRect(0, 0, w, h); g2.fillStyle = '#111'; for (let k2 = -2; k2 < 4; k2++) { g2.beginPath(); g2.moveTo(k2 * 64, 0); g2.lineTo(k2 * 64 + 32, 0); g2.lineTo(k2 * 64 + 32 + 128, h); g2.lineTo(k2 * 64 + 128, h); g2.closePath(); g2.fill(); } });
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       const cushion = new THREE.Mesh(gb.build(), this.mat.cushion ||= retroMaterial({ map: tex, roughness: 0.5 }, 1.3, 0.03));
       cushion.castShadow = true; grp.add(cushion);
     }
+    // an exit: the EXIT board in the gore, a few metres behind the cushion
+    const iG = iN + 5;
+    if (rp.kind === 'off' && iG >= i0 && iG < i1) {
+      const e = E(iG), q = R.point(iG, (19.9 + e.left) / 2);
+      const sg = this.postSign(SIGNS.gore(rp.no), 1.5, 1.88, 2.1, { posts: 2, postR: 0.06 });
+      sg.position.set(q.x - ox, q.y - oy, q.z - oz); sg.rotation.y = R.T[iG] + Math.PI; grp.add(sg);
+    }
     if (grp.children.length) { this.layer(grp); grp.traverse((o) => { o.layers.mask = grp.layers.mask; if (o.isMesh) o.receiveShadow = true; }); ch.group.add(grp); }
   }
+  // ---- road works (v98): the drums of a lane closure that stand in this chunk, and its flashing arrow board.
+  // The owner: "lanes should close down and narrow sometimes". Each drum is the real thing: an orange plastic barrel
+  // 95 cm high on a black rubber base, with white and orange bands that shine back in the headlights. The game knocks
+  // them over when the car runs into them (hitDrums); the arrow board is solid (the traffic module has its box).
+  buildClosure(cl, ch, add, i0, i1, ox, oy, oz) {
+    const R = this.road, sA = i0 * DS, sB = i1 * DS;
+    if (!cl.drums) {
+      const list = [], T = cl.taper;
+      for (let d = 0; d <= T; d += 9) list.push([cl.s0 + d, lerp(cl.uEdge, cl.uLine, d / T)]);
+      for (let s = cl.s0 + T + 14; s < cl.s1 - 44; s += 14) list.push([s, cl.uLine]);
+      for (let d = 0; d <= 40; d += 8) list.push([cl.s1 - 40 + d, lerp(cl.uLine, cl.uEdge, d / 40)]);
+      cl.drums = list.map(([s, u]) => ({ s, u, hit: false }));
+    }
+    this.initWorks();
+    const mine = cl.drums.filter((d) => d.s >= sA && d.s < sB && !d.hit);
+    if (mine.length) {
+      const im = new THREE.InstancedMesh(this.drumGeo, this.mat.drum, mine.length), mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), pv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+      ch.drums = mine.map((d, k) => {
+        const f = R.frameAt(d.s / DS), x = f.x - Math.cos(f.th) * d.u - ox, z = f.z + Math.sin(f.th) * d.u - oz, y = f.y - oy;
+        q.setFromAxisAngle(up, f.th + k * 1.7); pv.set(x, y, z); mtx.compose(pv, q, one); im.setMatrixAt(k, mtx);
+        return { d, im, k, x, y, z };
+      });
+      im.computeBoundingSphere(); im.castShadow = true; add(im, true, false);
+    }
+    if (cl.board.s >= sA && cl.board.s < sB) {
+      // the arrow points across to the lanes that are open
+      const f = R.frameAt(cl.board.s / DS), g = this.arrowBoard(-cl.side);
+      g.position.set(f.x - Math.cos(f.th) * cl.board.u - ox, f.y - oy, f.z + Math.sin(f.th) * cl.board.u - oz); g.rotation.y = f.th + Math.PI;
+      g.userData.detailTier = -1;
+      this.layer(g, true, false); g.traverse((o) => { o.layers.mask = g.layers.mask; if (o.isMesh) o.castShadow = true; });
+      ch.group.add(g);
+    }
+  }
+  initWorks() {
+    if (this.drumGeo) return;
+    // the drum: v runs up the barrel (the picture's bands), the base ring takes the black at the picture's foot
+    const body = new THREE.CylinderGeometry(0.225, 0.285, 0.9, 18, 1, false).translate(0, 0.52, 0);
+    { const uv = body.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setY(k, 0.1 + uv.getY(k) * 0.9); }
+    const lid = new THREE.CylinderGeometry(0.12, 0.225, 0.05, 18, 1, false).translate(0, 0.995, 0);
+    { const uv = lid.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setY(k, 0.97); }
+    const base = new THREE.CylinderGeometry(0.34, 0.37, 0.075, 18, 1, false).translate(0, 0.0375, 0);
+    { const uv = base.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setY(k, 0.02); }
+    this.drumGeo = mergeGeos([body, lid, base]); this.drumGeo.computeBoundingSphere();
+    this.sharedGeo.add(this.drumGeo);
+    const tex = signTexture('drum', 32, 256, (g, w, h) => {
+      // from the top down: orange, white, orange, white, orange (10 cm bands of sheeting), then the black base
+      const bands = [['#f26a12', 0.12], ['#f4f4ee', 0.16], ['#f26a12', 0.16], ['#f4f4ee', 0.16], ['#e8650f', 0.31], ['#101010', 0.09]];
+      let y = 0; for (const [c, f] of bands) { g.fillStyle = c; g.fillRect(0, Math.round(y * h), w, Math.ceil(f * h) + 1); y += f; }
+    });
+    this.mat.drum = retroMaterial({ map: tex, roughness: 0.62 }, 1.5, 0.02);
+    // the arrow board's parts: a matt black panel, and lamps that all flash together (update() sets their colour)
+    this.mat.boardPanel = new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.85, metalness: 0.1 });
+    this.mat.arrowLamp = new THREE.MeshBasicMaterial({ color: 0xffa21a });
+  }
+  // a trailer-mounted arrow board, as road crews stand at the head of a closed lane: a small two-wheel trailer, a
+  // mast, and a 2.4 x 1.2 m black panel of amber lamps showing an arrow. dir +1: the arrow points to the driver's
+  // right, -1 to the left. Built facing local +z (towards the traffic coming up to it).
+  arrowBoard(dir) {
+    const g = new THREE.Group(), steel = this.mat.darkSteel, box = (w, h, d, x, y, z, m = steel) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); g.add(b); return b; };
+    box(1.5, 0.12, 2.2, 0, 0.5, 0); box(0.1, 0.1, 1.3, 0, 0.5, 1.7);                       // deck and drawbar
+    for (const x of [-0.82, 0.82]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 14), this.mat.boardPanel); w.rotation.z = Math.PI / 2; w.position.set(x, 0.3, -0.2); g.add(w); }
+    for (const [x, z] of [[-0.7, 1.0], [0.7, 1.0], [-0.7, -1.0], [0.7, -1.0]]) box(0.07, 0.5, 0.07, x, 0.25, z);   // the legs it stands on
+    box(0.12, 2.0, 0.12, 0, 1.5, 0);                                                      // mast
+    box(2.44, 1.24, 0.1, 0, 3.0, 0, this.mat.boardPanel);                                 // the panel
+    box(2.52, 0.05, 0.14, 0, 3.64, 0); box(2.52, 0.05, 0.14, 0, 2.36, 0);                 // its frame
+    // the arrow: a shaft of five lamps and a head of five, drawn for dir = +1 and mirrored
+    const lamps = [[-0.9, 0], [-0.55, 0], [-0.2, 0], [0.15, 0], [0.5, 0], [0.9, 0], [0.6, 0.3], [0.6, -0.3], [0.3, 0.45], [0.3, -0.45]];
+    const geos = lamps.map(([x, y]) => new THREE.CircleGeometry(0.075, 12).translate(-x * dir, 3.0 + y, 0.056));
+    g.add(new THREE.Mesh(mergeGeos(geos), this.mat.arrowLamp)); for (const q of geos) q.dispose();
+    return g;
+  }
+  // The car against the drums of a lane closure (v98). car: its place and heading in the picture's space, and its
+  // speed along and across itself; dims: its box. A drum the car's box reaches is knocked away in the direction the
+  // car is going, tumbles and comes to rest, and is gone from the road for the rest of the run. Returns how many
+  // were hit this time.
+  hitDrums(car, dims) {
+    if (!this.drumChunks) return 0;
+    let n = 0;
+    const cy = Math.cos(car.yaw), sy = Math.sin(car.yaw), Vx = sy * car.vx + cy * car.vy, Vz = cy * car.vx - sy * car.vy;
+    for (const ch of this.chunks.values()) {
+      if (!ch.drums) continue;
+      const bx = ch.ox - this.offset.x - car.x, bz = ch.oz - this.offset.z - car.z;
+      for (const r of ch.drums) {
+        if (r.d.hit) continue;
+        const wx = r.x + bx, wz = r.z + bz;
+        if (Math.abs(wx) > 7 || Math.abs(wz) > 7) continue;
+        const lx = cy * wx - sy * wz, lz = sy * wx + cy * wz;
+        if (lz > dims.front + 0.28 || lz < -dims.rear - 0.28 || Math.abs(lx) > dims.hw + 0.28) continue;
+        r.d.hit = true; n++;
+        const side = Math.sign(lx) || 1, k = 0.75 + Math.random() * 0.3;
+        this.flying.push({ ch, r, x: r.x, y: r.y, z: r.z, vx: Vx * k + cy * side * (2 + Math.random() * 3), vy: 2.5 + Math.random() * 3 + Math.hypot(Vx, Vz) * 0.05, vz: Vz * k - sy * side * (2 + Math.random() * 3),
+          ax: Math.random() - 0.5, az: Math.random() - 0.5, rot: 0, spin: 5 + Math.random() * 9, t: 0, y0: r.y });
+      }
+    }
+    return n;
+  }
+  // the drums in flight: thrown, bouncing once or twice, sliding to a stop on their sides
+  updateDrums(dt) {
+    const mtx = this._dm ||= new THREE.Matrix4(), q = this._dq ||= new THREE.Quaternion(), ax = this._da ||= new THREE.Vector3(), pv = this._dp ||= new THREE.Vector3(), one = this._d1 ||= new THREE.Vector3(1, 1, 1);
+    for (const f of this.flying) {
+      f.t += dt; f.vy -= 9.8 * dt;
+      f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt; f.rot += f.spin * dt;
+      if (f.y < f.y0 + 0.25) { f.y = f.y0 + 0.25; if (f.vy < 0) f.vy = -f.vy * 0.3; const k = Math.exp(-dt * 2.2); f.vx *= k; f.vz *= k; f.spin *= Math.exp(-dt * 1.5); f.down = true; }
+      ax.set(f.ax, 0.15, f.az).normalize(); q.setFromAxisAngle(ax, f.down ? Math.PI / 2 + f.rot * 0.2 : f.rot);
+      pv.set(f.x, f.y, f.z); mtx.compose(pv, q, one); f.r.im.setMatrixAt(f.r.k, mtx); f.r.im.instanceMatrix.needsUpdate = true;
+      if (f.t < 0.1 || (f.t * 10 | 0) % 5 === 0) f.r.im.computeBoundingSphere();
+    }
+    if (this.flying.length > 40) this.flying.splice(0, this.flying.length - 40);
+    this.flying = this.flying.filter((f) => f.t < 6);
+  }
   // spawn pose on the ramp, s metres along the highway
-  rampPose(s = RAMP.sA + 16) {
+  rampPose(s = RAMP.sA + 16, rp = this.road.onRamp) {
     this.road.ensure(s / DS + 10);
-    const fi = s / DS, f = this.road.frameAt(fi), c = rampC(s), rx = -Math.cos(f.th), rz = Math.sin(f.th);
+    const fi = s / DS, f = this.road.frameAt(fi), c = rampC(s, rp), rx = -Math.cos(f.th), rz = Math.sin(f.th);
     this.hint = fi;
-    return { x: f.x + rx * c - this.offset.x, z: f.z + rz * c - this.offset.z, yaw: f.th - Math.atan(rampSlope(s)), y: f.y };
+    return { x: f.x + rx * c - this.offset.x, z: f.z + rz * c - this.offset.z, yaw: f.th - Math.atan(rampSlope(s, rp)), y: f.y, c };
   }
   // ---- signs
   signMaterial(tex, gain = 1.4, base = 0.05) {
@@ -2219,24 +2525,24 @@ export class World {
     return this.signMats.get(key);
   }
   buildSigns(ch, add, i0, i1, ox, oy, oz, isB) {
-    const R = this.road, s0 = i0 * DS, s1 = i1 * DS;
+    const R = this.road, hw = R.theme, s0 = i0 * DS, s1 = i1 * DS;
     const events = R.events.filter((e) => e.s >= s0 && e.s < s1);
     if (!events.length) return;
     // three groups by size, so the small ones can stop being drawn sooner with distance (see DetailLOD):
     // post-mounted signs, the big name / exit boards, gantries and billboards
     const gs = [new THREE.Group(), new THREE.Group(), new THREE.Group()];
-    const SIZE = { name: 1, exitAdvance: 1, gantry: 2, billboard: 2 };
+    const SIZE = { name: 1, exitAdvance: 1, work: 1, gantry: 2, billboard: 2 };
     for (const e of events) {
       const i = clamp(Math.round(e.s / DS), i0, i1), th = R.T[i], g = gs[SIZE[e.type] ?? 0];
-      if (isB(i) && (e.type === 'billboard' || e.type === 'speed' || e.type === 'mile')) continue;
+      if (isB(i) && (e.type === 'billboard' || e.type === 'speed' || e.type === 'mile' || e.type === 'work' || e.type === 'exitAdvance')) continue;
       if (R.tunnelAt(e.s, 40)) continue;   // nothing in a tunnel or across its mouth
       // nothing on the right-hand verge where the ramp runs
-      if (e.s > RAMP.sA - 20 && e.s < RAMP.sM + 10 && !(e.type === 'chevron' && e.dir < 0) && !(e.type === 'billboard' && e.side < 0)) continue;
+      if (R.rampAt(e.s, 16) && !(e.type === 'chevron' && e.dir < 0) && !(e.type === 'billboard' && e.side < 0)) continue;
       const place = (obj, u, yOff = 0) => { const p = R.point(i, u); obj.position.set(p.x - ox, p.y + yOff - oy, p.z - oz); obj.rotation.y = th + Math.PI; g.add(obj); return obj; };
       switch (e.type) {
         case 'speed': place(this.postSign(SIGNS.speed(e.mph), 0.75, 0.94, 2.2), 21.3); break;
         case 'reg': place(this.postSign(SIGNS.reg(e.k), 0.9, 1.12, 2.1), 21.3); break;
-        case 'mile': place(this.postSign(SIGNS.mile(e.n), 0.3, 0.9, 1.0), 20.9); break;
+        case 'mile': place(this.postSign(SIGNS.mile(e.n, hw.route), 0.3, 0.9, 1.0), 20.9); break;
         case 'curve':
           place(this.postSign(SIGNS.curve(e.dir), 1.75, 1.75, 2.0), 21.4);
           place(this.postSign(SIGNS.advisory(e.mph), 0.6, 0.6, 1.3, { posts: 0 }), 21.4);
@@ -2248,7 +2554,8 @@ export class World {
           else place(this.postSign(SIGNS.chevron(-1), 0.62, 0.82, 0.35, { postR: 0.05 }), 0.0, MED_H);
           break;
         case 'name': place(this.postSign(SIGNS.name(e.text), 4.2, 1.05, 2.3, { posts: 2, postR: 0.07 }), 21.8); break;
-        case 'exitAdvance': place(this.postSign(SIGNS.exitAdvance(e.exit, e.dist), 3.4, 2.04, 2.6, { posts: 2, postR: 0.1 }), 22.2); break;
+        case 'exitAdvance': place(this.postSign(SIGNS.exitAdvance(e.exit, e.dist, e.to), 3.4, 2.04, 2.6, { posts: 2, postR: 0.1 }), 22.2); break;
+        case 'work': place(this.postSign(e.merge ? SIGNS.workMerge(e.merge) : SIGNS.work(e.text), 1.75, 1.75, 2.0), 21.4); break;
         case 'gantry': if (!isB(i)) this.buildGantry(g, e, i, ox, oy, oz); break;
         case 'billboard': if (!isB(i)) this.buildBillboard(g, e, i, ox, oy, oz); break;
       }
@@ -2290,9 +2597,11 @@ export class World {
     for (const [dy, dz] of [[H, -0.45], [H, 0.45], [H + 0.9, -0.45], [H + 0.9, 0.45]]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, span, 6), steel); c.rotation.z = Math.PI / 2; c.position.set(span / 2, dy, dz); grp.add(c); }
     for (let u = 0.8; u < span; u += 1.6) for (const dz of [-0.45, 0.45]) { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.25, 4), steel); d.position.set(u, H + 0.45, dz); d.rotation.z = (u / 1.6) % 2 < 1 ? 0.65 : -0.65; grp.add(d); }
     // signs: left = through traffic (I-95 north, city), right = the exit
+    // (v98) the exit's board names the highway it leads to, with that highway's own shield
+    const hw = R.theme, to = e.to;
     const panels = [
-      [SIGNS.guide('thru' + e.city, [['NORTH', 54], [e.city, 76]], 95, null), 6.6, 3.3, 5.6],
-      [SIGNS.guide('exit' + e.exit + e.city2, [[`Route ${e.route}`, 60], [e.city2, 74], ['1/2 MILE', 58]], null, `EXIT ${e.exit}`), 6.6, 3.3, 14.6],
+      [SIGNS.guide('thru' + hw.id + e.city, [['NORTH', 54], [e.city, 76]], hw.route, null, hw.shield), 6.6, 3.3, 5.6],
+      [SIGNS.guide('exit' + e.exit + to.id + (e.dist || 'now'), [[to.name, 66], [e.dist || 'NEXT RIGHT', 60]], to.route, `EXIT ${e.exit}`, to.shield), 6.6, 3.3, 14.6],
     ];
     for (const [tex, w, h, u] of panels) {
       const geo = new THREE.PlaneGeometry(w, h);

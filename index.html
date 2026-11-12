@@ -204,6 +204,16 @@ body.is-touch .t-spec .t-actions kbd{display:none}
 .gear{font-family:var(--f-display);font-weight:800;font-style:italic;font-size:calc(var(--d) * .15);line-height:1;width:calc(var(--d) * .2);height:calc(var(--d) * .175);display:grid;place-items:center;border-radius:calc(var(--d) * .03);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.22);box-shadow:inset 0 -2px 0 rgba(90,215,255,.55)}
 .gear.r{color:var(--amber);box-shadow:inset 0 -2px 0 var(--amber)}
 .gear-label{font-family:var(--f-display);font-weight:600;font-size:calc(var(--d) * .044);letter-spacing:.2em;color:var(--ink-dim);text-transform:uppercase}
+.gaugebox{position:relative;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55))}
+.gauge{display:block}
+/* (v98) the maker's badge, to the left of the car's own gauges (over their top corner on a phone) */
+.gauge-logo{position:absolute;right:calc(100% + 12px);top:50%;transform:translateY(-50%);width:calc(var(--d) * .3);height:calc(var(--d) * .3);max-width:none;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.75));pointer-events:none}
+.gauge-logo.tall{width:auto;height:calc(var(--d) * .38);border-radius:3px}
+.cluster.compact .gauge-logo{right:auto;left:-8px;top:-6px;transform:none;width:calc(var(--d) * .26);height:calc(var(--d) * .26)}
+.cluster.compact .gauge-logo.tall{width:auto;height:calc(var(--d) * .3)}
+.cluster-foot .unit,.cluster-foot .gearbox{position:static;transform:none;margin:0;padding:1px 7px;border:1px solid var(--edge);border-radius:3px;background:rgba(8,10,14,.5);font-family:var(--f-display);font-weight:700;font-size:11px;letter-spacing:.1em;color:var(--ink-dim);text-transform:uppercase;cursor:pointer}
+.cluster-foot .gear-label{font-size:11px;letter-spacing:.1em;font-weight:700;color:inherit}
+.cluster-foot .unit:hover,.cluster-foot .gearbox:hover{color:var(--ink)}
 .shiftlights{display:flex;gap:5px;justify-content:center;height:8px}
 .shiftlights i{flex:0 0 calc(var(--d) * .085);border-radius:2px;transform:skewX(-14deg);background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(0,0,0,.4)}
 .shiftlights i.on.g{background:#53e07f;box-shadow:0 0 8px #53e07f}
@@ -570,38 +580,77 @@ body.is-touch .attribution{bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 /* The pursuit badge (v34, restyled to the HUD): a dark cut-corner plate with a light bar's LEDs at each end (red left,
    blue right, double-flashing in turn), a "Pursuit" chip, a slanted pip per unit, and the busted meter in segments.
    The plate is clipped, so the glow is a drop-shadow on the wrapper. */
-.wanted{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:12;pointer-events:none;opacity:0;transition:opacity .3s;filter:drop-shadow(0 6px 14px rgba(0,0,0,.55));font-family:var(--f-display);text-transform:uppercase;white-space:nowrap}
+.wanted{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:12;pointer-events:none;opacity:0;transition:opacity .35s;font-family:var(--f-display);text-transform:uppercase;white-space:nowrap}
 .wanted.on{opacity:1}
-.w-in{position:relative;display:flex;align-items:stretch;min-width:316px;clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,16px 100%);background:linear-gradient(180deg,rgba(9,11,16,.94),rgba(12,15,22,.84));transition:background .2s}
-.w-in::after{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,#ff2a3a,rgba(255,42,58,0) 40%,rgba(42,108,255,0) 60%,#2a6cff)}
-.w-light{flex:none;width:40px;opacity:.14;background:repeating-linear-gradient(115deg,#ff2a3a 0 7px,transparent 7px 11px);animation:wstrobe .84s linear infinite}
-.w-light.r{background:repeating-linear-gradient(65deg,#2a6cff 0 7px,transparent 7px 11px);animation-delay:.42s}
-@keyframes wstrobe{0%,13%{opacity:1}14%,22%{opacity:.14}23%,36%{opacity:1}37%,100%{opacity:.14}}
-.w-mid{flex:1;display:flex;flex-direction:column;gap:5px;padding:6px 10px 8px}
-.w-top{display:flex;align-items:center;justify-content:center;gap:9px}
-.w-chip{padding:1px 10px 1px 8px;font-weight:800;font-style:italic;font-size:10px;letter-spacing:.22em;color:#07060c;background:linear-gradient(90deg,#ff4a56,#4a86ff);clip-path:polygon(0 0,100% 0,calc(100% - 6px) 100%,0 100%)}
-.w-top b{font-weight:800;font-style:italic;font-size:21px;line-height:1;letter-spacing:.08em;color:#fff;padding-right:.08em}
-.w-units{display:flex;gap:2px}
-.w-units i{display:block;width:9px;height:15px;clip-path:polygon(38% 0,100% 0,62% 100%,0 100%);background:#ff4a56}
-.w-units i:nth-child(even){background:#4a86ff}
-.w-heat{display:flex;align-items:center;gap:8px}
-.w-heat span{font-weight:700;font-size:10px;letter-spacing:.22em;color:var(--ink-dim)}
-.wanted .heat{flex:1;height:7px;background:rgba(255,255,255,.12);-webkit-mask:repeating-linear-gradient(90deg,#000 0 9px,transparent 9px 11px);mask:repeating-linear-gradient(90deg,#000 0 9px,transparent 9px 11px)}
-.wanted .heat b{display:block;height:100%;width:var(--h,0%);background:linear-gradient(90deg,#ffb020,#ff5a1c 55%,#ff1a2a);transition:width .12s linear}
-/* no unit on you: a quiet tag, lights dark */
-.wanted.calm .w-in{min-width:0}
-.wanted.calm .w-light{width:26px;animation:none}
-.wanted.calm .w-units,.wanted.calm .w-heat{display:none}
-.wanted.calm .w-top b{font-size:15px;color:var(--ink-dim)}
-/* a unit is on your bumper and the meter is filling: the plate goes red and the glow beats */
-.wanted.danger{animation:wdanger .36s ease-in-out infinite alternate}
-.wanted.danger .w-in{background:linear-gradient(180deg,rgba(46,6,12,.95),rgba(24,8,13,.88))}
-.wanted.danger .w-in::after{background:#ff2a3a}
-.wanted.danger .w-heat span{color:#ff5a5f;animation:beacon .5s steps(1) infinite}
-.wanted.danger.calm .w-heat{display:flex}
-@keyframes wdanger{0%{filter:drop-shadow(0 6px 14px rgba(0,0,0,.55)) drop-shadow(0 0 0 rgba(255,40,40,0))}100%{filter:drop-shadow(0 6px 14px rgba(0,0,0,.55)) drop-shadow(0 0 16px rgba(255,40,40,.85))}}
-@keyframes beacon{0%{opacity:1}50%{opacity:.15}100%{opacity:1}}
-@media (max-width:560px){ .w-in{min-width:250px} .w-light{width:30px} .w-top b{font-size:18px} .w-chip{display:none} }
+/* v98, the owner: "rework the police indicator where it says police and how many are after you". A slim instrument
+   panel: the state of the chase, how hot it is, a strip showing how far back each unit is, and one meter (red as you
+   are being boxed in, green as you get away). */
+.pq{position:relative;width:308px;padding:7px 12px 8px;border-radius:5px;background:linear-gradient(180deg,rgba(10,12,17,.9),rgba(10,12,17,.76));border:1px solid rgba(255,255,255,.1);box-shadow:0 8px 22px rgba(0,0,0,.5);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.pq-head{display:flex;align-items:center;gap:9px}
+.pq-head b{font-weight:700;font-size:15px;letter-spacing:.2em;color:#f2f4f8;line-height:1}
+.pq-leds{display:flex;gap:2px}
+.pq-leds i{display:block;width:9px;height:4px;border-radius:1px;background:#ff3340;opacity:.22}
+.pq-leds.b{margin-left:auto}
+.pq-leds.b i{background:#3d7dff}
+.wanted.hot .pq-leds i{animation:pqled .9s steps(1) infinite}
+.wanted.hot .pq-leds.b i{animation-delay:.45s}
+@keyframes pqled{0%,12%{opacity:1}13%,24%{opacity:.22}25%,38%{opacity:1}39%,100%{opacity:.22}}
+.pq-heat{display:flex;gap:3px;align-items:flex-end;height:11px;margin-left:2px}
+.pq-heat i{display:block;width:4px;background:rgba(255,255,255,.2);border-radius:1px}
+.pq-heat i:nth-child(1){height:5px}.pq-heat i:nth-child(2){height:7px}.pq-heat i:nth-child(3){height:9px}.pq-heat i:nth-child(4){height:11px}
+.pq-heat i.on{background:#ffb238}
+.pq-heat i.on:nth-child(n+3){background:#ff5a2e}
+.pq-track{position:relative;height:17px;margin:8px 2px 3px;border-bottom:1px solid rgba(255,255,255,.28);background:linear-gradient(rgba(255,255,255,.3),rgba(255,255,255,.3)) 57.75% 100%/1px 5px no-repeat,linear-gradient(rgba(255,255,255,.3),rgba(255,255,255,.3)) 31.5% 100%/1px 5px no-repeat,linear-gradient(rgba(255,255,255,.3),rgba(255,255,255,.3)) 5.25% 100%/1px 5px no-repeat}
+.pq-you{position:absolute;left:84%;bottom:1px;width:0;height:0;margin-left:-5px;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:10px solid #f2f4f8}
+.pq-track i{position:absolute;bottom:2px;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:#ff3340;box-shadow:0 0 7px rgba(255,51,64,.85);transition:left .12s linear,opacity .3s}
+.pq-track i:nth-child(odd){background:#3d7dff;box-shadow:0 0 7px rgba(61,125,255,.85)}
+.pq-track i.far{opacity:.4}
+.pq-foot{display:flex;justify-content:space-between;font-weight:600;font-size:11px;letter-spacing:.16em;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.pq-meter{display:none;align-items:center;gap:8px;margin-top:6px}
+.pq-meter span:first-child{font-weight:700;font-size:10px;letter-spacing:.2em;color:#ff6b6b;min-width:52px}
+.pq-bar{flex:1;height:5px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+.pq-bar b{display:block;height:100%;width:var(--h,0%);background:linear-gradient(90deg,#ff9a2e,#ff2a3a);transition:width .12s linear}
+.wanted.danger .pq-meter,.wanted.evading .pq-meter{display:flex}
+.wanted.evading:not(.danger) .pq-meter span:first-child{color:#58e39a}
+.wanted.evading:not(.danger) .pq-bar b{background:linear-gradient(90deg,#2fbf78,#7df2b0)}
+.wanted.evading:not(.danger) .pq-head b{color:#8ff0bd}
+.wanted.danger .pq{border-color:rgba(255,60,70,.75);box-shadow:0 8px 22px rgba(0,0,0,.5),0 0 18px rgba(255,40,50,.35)}
+.pq-note{height:0;overflow:hidden;font-weight:700;font-size:12px;letter-spacing:.14em;color:#8ff0bd;text-align:center;transition:height .2s}
+.wanted.note .pq-note{height:17px;margin-top:5px}
+.wanted.clear .pq-track,.wanted.clear .pq-foot,.wanted.clear .pq-meter,.wanted.clear .pq-heat{display:none}
+.wanted.clear .pq{width:auto;min-width:230px}
+.wanted.clear .pq-head{justify-content:center}
+.wanted.clear .pq-leds.b{margin-left:0}
+@media (max-width:560px){ .pq{width:258px;padding:6px 10px 7px} .pq-head b{font-size:13px} }
+/* the exit sign (v98): the next exit and the highway it leads to, as a green road sign at the right of the screen */
+.exitind{position:fixed;right:calc(14px + env(safe-area-inset-right,0px));top:calc(92px + env(safe-area-inset-top,0px));z-index:11;min-width:168px;padding:7px 11px 8px;border-radius:7px;background:#00643f;border:2px solid #eef2ee;box-shadow:0 6px 18px rgba(0,0,0,.5);color:#f4f6f2;font-family:var(--f-display);pointer-events:none;text-transform:uppercase}
+.ex-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ex-top b{font-weight:700;font-size:17px;letter-spacing:.08em}
+.ex-top svg{width:22px;height:22px}
+.ex-name{display:flex;align-items:center;gap:7px;margin-top:3px;font-weight:600;font-size:13px;letter-spacing:.05em;white-space:nowrap}
+.ex-name i,.hwcard i{display:grid;place-items:center;flex:none;min-width:30px;height:22px;padding:0 4px;border-radius:4px;background:#f6f6f2;color:#0c0c0c;font-style:normal;font-weight:800;font-size:12px;letter-spacing:0;line-height:1}
+.ex-name i.interstate,.hwcard i.interstate{background:linear-gradient(180deg,#c8102e 0 30%,#003f87 30%);color:#fff;border:1px solid #fff;border-radius:4px 4px 9px 9px}
+.ex-dist{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:4px;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.ex-dist em{font-style:normal;font-weight:700;font-size:10px;letter-spacing:.16em;color:#ffe27a}
+.exitind.now{animation:exnow .5s steps(2) infinite}
+@keyframes exnow{50%{border-color:#ffe27a;box-shadow:0 6px 18px rgba(0,0,0,.5),0 0 16px rgba(255,226,122,.55)}}
+@media (max-width:900px){ .exitind{top:calc(60px + env(safe-area-inset-top,0px));min-width:0;padding:5px 8px 6px} .ex-top b{font-size:14px} .ex-name{font-size:11px} .ex-dist{font-size:13px} }
+/* the highway's name as a run starts on it, and after an exit */
+.hwcard{position:fixed;left:50%;top:34%;transform:translate(-50%,8px);z-index:31;display:flex;align-items:center;gap:14px;padding:12px 20px 13px 16px;border-radius:8px;background:rgba(8,10,14,.82);border:1px solid rgba(255,255,255,.14);box-shadow:0 14px 40px rgba(0,0,0,.6);color:#f2f4f8;font-family:var(--f-display);opacity:0;transition:opacity .45s,transform .45s;pointer-events:none;white-space:nowrap}
+.hwcard.show{opacity:1;transform:translate(-50%,0)}
+.hwcard i{min-width:54px;height:40px;font-size:19px;border-radius:6px}
+.hwcard i.interstate{border-radius:6px 6px 16px 16px}
+.hwcard small{display:block;font-weight:600;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim)}
+.hwcard b{display:block;font-weight:700;font-size:25px;letter-spacing:.03em;line-height:1.15}
+.hwcard span{display:block;font-size:13px;color:#c5cad3;white-space:normal;max-width:min(62vw,420px)}
+@media (max-width:560px){ .hwcard b{font-size:19px} .hwcard i{min-width:44px;height:34px;font-size:16px} }
+.roadfade{position:fixed;inset:0;z-index:30;background:#000;opacity:0;pointer-events:none}
+body.in-garage .hwcard,body.in-garage .exitind{display:none}
+/* road works use the spike strip's warning in orange */
+.spikewarn.works{background:rgba(22,12,4,.86);border-color:rgba(255,150,40,.7);box-shadow:0 0 22px rgba(255,140,30,.22)}
+.spikewarn.works .sw-lanes i.x{background:repeating-linear-gradient(135deg,#f47b20 0 6px,#2a1606 6px 12px);border-color:#ffa24a}
+.spikewarn.works .sw-dist{color:#ffb866}
+.spikewarn.works.near{animation:none}
 .cc.red{background-image:linear-gradient(90deg,#ff5a3c,#ffd23c);filter:drop-shadow(0 0 16px rgba(255,90,60,.5)) drop-shadow(0 2px 8px rgba(0,0,0,.7))}
 .cc{position:fixed;left:50%;top:calc(30% + env(safe-area-inset-top,0px));transform:translateX(-50%) translateY(10px);padding-right:.14em;font-family:var(--f-display);font-weight:800;font-style:italic;font-size:32px;letter-spacing:.04em;text-transform:uppercase;background:linear-gradient(90deg,#5ad7ff,#ff4fd8);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 16px rgba(255,79,216,.55)) drop-shadow(0 2px 8px rgba(0,0,0,.7));white-space:nowrap;opacity:0;pointer-events:none}
 .cc.show{animation:ccpop 1.3s ease-out forwards}
@@ -698,7 +747,7 @@ body.mirror-on .combo{top:calc(var(--below-badge,260px) + 92px)}
   .sw-lanes i{width:26px;height:22px}
   .sw-lanes i.ok::after{border-left-width:5px;border-right-width:5px;border-bottom-width:8px}
 }
-@media (prefers-reduced-motion:reduce){ .over::before,.spikewarn.near,.wanted.danger,.w-light{animation:none} }
+@media (prefers-reduced-motion:reduce){ .over::before,.spikewarn.near,.pq-leds i,.exitind.now{animation:none} }
 body.is-touch .cc{font-size:22px}
 </style>
 
@@ -814,23 +863,9 @@ body.is-touch .cc{font-size:22px}
   <div class="cluster" id="cluster">
     <div class="shiftnote" id="shiftNote"></div>
     <div class="shiftlights" id="shiftLights"><i class="g"></i><i class="g"></i><i class="y"></i><i class="y"></i><i class="r"></i></div>
-    <div class="dial">
-      <svg class="dial-svg" viewBox="0 0 220 220" aria-hidden="true">
-        <defs>
-          <radialGradient id="dialFace" cx="50%" cy="42%" r="58%"><stop offset="0" stop-color="#1b212b"/><stop offset=".7" stop-color="#0c0f14"/><stop offset="1" stop-color="#06070a"/></radialGradient>
-          <linearGradient id="dialHot" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#eefaff"/><stop offset=".55" stop-color="#5ad7ff"/><stop offset="1" stop-color="#8a7bff"/></linearGradient>
-          <mask id="dialSegs" maskUnits="userSpaceOnUse" x="0" y="0" width="220" height="220"><rect width="220" height="220" fill="#fff"/><path id="dialSegCut" fill="none" stroke="#000" stroke-width="16" pathLength="1000" stroke-dasharray="1.6 10.9"/></mask>
-        </defs>
-        <circle class="dial-face" cx="110" cy="110" r="107"/>
-        <circle class="dial-ring" cx="110" cy="110" r="78"/>
-        <g mask="url(#dialSegs)"><path class="dial-track" id="dialTrack"/><path class="dial-red" id="dialRed"/><path class="dial-fill" id="tachFill" pathLength="1000"/></g>
-        <g class="dial-ticks" id="tachNums"></g>
-        <g id="dialTip"><line class="dial-tip" x1="190" y1="110" x2="210" y2="110"/></g>
-      </svg>
-      <div class="dial-mid"><span class="speed" id="speed">0</span><button class="unit" id="unit" title="Switch mph / km/h">mph</button></div>
-      <button class="gearbox" id="gearbox" title="Switch manual / automatic (G)"><span class="gear" id="gear">1</span><span class="gear-label" id="gearLabel">Manual</span></button>
-    </div>
-    <div class="cluster-foot"><span class="rpm"><b id="rpm">850</b> rpm</span><button class="lamp" id="tcsLamp" title="Traction control (T)">TRAC OFF</button></div>
+    <div class="gaugebox"><img class="gauge-logo" id="gaugeLogo" alt="" hidden><canvas class="gauge" id="gauge" width="2" height="2"></canvas></div>
+    <div class="cluster-foot"><button class="unit" id="unit" title="Switch mph / km/h">mph</button><button class="gearbox" id="gearbox" title="Switch manual / automatic (G)"><span class="gear-label" id="gearLabel">Manual</span></button><button class="lamp" id="tcsLamp" title="Traction control (T)">TRAC OFF</button></div>
+    <span id="speed" hidden>0</span><span id="gear" hidden>1</span><span id="rpm" hidden>850</span>
   </div>
   <dl class="keys panel" id="keys">
     <dt><kbd>W</kbd><kbd>S</kbd></dt><dd>Throttle / brake · reverse</dd>
@@ -853,9 +888,17 @@ body.is-touch .cc{font-size:22px}
   <button class="attribution" id="attrib">Supra model by Martin Trafas · CC BY 4.0</button>
   <div class="toast" id="toast"></div>
   <div class="cc" id="cc"></div>
-  <div class="wanted" id="wanted" title="When the bar fills, you're busted"><div class="w-in"><span class="w-light"></span><div class="w-mid"><div class="w-top"><i class="w-chip" id="wantedChip">Pursuit</i><b id="wantedText">Police</b><span class="w-units" id="wantedUnits"></span></div><div class="w-heat"><span>Busted</span><span class="heat" id="heatBar"><b></b></span></div></div><span class="w-light r"></span></div></div>
+  <div class="wanted" id="wanted"><div class="pq">
+    <div class="pq-head"><span class="pq-leds"><i></i><i></i><i></i></span><b id="wantedText">Pursuit</b><span class="pq-heat" id="pqHeat" title="Heat: how hard they are trying"><i></i><i></i><i></i><i></i></span><span class="pq-leds b"><i></i><i></i><i></i></span></div>
+    <div class="pq-track" id="pqTrack" title="How far behind you each unit is"><span class="pq-you"></span></div>
+    <div class="pq-foot"><span id="pqUnits"></span><span id="pqNear"></span></div>
+    <div class="pq-meter" id="pqMeter"><span id="pqMeterLbl">Busted</span><span class="pq-bar"><b></b></span></div>
+    <div class="pq-note" id="pqNote"></div>
+  </div></div>
   <div class="mirror" id="mirror" hidden></div>
-  <div class="spikewarn" id="spikeWarn" hidden role="status"><div class="sw-top"><b class="sw-ico">!</b><span>Spike strip</span><span class="sw-dist" id="swDist"></span></div><div class="sw-lanes" id="swLanes"><i></i><i></i><i></i><i></i></div></div>
+  <div class="exitind" id="exitInd" hidden role="status"><div class="ex-top"><b id="exNo">Exit</b><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20 17 7M17 7h-8M17 7v8" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="square"/></svg></div><div class="ex-name"><i id="exShield"></i><span id="exName"></span></div><div class="ex-dist"><span id="exDist"></span><em id="exHint"></em></div></div>
+  <div class="hwcard" id="hwCard"><i id="hwShield"></i><div><small id="hwKicker">Now on</small><b id="hwName"></b><span id="hwTag"></span></div></div>
+  <div class="spikewarn" id="spikeWarn" hidden role="status"><div class="sw-top"><b class="sw-ico">!</b><span id="swTitle">Spike strip</span><span class="sw-dist" id="swDist"></span></div><div class="sw-lanes" id="swLanes"><i></i><i></i><i></i><i></i></div></div>
   <pre id="diag" hidden style="position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:41;margin:0;padding:8px 12px;background:rgba(0,0,0,.8);color:#9fe;font:12px/1.5 monospace;white-space:pre-wrap;max-width:min(92vw,900px);-webkit-user-select:text;user-select:text"></pre>
   <div class="combo" id="combo"></div>
   <div class="drift fade" id="drift" aria-live="off"><span class="lbl">Drift</span><span class="ang" id="driftAng">0°</span><span class="pts" id="driftPts">0</span><span class="mul" id="driftMul">x1</span></div>
@@ -873,6 +916,7 @@ body.is-touch .cc{font-size:22px}
     </nav>
   </div>
 </div>
+<div class="roadfade" id="roadFade"></div>
 <div class="over" id="over" hidden>
   <div class="over-title" id="overTitle">Busted</div>
   <div class="over-sub" id="overSub"></div>
@@ -1057,7 +1101,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS } from './world.js';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
 import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js';
 import { createGarage, GARAGE_SPEC } from './garage.js';
 import { SpikeStrips, Mirror } from './pursuit.js';
@@ -3705,7 +3749,7 @@ function placeWanted() {
   // under the mirror when it's up, else at the top; the spike warning goes under the badge
   const m = $('mirror'), mr = m.hidden ? null : m.getBoundingClientRect();
   const top = Math.round(mr && mr.height ? mr.bottom + 10 : 16);
-  if (top !== wantedTop) { wantedTop = top; $('wanted').style.top = top + 'px'; document.documentElement.style.setProperty('--below-badge', `${top + 62}px`); }
+  if (top !== wantedTop) { wantedTop = top; $('wanted').style.top = top + 'px'; document.documentElement.style.setProperty('--below-badge', `${top + 104}px`); }
   return true;
 }
 let wantedPlaced = false;
@@ -5759,6 +5803,41 @@ const GEN_SONGS = [
     chords: { A: [1, 6, 1, 5], B: [6, 5, 1, 1] }, stab: [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0],
     lead: { A: [[5, 2], [6, 1], [5, 1], [3, 2], [2, 2], [1, 4], [0, 4], [1, 2], [2, 1], [3, 1], [5, 2], [3, 2], [2, 4], [0, 4]], B: [[8, 2], [6, 2], [5, 2], [6, 1], [5, 1], [3, 4], [0, 4], [5, 2], [6, 2], [8, 2], [9, 1], [8, 1], [6, 2], [5, 4], [0, 2]] },
     form: [['A', 4, 'PL'], ['A', 8, 'KCHBL'], ['A', 8, 'KCHOBPLT'], ['B', 8, 'KCHOBPSAT'], ['A', 4, 'PLTR'], ['A', 16, 'KCHOBPSLTX'], ['B', 8, 'KCHOBPSALT'], ['A', 8, 'KCHBL']] },
+  // v98, the owner: "add more intense sounding music tracks to the game that sound like fast paced racing music and
+  // more calm tracks for the garage". Four for the road, each in one of the styles racing games and street-racing
+  // films run on, all original: a eurobeat sprint (four-on-the-floor at 158, a galloping octave bass, bright stacked
+  // saws), a drift-phonk track (a hard half-time beat, a sliding distorted bass drum and a cowbell tune), a drum and
+  // bass chase (174, a growling held bass, tense strings), and a fast cousin of Midnight Touge (the same plucked
+  // strings and hand drums at 148). Three for the garage and menus, slow and soft: electric piano chords, a low sine
+  // bass, brushed drums or none at all, a bell-like tune.
+  { title: 'Redline Rush', where: ['drive'], bpm: 158, root: 57, scale: 'minor', swing: 0, kit: 'euro', bass: 'gallop', stabSound: 'supersaw', cover: ['#ff2d55', '#16040c', 'lines'],
+    chords: { A: [1, 6, 7, 5], B: [6, 7, 1, 1] }, stab: [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+    lead: { A: [[8, 2], [7, 2], [8, 2], [10, 2], [9, 2], [8, 2], [7, 2], [5, 2], [6, 2], [5, 2], [6, 2], [8, 2], [7, 4], [5, 4]], B: [[10, 3], [9, 1], [8, 2], [10, 2], [12, 4], [10, 4], [9, 3], [8, 1], [7, 2], [9, 2], [8, 8]] },
+    form: [['A', 4, 'HBS'], ['A', 8, 'KHBSA'], ['A', 16, 'KCHOBPSLX'], ['B', 8, 'KCHOBPSALX'], ['A', 4, 'PSLR'], ['A', 16, 'KCHOBPSALX'], ['B', 16, 'KCHOBPSALX'], ['A', 8, 'KCHOBSL'], ['A', 4, 'KHB']] },
+  { title: 'Ghost Lane', where: ['drive'], bpm: 150, root: 50, scale: 'minor', swing: 0, kit: 'phonk', bass: '808', stabSound: 'pluck', leadSound: 'cowbell', cover: ['#b14cff', '#0a0414', 'grid'],
+    chords: { A: [1, 1, 6, 5], B: [1, 7, 6, 5] }, stab: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    lead: { A: [[8, 2], [8, 1], [10, 2], [8, 1], [7, 2], [8, 2], [5, 4], [0, 2], [8, 2], [8, 1], [10, 2], [8, 1], [11, 2], [10, 2], [8, 4], [0, 2]], B: [[12, 2], [11, 2], [10, 2], [8, 2], [10, 3], [8, 1], [7, 4], [8, 2], [10, 2], [8, 2], [7, 2], [5, 4], [7, 4]] },
+    form: [['A', 4, 'L'], ['A', 8, 'KHBL'], ['A', 16, 'KCHBLX'], ['B', 8, 'KCHBPLX'], ['A', 4, 'PLR'], ['A', 16, 'KCHOBLX'], ['B', 8, 'KCHOBPL'], ['A', 8, 'KCHBL'], ['A', 4, 'L']] },
+  { title: 'Interceptor', where: ['drive'], bpm: 174, root: 52, scale: 'minor', swing: 0, kit: 'dnb', hold: 2, bass: 'reese', stabSound: 'strings', cover: ['#2de2ff', '#03121a', 'wave'],
+    chords: { A: [1, 6, 4, 5], B: [6, 7, 1, 3] }, stab: [1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0],
+    lead: { A: [[5, 4], [8, 4], [7, 6], [5, 2], [4, 4], [5, 4], [3, 8]], B: [[8, 6], [10, 2], [9, 4], [8, 4], [7, 6], [5, 2], [7, 8]] },
+    form: [['A', 8, 'PSH'], ['A', 8, 'KHBPS'], ['A', 16, 'KCHBPSLX'], ['B', 16, 'KCHBPSAX'], ['A', 8, 'PSAR'], ['A', 16, 'KCHBPSLAX'], ['B', 16, 'KCHBPSLAX'], ['A', 8, 'KCHB']] },
+  { title: 'Touge Overdrive', where: ['drive'], bpm: 148, root: 50, scale: 'minor', swing: 0, kit: 'phonk', bass: 'roll16', stabSound: 'pluck', leadSound: 'koto', cover: ['#ff6a00', '#1a0803', 'sun'],
+    chords: { A: [1, 6, 1, 5], B: [6, 5, 1, 1] }, stab: [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0],
+    lead: { A: [[5, 1], [6, 1], [8, 2], [6, 1], [5, 1], [3, 2], [5, 2], [3, 1], [2, 1], [1, 4], [1, 1], [2, 1], [3, 2], [5, 1], [6, 1], [8, 2], [9, 2], [8, 1], [6, 1], [5, 4]], B: [[8, 2], [9, 1], [8, 1], [6, 2], [5, 2], [6, 1], [5, 1], [3, 2], [5, 4], [10, 2], [9, 2], [8, 2], [6, 2], [8, 3], [6, 1], [5, 4]] },
+    form: [['A', 4, 'LT'], ['A', 8, 'KCHBLT'], ['A', 16, 'KCHOBPLTX'], ['B', 8, 'KCHOBPSALT'], ['A', 4, 'PLTR'], ['A', 16, 'KCHOBPSLTX'], ['B', 16, 'KCHOBPSALTX'], ['A', 8, 'KCHBLT']] },
+  { title: 'After Hours', where: ['garage'], bpm: 76, root: 53, scale: 'major', swing: 0.14, kit: 'soft', bass: 'long', stabSound: 'epiano', leadSound: 'bell', cover: ['#ffc98a', '#1c1420', 'rings'],
+    chords: { A: [1, 6, 4, 5], B: [4, 5, 3, 6] }, stab: [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+    lead: { A: [[5, 4], [3, 2], [5, 2], [6, 6], [0, 2], [5, 2], [3, 2], [2, 4], [1, 8]], B: [[6, 4], [5, 2], [3, 2], [5, 8], [3, 2], [2, 2], [1, 4], [2, 8]] },
+    form: [['A', 4, 'P'], ['A', 8, 'PS'], ['A', 8, 'KCHBPS'], ['A', 8, 'KCHBPSL'], ['B', 8, 'KCHBPSL'], ['A', 8, 'KCHBPSA'], ['B', 8, 'PSL'], ['A', 8, 'KCHBPSL'], ['A', 4, 'PS']] },
+  { title: 'Clear Coat', where: ['garage'], bpm: 84, root: 50, scale: 'dorian', swing: 0.08, kit: 'soft', bass: 'long', stabSound: 'epiano', leadSound: 'bell', cover: ['#7fd3ff', '#06141c', 'wave'],
+    chords: { A: [1, 4, 1, 7], B: [3, 4, 5, 1] }, stab: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+    lead: { A: [[1, 6], [3, 2], [5, 8], [4, 6], [3, 2], [1, 8]], B: [[5, 4], [7, 4], [8, 8], [7, 4], [5, 4], [4, 8]] },
+    form: [['A', 8, 'PA'], ['A', 8, 'PAB'], ['A', 8, 'kHPABL'], ['B', 8, 'kHPABL'], ['A', 8, 'PASB'], ['B', 8, 'kHPABSL'], ['A', 8, 'PAL'], ['A', 4, 'P']] },
+  { title: 'Idle Hours', where: ['garage'], bpm: 90, root: 57, scale: 'minor', swing: 0.16, kit: 'soft', bass: 'sub', stabSound: 'epiano', leadSound: 'bell', cover: ['#c9b6ff', '#120e1f', 'bars'],
+    chords: { A: [1, 4, 7, 3], B: [6, 5, 1, 1] }, stab: [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0],
+    lead: { A: [[5, 2], [0, 2], [3, 2], [5, 2], [8, 4], [7, 4], [5, 2], [0, 2], [4, 2], [3, 2], [1, 8]], B: [[8, 3], [7, 1], [5, 4], [3, 4], [5, 4], [6, 3], [5, 1], [3, 4], [1, 8]] },
+    form: [['A', 4, 'PS'], ['A', 8, 'KCHBPS'], ['A', 16, 'KCHBPSL'], ['B', 8, 'KCHBPSA'], ['A', 8, 'PSL'], ['A', 16, 'KCHOBPSL'], ['A', 4, 'PS']] },
 ];
 // The engine: one per audio context. play(song) starts a song from the top (or from a step), tick() keeps the next
 // 0.4 s of notes scheduled, and onEnd is called once when the last bar has sounded.
@@ -5797,6 +5876,9 @@ function makeSynth(ctx, dest) {
     for (const m of notes) {
       if (sound === 'piano') { tone('triangle', f(m), t, 0.34, 0.085, [pump, verb], { lpf: 3000, lpf2: 700 }); tone('sawtooth', f(m), t, 0.26, 0.03, [pump, dlyIn], { lpf: 2600, lpf2: 600 }); }
       else if (sound === 'organ') { tone('sine', f(m), t, 0.24, 0.07, [pump, verb]); tone('sine', f(m + 12), t, 0.2, 0.035, pump); tone('sine', f(m + 19), t, 0.16, 0.018, pump); }
+      else if (sound === 'epiano') { tone('sine', f(m), t, 1.2, 0.046, [pump, verb], { attack: 0.008 }); tone('triangle', f(m), t, 0.75, 0.025, [pump, verb], { attack: 0.008, lpf: 1900, lpf2: 500 }); tone('sine', f(m + 12), t, 0.3, 0.01, pump); }
+      else if (sound === 'supersaw') { for (const det of [-13, 0, 13]) tone('sawtooth', f(m), t, 0.22, 0.03, [pump, dlyIn, verb], { lpf: 5400, lpf2: 1200, detune: det, q: 1.2 }); }
+      else if (sound === 'strings') { for (const det of [-9, 9]) tone('sawtooth', f(m), t, 0.5, 0.03, [pump, verb], { attack: 0.03, lpf: 2700, lpf2: 900, detune: det, hold: true }); }
       else tone('square', f(m), t, 0.2, 0.05, [pump, dlyIn, verb], { lpf: 2400, lpf2: 500, q: 2 });
     }
   };
@@ -5805,6 +5887,17 @@ function makeSynth(ctx, dest) {
   const taiko = (t, lvl = 1) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(52, t + 0.14); g.gain.setValueAtTime(0.7 * lvl, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5); o.connect(g); g.connect(drums); g.connect(verb); o.start(t); o.stop(t + 0.52); noise(t, 0.05, 420, 0.3 * lvl, [drums, verb], { type: 'lowpass' }); };
   const subNote = (t, m, dur, acc) => { tone('sine', f(m), t, dur, 0.15 * acc, pump, { attack: 0.006, hold: true }); tone('sawtooth', f(m), t, dur * 0.6, 0.06 * acc, pump, { lpf: 700, lpf2: 110, q: 2 }); };
   const arpNote = (t, m, dur) => tone('square', f(m), t, dur, 0.058, [pump, dlyIn], { lpf: 3000, lpf2: 800 });
+  // (v98) for the racing tracks: an overdriven path for the phonk bass drum's long tail (straight to the mix: it must
+  // not duck under its own kick), that sliding bass, a cowbell with a pitch, a held growling bass of detuned saws, and
+  // a galloping bass. For the calm ones: a rim click, an electric piano, a bell, a long soft bass note.
+  const dist = ctx.createWaveShaper(), distOut = ctx.createGain();
+  { const c = new Float32Array(1024); for (let i = 0; i < 1024; i++) c[i] = Math.tanh((i / 512 - 1) * 3.2); dist.curve = c; } distOut.gain.value = 0.34; dist.connect(distOut); distOut.connect(bus);
+  const bass808 = (t, m, dur, acc = 1) => tone('sine', f(m), t, dur, 0.3 * acc, dist, { attack: 0.004, bend: 900, hold: true });
+  const cowbell = (t, m) => { tone('square', f(m), t, 0.3, 0.085, [pump, verb], { attack: 0.002, lpf: 5200, lpf2: 1700, q: 1.4 }); tone('square', f(m) * 1.498, t, 0.2, 0.04, [pump, dlyIn], { attack: 0.002, lpf: 6000, lpf2: 2200 }); };
+  const reese = (t, m, dur, acc = 1) => { for (const det of [-17, 17]) tone('sawtooth', f(m), t, dur, 0.11 * acc, pump, { attack: 0.02, lpf: 380, lpf2: 1250, detune: det, q: 5, hold: true }); tone('sine', f(m), t, dur, 0.17 * acc, pump, { attack: 0.01, hold: true }); };
+  const rim = (t, lvl = 1) => { noise(t, 0.028, 2700, 0.34 * lvl, [drums, verb], { type: 'bandpass', q: 3 }); tone('triangle', 430, t, 0.05, 0.16 * lvl, drums); };
+  const longBass = (t, m, dur) => { tone('sine', f(m), t, dur, 0.13, pump, { attack: 0.05, hold: true }); tone('triangle', f(m + 12), t, dur * 0.7, 0.022, pump, { attack: 0.05, lpf: 600, hold: true }); };
+  const bell = (t, m, len) => { const d = Math.max(0.9, len * 1.2); tone('sine', f(m), t, d, 0.1, [pump, verb, dlyIn], { attack: 0.006 }); tone('sine', f(m + 12), t, d * 0.45, 0.028, [pump, verb], { attack: 0.004 }); tone('triangle', f(m), t, d * 0.4, 0.03, pump, { attack: 0.006, lpf: 2400, lpf2: 700 }); };
   const leadNote = (t, m, dur) => { for (const det of [-7, 7]) tone('sawtooth', f(m), t, dur, 0.062, [pump, dlyIn, verb], { attack: 0.012, lpf: 3400, lpf2: 1500, detune: det, q: 1.6, hold: true }); tone('square', f(m - 12), t, dur, 0.018, pump, { attack: 0.012, lpf: 1800, hold: true }); };
   function schedule(step, t) {
     const sg = S.song, s16 = 60 / sg.bpm / 4, beat = s16 * 4, bar = (step / 16) | 0, i = step % 16, b = S.map[bar], L = b.layers, sc = SCALES[sg.scale];
@@ -5812,19 +5905,28 @@ function makeSynth(ctx, dest) {
     const prog = sg.chords[b.set], deg = prog[Math.floor(b.barIn / (sg.hold || 1)) % prog.length];
     const chord = [deg, deg + 2, deg + 4, deg + 6].map((d) => { let n = note(d); while (n > sg.root + 14) n -= 12; return n; });   // kept in one comfortable octave and a bit
     let bassRoot = note(deg) - 24; while (bassRoot < 33) bassRoot += 12; while (bassRoot > 47) bassRoot -= 12;
-    const dnb = sg.kit === 'dnb', hip = sg.kit === 'hiphop', has = (c) => L.includes(c);
-    // drums
-    const kickNow = dnb ? has('K') && (i === 0 || i === 10) : hip ? has('K') && (i === 0 || i === 3 || i === 8 || i === 10) : (has('K') && i % 4 === 0) || (has('k') && i === 0);
-    if (kickNow) { kick(t); pump.gain.cancelScheduledValues(t); pump.gain.setValueAtTime(dnb || hip ? 0.5 : 0.26, t); pump.gain.linearRampToValueAtTime(1, t + beat * 0.55); }
-    if (has('C') && (i === 4 || i === 12)) (dnb ? snare : clap)(t);
+    const dnb = sg.kit === 'dnb', hip = sg.kit === 'hiphop', euro = sg.kit === 'euro', phonk = sg.kit === 'phonk', soft = sg.kit === 'soft', has = (c) => L.includes(c);
+    // drums (v98 kits: euro = four on the floor with every sixteenth on the hats; phonk = a hard half-time beat with
+    // hat rolls; soft = a quiet kick on one and the "and" of three, a rim click for the backbeat, light hats)
+    const kickNow = dnb ? has('K') && (i === 0 || i === 10) : hip ? has('K') && (i === 0 || i === 3 || i === 8 || i === 10) : phonk ? has('K') && (i === 0 || i === 6 || i === 10)
+      : soft ? (has('K') && (i === 0 || i === 10)) || (has('k') && i === 0) : (has('K') && i % 4 === 0) || (has('k') && i === 0);
+    if (kickNow) { kick(t, soft ? 0.5 : 1); pump.gain.cancelScheduledValues(t); pump.gain.setValueAtTime(soft ? 0.74 : dnb || hip || phonk ? 0.5 : 0.26, t); pump.gain.linearRampToValueAtTime(1, t + beat * 0.55); }
+    if (has('C') && (i === 4 || i === 12)) { if (soft) rim(t); else (dnb || phonk ? snare : clap)(t); }
     if (has('T') && ((b.barIn % 4 === 3 && (i === 8 || i === 11 || i === 14)) || (b.barIn % 8 === 0 && i === 0))) taiko(t, i === 14 || i === 0 ? 1 : 0.75);   // hand drums: a three-hit figure closing every fourth bar
-    if (has('H')) { if (hip) { if (i % 2 === 0) hat(t, has('O') && i === 14, i % 4 === 2 ? 1.1 : 0.8); else if (i === 7 || i === 15) hat(t, false, 0.45); } else if (dnb) { if (i % 2 === 0) hat(t, false, i % 4 === 2 ? 1.2 : 0.8); else if (i === 7 || i === 15) hat(t, false, 0.5); } else if (i % 4 === 2) hat(t, has('O')); else if (i % 2 === 1) hat(t, false, 0.6); }
+    if (has('H') && euro) { if (i % 4 === 2) hat(t, true, 1); else hat(t, false, i % 2 ? 0.45 : 0.75); }
+    else if (has('H') && phonk) { if (i % 2 === 0) hat(t, has('O') && i === 14, i % 4 === 2 ? 1.1 : 0.8); if (b.barIn % 2 === 1 && i >= 12) { hat(t, false, 0.5); hat(t + s16 / 2, false, 0.4); } }
+    else if (has('H') && soft) { if (i % 2 === 0) hat(t, false, i % 4 === 2 ? 0.55 : 0.35); }
+    else if (has('H')) { if (hip) { if (i % 2 === 0) hat(t, has('O') && i === 14, i % 4 === 2 ? 1.1 : 0.8); else if (i === 7 || i === 15) hat(t, false, 0.45); } else if (dnb) { if (i % 2 === 0) hat(t, false, i % 4 === 2 ? 1.2 : 0.8); else if (i === 7 || i === 15) hat(t, false, 0.5); } else if (i % 4 === 2) hat(t, has('O')); else if (i % 2 === 1) hat(t, false, 0.6); }
     if (has('X') && b.barIn === 0 && i === 0) noise(t, 1.3, 5200, 0.1, [drums, verb]);
     if (has('R') && b.last && i % 4 === 0) { const q = i / 4; noise(t, beat, 500 + q * 900, 0.035 + q * 0.03, [verb, pump], { type: 'bandpass', q: 2.2, freq2: 900 + q * 1500 }); if (q === 3) for (let k = 0; k < 4; k++) (dnb ? snare : clap)(t + k * s16, 0.35 + k * 0.15); }
     // bass
     if (has('B')) {
       const B = sg.bass;
-      if (B === 'sub') { if (i === 0) subNote(t, bassRoot, s16 * 2.8, 1); else if (i === 3) subNote(t, bassRoot, s16 * 4.5, 0.85); else if (i === 8) subNote(t, bassRoot, s16 * 1.9, 1); else if (i === 10) subNote(t, bassRoot + 7 > 47 ? bassRoot - 5 : bassRoot + 7, s16 * 5, 0.85); }
+      if (B === 'gallop') bassNote(t, bassRoot + (i % 2 ? 12 : 0), s16 * 0.85, i % 4 === 0 ? 0.7 : 1);
+      else if (B === '808') { if (i === 0) bass808(t, bassRoot, s16 * 5.2); else if (i === 6) bass808(t, bassRoot, s16 * 3.4, 0.85); else if (i === 10) bass808(t, bassRoot + 7 > 47 ? bassRoot - 5 : bassRoot + 7, s16 * 5.2, 0.9); }
+      else if (B === 'reese') { if (i === 0) reese(t, bassRoot, s16 * 9.4); else if (i === 10) reese(t, bassRoot, s16 * 3.6, 0.85); else if (i === 14) reese(t, bassRoot + 12, s16 * 1.7, 0.7); }
+      else if (B === 'long') { if (i === 0) longBass(t, bassRoot + 12 > 50 ? bassRoot : bassRoot + 12, beat * 3.7); }
+      else if (B === 'sub') { if (i === 0) subNote(t, bassRoot, s16 * 2.8, 1); else if (i === 3) subNote(t, bassRoot, s16 * 4.5, 0.85); else if (i === 8) subNote(t, bassRoot, s16 * 1.9, 1); else if (i === 10) subNote(t, bassRoot + 7 > 47 ? bassRoot - 5 : bassRoot + 7, s16 * 5, 0.85); }
       else if (B === 'offbeat') { if (i % 4 === 2) bassNote(t, bassRoot, s16 * 1.9, 1); }
       else if (B === 'pump8') { if (i % 2 === 0) bassNote(t, bassRoot + (i === 6 || i === 14 ? 12 : 0), s16 * 1.7, i % 4 === 0 ? 0.7 : 1); }
       else if (B === 'octave') { if (i % 2 === 0) bassNote(t, bassRoot + (i % 4 === 2 ? 12 : 0), s16 * 1.6, i % 4 === 0 ? 0.85 : 1); }
@@ -5834,9 +5936,10 @@ function makeSynth(ctx, dest) {
     // harmony
     if (has('P') && i === 0) pad(t, chord, beat * 4);
     if (has('S') && sg.stab[i]) stab(t, chord.slice(0, 3).map((n) => n + 12), sg.stabSound);
-    if (has('A') && (dnb ? i % 2 === 0 : true)) { const seq = [0, 1, 2, 3, 2, 1], n = chord[seq[(dnb ? step / 2 : step) % seq.length]] + 12; arpNote(t, n, s16 * (dnb ? 2.6 : 1.4)); }
+    if (has('A') && soft) { if (i % 2 === 0) { const seq = [0, 1, 2, 3, 2, 1], n = chord[seq[(step / 2) % seq.length]] + 12; tone('triangle', f(n), t, s16 * 3.4, 0.045, [pump, dlyIn, verb], { attack: 0.01, lpf: 2200, lpf2: 700 }); } }
+    else if (has('A') && (dnb ? i % 2 === 0 : true)) { const seq = [0, 1, 2, 3, 2, 1], n = chord[seq[(dnb ? step / 2 : step) % seq.length]] + 12; arpNote(t, n, s16 * (dnb ? 2.6 : 1.4)); }
     // lead: two bars of phrase, repeated
-    if (has('L')) { const ev = (S.slots[b.set] || S.slots.A)[(b.barIn % 2) * 16 + i]; if (ev && ev[0]) { if (sg.leadSound === 'koto') kotoNote(t, note(ev[0], 1), s16 * ev[1]); else leadNote(t, note(ev[0], 1), s16 * ev[1] * 0.96); } }
+    if (has('L')) { const ev = (S.slots[b.set] || S.slots.A)[(b.barIn % 2) * 16 + i]; if (ev && ev[0]) { if (sg.leadSound === 'koto') kotoNote(t, note(ev[0], 1), s16 * ev[1]); else if (sg.leadSound === 'cowbell') cowbell(t, note(ev[0], 1)); else if (sg.leadSound === 'bell') bell(t, note(ev[0], 1), s16 * ev[1]); else leadNote(t, note(ev[0], 1), s16 * ev[1] * 0.96); } }
   }
   function play(song, atStep = 0) {
     S.song = song; S.map = []; S.slots = {};
@@ -5879,8 +5982,10 @@ function songCover(sg) {
 }
 // v70, the owner: "make mignight touge the only song it sounds freaking sick". The other eight stay written above but are
 // left off the radio; PLAYLIST names what plays (an empty list would mean all of them), everywhere while it is this short.
-const PLAYLIST = ['Midnight Touge'];
-for (const sg of GEN_SONGS) if (!PLAYLIST.length || PLAYLIST.includes(sg.title)) MUSIC.push({ title: sg.title, artist: 'Night Runner', gen: sg, where: PLAYLIST.length ? null : sg.where });
+// v98: the four racing tracks join it on the road, and the three calm ones play in the garage and the menus (each
+// song's own `where` decides; Midnight Touge is a road song again, so the garage is quiet music only).
+const PLAYLIST = ['Midnight Touge', 'Redline Rush', 'Ghost Lane', 'Interceptor', 'Touge Overdrive', 'After Hours', 'Clear Coat', 'Idle Hours'];
+for (const sg of GEN_SONGS) if (!PLAYLIST.length || PLAYLIST.includes(sg.title)) MUSIC.push({ title: sg.title, artist: 'Night Runner', gen: sg, where: sg.where });
 // The player on screen: the cover, title and artist of the song playing, how far through it is, and the two keys.
 function npShow(s) {
   const box = $('np'); if (!box) return; const was = box.dataset.song || ''; box.hidden = !s; if (!s) { box.dataset.song = ''; return; }
@@ -6411,6 +6516,11 @@ function resetCar(quiet) {
   // a new run: back to the foot of the ramp at a standstill, fresh traffic, the run's numbers cleared
   clearOver();
   state.leftRamp = false; syncRampGarage();
+  // v98, the owner: "the roads need to always be random". Every new run is a road nobody has driven, on one of the
+  // five highways. (Not when the garage is opened from the ramp: that only puts the car back at the foot of the
+  // road it is on.)
+  if (quiet !== true) { world.newRoad(undefined, pickHighway(null)); traffic.applyDensity?.(); highwayCard(world.road.theme, 'Starting on', 3.2); }
+  hwy.count = 0; hwy.phase = ''; hwy.exit = null; $('roadFade').style.opacity = 0; $('exitInd').hidden = true;
   const p = world.rampPose();
   car.reset(p.x, p.z, p.yaw);
   skids.trails.clear(); skids.reset?.();
@@ -6634,32 +6744,324 @@ function updateTiming() {
   if (state.t060Start != null && car.vx < 0) state.t060Start = null;
 
 }
-// tach scale, per car: 0-10k for the Supra, 0-8k for the CSL, red from the redline. The dial: a 270-degree arc
-// from bottom left (135 degrees, clockwise in screen space) over the top to bottom right, in a 220-unit SVG box.
+// ---------------------------------------------------------------- the gauges (v98)
+// The owner: "each car should have a customized gauge in the bottom right based on what the car's gauge actually looks
+// like and a the logo of the actual car next to it", with pictures and pages of a dozen real clusters, then: "look for
+// all the other speedometers for all the other cars research them please and use the correct ones". Every car draws
+// its own instruments, laid out and coloured after the real car's (drawn here in code from those references, not
+// copied pictures):
+//   Supra Mk4: three round dials, the rev counter in the middle, orange needles      Supra Mk5: a rev ring whose top runs on to the right as a straight bar
+//   M4 CSL: BMW's two angular bands, speed on the left and revs on the right          M3 E92: two dials, red needles, a yellow-then-red warning field
+//   X5: two thin-ringed dials, amber                                                   i8: two glowing orange rings (its Sport display)
+//   Corvette: the C8 Z06's big centre rev ring (the owner: "for a c8 but use it for the c7")   Camaro ZL1: two dials in squared hoods
+//   Challenger: two dials on carbon fibre, revs on the left                            Viper: one big centre rev counter, speed beside it
+//   GT-R R35: big centre rev counter with the gear beside it                           Skyline R34: rev counter to 10,000 in the middle, red needles
+//   Carrera GT and 911 GT3 RS: Porsche's centre rev counter (the GT3's needle yellow)  720S: a centre ring round the gear and speed
+//   812: Ferrari's yellow rev counter, black numerals                                  Aventador SVJ: the arch of revs, yellow into red, round a big gear
+//   R8: two dials in aluminium rings, red needles                                      NSX: two big dials, orange needles
+//   S2000: the orange arc of bars over a big digital speed                             Civic: two digital rings          MX-5: centre rev counter, white needle
+// On a phone there is room for one dial only: each car shows its rev counter (or a ring in its colours) with the speed in it.
+// The face (what never moves) is drawn once and kept; the needles, bars and numbers are drawn over it thirty times a second.
+const D2R = Math.PI / 180;
 let tachMax = 10, tachRed = 0.85;
-const DIAL = { cx: 110, cy: 110, r: 90, a0: 135, sweep: 270 };
-const dialAt = (r, f) => { const a = (DIAL.a0 + DIAL.sweep * f) * Math.PI / 180; return [DIAL.cx + r * Math.cos(a), DIAL.cy + r * Math.sin(a)]; };
-const dialArc = (r, f0, f1) => { const [x0, y0] = dialAt(r, f0), [x1, y1] = dialAt(r, f1); return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 ${(f1 - f0) * DIAL.sweep > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
+const GZ = { cv: null, g: null, face: null, key: '', L: null, fam: 'sans-serif', sans: '"Helvetica Neue",Helvetica,Arial,sans-serif' };
+const zt = (g, t, x, y, size, color, o = {}) => { g.font = `${o.i ? 'italic ' : ''}${o.w ?? 700} ${size}px ${o.fam || GZ.fam}`; g.fillStyle = color; g.textAlign = o.a || 'center'; g.textBaseline = o.b || 'middle'; g.fillText(t, x, y); };
+const zarc = (g, cx, cy, r, a0, a1, w, color) => { if (a1 <= a0) return; g.beginPath(); g.arc(cx, cy, r, a0 * D2R, a1 * D2R); g.lineWidth = w; g.strokeStyle = color; g.stroke(); };
+const zrr = (g, x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+const RED = '#e3202a';
+// an analog dial's face: bezel, face, ticks, numerals, the red zone. d: { cx, cy, r, a0, sweep }; sc: the scale; st: the style
+function zDialFace(g, d, sc, st) {
+  const { cx, cy, r } = d, a0 = d.a0 ?? 135, sw = d.sweep ?? 270, ang = (v) => a0 + sw * v / sc.max;
+  if (st.bezel) { const gr = g.createLinearGradient(cx - r, cy - r, cx + r, cy + r); gr.addColorStop(0, st.bezel[0]); gr.addColorStop(0.5, st.bezel[1]); gr.addColorStop(1, st.bezel[0]); g.beginPath(); g.arc(cx, cy, r * 1.05, 0, 7); g.fillStyle = gr; g.fill(); }
+  g.beginPath(); g.arc(cx, cy, r, 0, 7);
+  if (st.faceFn) st.faceFn(g, d); else { const gr = g.createRadialGradient(cx, cy - r * 0.25, r * 0.1, cx, cy, r); gr.addColorStop(0, st.face2 || st.face); gr.addColorStop(1, st.face); g.fillStyle = gr; g.fill(); }
+  if (st.ring) { g.beginPath(); g.arc(cx, cy, r * 0.985, 0, 7); g.lineWidth = r * 0.028; g.strokeStyle = st.ring; g.stroke(); }
+  if (sc.warn != null) zarc(g, cx, cy, r * 0.9, ang(sc.warn), ang(sc.red), r * 0.06, st.warn || '#f5b921');
+  if (sc.red != null && sc.red < sc.max) zarc(g, cx, cy, r * 0.9, ang(sc.red), ang(sc.max), r * 0.06, st.red || RED);
+  const n = Math.round(sc.max / sc.major), sub = sc.minor || 2;
+  for (let k = 0; k <= n * sub; k++) {
+    const v = k * sc.major / sub, major = k % sub === 0, a = ang(v) * D2R, hot = sc.red != null && v >= sc.red - 1e-6, r1 = r * 0.94, r0 = r * (major ? 0.8 : 0.87);
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    g.lineWidth = r * (major ? 0.028 : 0.014); g.strokeStyle = hot ? (st.red || RED) : st.tick; g.stroke();
+    if (major && (k / sub) % (sc.every || 1) === 0) zt(g, sc.fmt ? sc.fmt(v) : String(Math.round(v)), cx + Math.cos(a) * r * (sc.numR || 0.64), cy + Math.sin(a) * r * (sc.numR || 0.64), r * (sc.numS || 0.2), hot && st.redNums ? (st.red || RED) : st.num, { fam: st.fam || GZ.sans, i: st.italic, w: st.weight ?? 700 });
+  }
+  if (sc.label && r >= 56) zt(g, sc.label, cx, cy + r * (d.labelY ?? -0.32), r * 0.09, st.dim || 'rgba(255,255,255,.5)', { fam: GZ.sans, w: 600 });
+}
+function zNeedle(g, d, f, st) {
+  const { cx, cy, r } = d, a = ((d.a0 ?? 135) + (d.sweep ?? 270) * clamp(f, 0, 1)) * D2R, c = Math.cos(a), s = Math.sin(a), w = r * (st.needleW || 0.035);
+  g.save(); g.shadowColor = st.glow || 'rgba(0,0,0,.7)'; g.shadowBlur = r * 0.07;
+  g.beginPath(); g.moveTo(cx - c * r * 0.17 - s * w, cy - s * r * 0.17 + c * w); g.lineTo(cx + c * r * 0.88, cy + s * r * 0.88); g.lineTo(cx - c * r * 0.17 + s * w, cy - s * r * 0.17 - c * w); g.closePath(); g.fillStyle = st.needle; g.fill(); g.restore();
+  g.beginPath(); g.arc(cx, cy, r * (st.hubR || 0.12), 0, 7); g.fillStyle = st.hub || '#0c0c0d'; g.fill(); g.lineWidth = r * 0.014; g.strokeStyle = st.hubRing || 'rgba(255,255,255,.2)'; g.stroke();
+}
+// the speedometer's scale for a car whose dial reads to `mph`, in the units the player has chosen
+const zSpeedScale = (mph) => (state.units === 'mph' ? { max: mph, major: 20, minor: 2, every: mph > 200 ? 2 : 1, numS: 0.125, numR: 0.67, label: 'mph' } : { max: Math.ceil(mph * 1.609 / 40) * 40, major: 20, minor: 2, every: 2, numS: 0.125, numR: 0.67, label: 'km/h' });
+// a little display: the gear on the left, the speed and its unit on the right
+function zReadout(g, r, S, st = {}) {
+  zrr(g, r.x - r.w / 2, r.y - r.h / 2, r.w, r.h, r.h * 0.2); g.fillStyle = st.bg || 'rgba(3,4,5,.92)'; g.fill(); g.lineWidth = 1; g.strokeStyle = st.edge || 'rgba(255,255,255,.16)'; g.stroke();
+  zt(g, S.gear, r.x - r.w * 0.31, r.y + r.h * 0.03, r.h * 0.74, S.gear === 'R' ? '#ffb238' : st.gear || st.ink || '#fff', { i: st.italic });
+  g.fillStyle = st.edge || 'rgba(255,255,255,.16)'; g.fillRect(r.x - r.w * 0.14, r.y - r.h * 0.3, 1, r.h * 0.6);
+  zt(g, String(S.spd), r.x + r.w * 0.2, r.y + r.h * 0.03, r.h * 0.68, st.ink || '#fff', { a: 'right', i: st.italic });
+  zt(g, S.unit, r.x + r.w * 0.23, r.y + r.h * 0.14, r.h * 0.27, st.dim || 'rgba(255,255,255,.55)', { a: 'left', w: 600 });
+}
+// the plate everything sits on
+function zPanel(g, L, fill = 'rgba(7,8,11,.86)') { zrr(g, 1, 1, L.W - 2, L.H - 2, L.compact ? 26 : 18); g.fillStyle = fill; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.1)'; g.stroke(); }
+// ---- analog clusters: a list of dials (role: tach, speed, boost or aux), one style, a readout
+function analogCluster(cfg) {
+  const scaleOf = (d) => (d.role === 'tach' ? { max: tachMax, major: 1, minor: cfg.tachMinor || 2, red: CAR.redline / 1000, warn: cfg.warn ? CAR.redline / 1000 - cfg.warn : null, label: 'x1000 r/min', numS: tachMax > 9 ? 0.175 : 0.2, numR: 0.64 }
+    : d.role === 'speed' ? zSpeedScale(cfg.mph) : d.role === 'boost' ? { max: 4, major: 1, minor: 2, fmt: (v) => ['', '0', '', '1', ''][v], numS: 0.2, numR: 0.6, label: 'boost' } : { max: 4, major: 2, minor: 2, fmt: (v) => ['C', '', 'H'][v / 2], numS: 0.2, numR: 0.6, label: d.label || 'temp' });
+  const styleOf = (d) => ({ ...cfg.style, ...(d.style || {}) });
+  return {
+    face(g, L) {
+      L.dials = L.compact ? [{ ...cfg.dials.find((d) => d.role === 'tach'), cx: 90, cy: 90, r: 82 }] : cfg.dials;
+      zPanel(g, L, cfg.plate);
+      if (cfg.hoods && !L.compact) for (const d of L.dials) { zrr(g, d.cx - d.r * 1.08, d.cy - d.r * 1.06, d.r * 2.16, d.r * 2.12, d.r * 0.42); g.fillStyle = '#131417'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = 'rgba(255,255,255,.18)'; g.stroke(); }
+      for (const d of L.dials) zDialFace(g, d, scaleOf(d), styleOf(d));
+    },
+    live(g, S, L) {
+      for (const d of L.dials) zNeedle(g, d, d.role === 'tach' ? S.f : d.role === 'speed' ? S.spd / zSpeedScale(cfg.mph).max : d.role === 'boost' ? 0.2 + 0.7 * S.boost : 0.45, styleOf(d));
+      zReadout(g, L.compact ? { x: 90, y: 151, w: 64, h: 24 } : cfg.readout, S, cfg.read);
+    },
+  };
+}
+// ---- digital rings: a track with numerals inside it, a lit sweep, a red zone
+function zRingFace(g, d, o) {
+  const a0 = d.a0 ?? 135, sw = d.sweep ?? 270, { cx, cy, r } = d, w = o.w || r * 0.11, max = o.max;
+  zarc(g, cx, cy, r, a0, a0 + sw, w, o.track || 'rgba(255,255,255,.1)');
+  if (o.red != null) zarc(g, cx, cy, r, a0 + sw * o.red / max, a0 + sw, w, o.redTrack || 'rgba(227,32,42,.38)');
+  for (let k = 0; k <= max * (o.sub || 2); k++) {
+    const v = k / (o.sub || 2), a = (a0 + sw * v / max) * D2R, major = k % (o.sub || 2) === 0, hot = o.red != null && v >= o.red - 1e-6;
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * (r + w * 0.75), cy + Math.sin(a) * (r + w * 0.75)); g.lineTo(cx + Math.cos(a) * (r + w * (major ? 1.5 : 1.15)), cy + Math.sin(a) * (r + w * (major ? 1.5 : 1.15)));
+    g.lineWidth = major ? 1.6 : 1; g.strokeStyle = hot ? RED : o.tick || 'rgba(255,255,255,.5)'; g.stroke();
+    if (major && o.nums !== false && v % (o.every || 1) === 0) zt(g, o.fmt ? o.fmt(v) : String(v), cx + Math.cos(a) * (r - w * 1.75), cy + Math.sin(a) * (r - w * 1.75), r * (o.numS || 0.17), hot ? RED : o.num || '#e9edf2', { i: o.italic, w: o.weight ?? 700 });
+  }
+}
+function zRingLive(g, d, f, o) {
+  const a0 = d.a0 ?? 135, sw = d.sweep ?? 270, { cx, cy, r } = d, w = o.w || r * 0.11, fr = o.red != null ? o.red / o.max : 2;
+  g.save(); g.shadowColor = o.glow || o.fill; g.shadowBlur = r * 0.12;
+  zarc(g, cx, cy, r, a0, a0 + sw * Math.min(f, fr), w, o.fill);
+  if (f > fr) zarc(g, cx, cy, r, a0 + sw * fr, a0 + sw * f, w, RED);
+  g.restore();
+  const a = (a0 + sw * f) * D2R; g.beginPath(); g.moveTo(cx + Math.cos(a) * (r - w * 0.9), cy + Math.sin(a) * (r - w * 0.9)); g.lineTo(cx + Math.cos(a) * (r + w * 0.9), cy + Math.sin(a) * (r + w * 0.9)); g.lineWidth = 2.4; g.strokeStyle = '#fff'; g.stroke();
+}
+// one centre ring round the gear and the speed (the Corvette, the 720S, and every digital cluster on a phone)
+function ringCluster(o) {
+  return {
+    face(g, L) { L.d = L.compact ? { cx: 90, cy: 92, r: 70 } : { cx: 180, cy: 94, r: 70 }; zPanel(g, L, o.plate); zRingFace(g, L.d, { ...o, max: tachMax, red: CAR.redline / 1000 }); if (!L.compact && o.sides) o.sides(g, L); },
+    live(g, S, L) {
+      const d = L.d; zRingLive(g, d, S.f, { ...o, max: tachMax, red: CAR.redline / 1000 });
+      zt(g, S.gear, d.cx, d.cy - d.r * 0.2, d.r * 0.66, S.gear === 'R' ? '#ffb238' : o.gear || '#fff', { i: o.italic, w: 800 });
+      zt(g, String(S.spd), d.cx, d.cy + d.r * 0.36, d.r * 0.4, o.ink || '#fff', { i: o.italic });
+      zt(g, S.unit, d.cx, d.cy + d.r * 0.66, d.r * 0.14, o.dim || 'rgba(255,255,255,.55)', { w: 600 });
+      if (!L.compact && o.sidesLive) o.sidesLive(g, S, L);
+    },
+  };
+}
+// two rings side by side (the i8's Sport display, the Civic): one is the rev counter with the gear in it, the other the speed
+function twinRings(o) {
+  const single = ringCluster(o);
+  return {
+    face(g, L) {
+      if (L.compact) return single.face(g, L);
+      zPanel(g, L, o.plate); L.t = { cx: o.tachLeft ? 92 : 268, cy: 92, r: 66 }; L.s = { cx: o.tachLeft ? 268 : 92, cy: 92, r: 66 };
+      zRingFace(g, L.t, { ...o, max: tachMax, red: CAR.redline / 1000 });
+      const sc = zSpeedScale(o.mph); zRingFace(g, L.s, { ...o, max: sc.max / 20, sub: 1, red: null, every: 2, fmt: (v) => String(v * 20), numS: 0.14 });
+    },
+    live(g, S, L) {
+      if (L.compact) return single.live(g, S, L);
+      zRingLive(g, L.t, S.f, { ...o, max: tachMax, red: CAR.redline / 1000 });
+      const sc = zSpeedScale(o.mph); zRingLive(g, L.s, Math.min(1, S.spd / sc.max), { ...o, max: 1, red: null });
+      zt(g, S.gear, L.t.cx, L.t.cy - 4, 46, S.gear === 'R' ? '#ffb238' : o.gear || '#fff', { i: o.italic, w: 800 });
+      zt(g, 'x1000 rpm', L.t.cx, L.t.cy + 30, 9, o.dim || 'rgba(255,255,255,.55)', { w: 600 });
+      zt(g, String(S.spd), L.s.cx, L.s.cy - 4, 40, o.ink || '#fff', { i: o.italic, w: 800 });
+      zt(g, S.unit, L.s.cx, L.s.cy + 28, 10, o.dim || 'rgba(255,255,255,.55)', { w: 600 });
+    },
+  };
+}
+// a line through points, and the part of it between two fractions of its length (for bars that are not circles)
+function zPolyLen(pts) { const seg = []; let L = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); L += l; } return { seg, L }; }
+function zPolyAt(pts, f) { const { seg, L } = zPolyLen(pts); let s = clamp(f, 0, 1) * L; for (let i = 0; i < seg.length; i++) { if (s <= seg[i] || i === seg.length - 1) { const t = seg[i] ? clamp(s / seg[i], 0, 1) : 0; return [lerp(pts[i][0], pts[i + 1][0], t), lerp(pts[i][1], pts[i + 1][1], t)]; } s -= seg[i]; } return pts[pts.length - 1]; }
+function zPoly(g, pts, f0, f1, w, color) {
+  if (f1 <= f0) return; const { seg, L } = zPolyLen(pts), a = f0 * L, b = f1 * L; let acc = 0, started = false; g.beginPath();
+  for (let i = 0; i < seg.length; i++) { const s0 = acc, s1 = acc + seg[i]; acc = s1; if (s1 < a || s0 > b || !seg[i]) continue; const t0 = Math.max(0, (a - s0) / seg[i]), t1 = Math.min(1, (b - s0) / seg[i]); if (!started) { g.moveTo(lerp(pts[i][0], pts[i + 1][0], t0), lerp(pts[i][1], pts[i + 1][1], t0)); started = true; } g.lineTo(lerp(pts[i][0], pts[i + 1][0], t1), lerp(pts[i][1], pts[i + 1][1], t1)); }
+  g.lineWidth = w; g.strokeStyle = color; g.lineJoin = 'round'; g.lineCap = 'butt'; g.stroke();
+}
+const arcPts = (cx, cy, r, a0, a1, n = 40) => Array.from({ length: n + 1 }, (_, k) => { const a = (a0 + (a1 - a0) * k / n) * D2R; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; });
+// ---- the Mk5 Supra: a ring that starts at the lower left, climbs over the top and runs on to the right as a straight bar
+const a90Cluster = (() => {
+  const pal = { fill: '#f4f6f8', num: '#e9edf2', plate: 'rgba(5,6,8,.9)' }, small = ringCluster(pal), pts = [...arcPts(112, 98, 66, 128, 270, 36), [330, 32]];
+  return {
+    face(g, L) {
+      if (L.compact) return small.face(g, L);
+      zPanel(g, L, pal.plate); const fr = CAR.redline / 1000 / tachMax;
+      zPoly(g, pts, 0, 1, 9, 'rgba(255,255,255,.11)'); zPoly(g, pts, fr, 1, 9, 'rgba(227,32,42,.4)');
+      for (let k = 0; k <= tachMax; k++) { const [x, y] = zPolyAt(pts, k / tachMax), onArc = x < 113, dx = onArc ? 112 - x : 0, dy = onArc ? 98 - y : 1, n = Math.hypot(dx, dy) || 1; zt(g, String(k), x + dx / n * 17, y + dy / n * 17, 13, k >= CAR.redline / 1000 ? RED : pal.num, { w: 700 }); }
+      zt(g, 'x1000 rpm', 300, 70, 9, 'rgba(255,255,255,.5)', { w: 600 });
+    },
+    live(g, S, L) {
+      if (L.compact) return small.live(g, S, L);
+      const fr = CAR.redline / 1000 / tachMax;
+      g.save(); g.shadowColor = '#fff'; g.shadowBlur = 8; zPoly(g, pts, 0, Math.min(S.f, fr), 9, pal.fill); if (S.f > fr) zPoly(g, pts, fr, S.f, 9, RED); g.restore();
+      zt(g, String(S.spd), 112, 96, 50, '#fff', { w: 800 }); zt(g, S.unit, 112, 130, 11, 'rgba(255,255,255,.55)', { w: 600 });
+      zrr(g, 222, 92, 78, 56, 8); g.fillStyle = 'rgba(255,255,255,.05)'; g.fill(); g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,.16)'; g.stroke();
+      zt(g, S.gear, 261, 122, 44, S.gear === 'R' ? '#ffb238' : '#fff', { w: 800 });
+    },
+  };
+})();
+// ---- the M4 CSL: BMW M's display, two angular bands facing each other, speed in the left one and revs in the right
+const bmwMCluster = (() => {
+  const pal = { fill: '#f1f3f6', num: '#e9edf2', plate: 'rgba(5,6,9,.9)' }, small = ringCluster(pal);
+  const Lp = [[150, 156], [46, 156], [16, 90], [46, 24], [150, 24]], Rp = Lp.map(([x, y]) => [360 - x, y]);
+  return {
+    face(g, L) {
+      if (L.compact) return small.face(g, L);
+      zPanel(g, L, pal.plate); const fr = CAR.redline / 1000 / tachMax;
+      zPoly(g, Lp, 0, 1, 10, 'rgba(255,255,255,.1)'); zPoly(g, Rp, 0, 1, 10, 'rgba(255,255,255,.1)'); zPoly(g, Rp, fr, 1, 10, 'rgba(227,32,42,.42)');
+      for (let k = 0; k <= tachMax; k++) { const [x, y] = zPolyAt(Rp, k / tachMax), dx = 262 - x, dy = 90 - y, n = Math.hypot(dx, dy); zt(g, String(k), x + dx / n * 18, y + dy / n * 18, 12.5, k >= CAR.redline / 1000 ? RED : pal.num, { i: true, w: 700 }); }
+      const sc = zSpeedScale(200); for (let v = 0; v <= sc.max; v += sc.major * 2) { const [x, y] = zPolyAt(Lp, v / sc.max), dx = 98 - x, dy = 90 - y, n = Math.hypot(dx, dy); zt(g, String(v), x + dx / n * 18, y + dy / n * 18, 9.5, 'rgba(233,237,242,.75)', { i: true, w: 600 }); }
+      // the three M stripes
+      [['#2b9ad6', 0], ['#1e3f8f', 5], [RED, 10]].forEach(([c, dx]) => { g.beginPath(); g.moveTo(168 + dx, 150); g.lineTo(173 + dx, 150); g.lineTo(179 + dx, 138); g.lineTo(174 + dx, 138); g.closePath(); g.fillStyle = c; g.fill(); });
+    },
+    live(g, S, L) {
+      if (L.compact) return small.live(g, S, L);
+      const fr = CAR.redline / 1000 / tachMax, sc = zSpeedScale(200);
+      g.save(); g.shadowColor = '#cfe6ff'; g.shadowBlur = 8; zPoly(g, Lp, 0, Math.min(1, S.spd / sc.max), 10, pal.fill); zPoly(g, Rp, 0, Math.min(S.f, fr), 10, pal.fill); if (S.f > fr) zPoly(g, Rp, fr, S.f, 10, RED); g.restore();
+      zt(g, String(S.spd), 104, 86, 48, '#fff', { i: true, w: 800 }); zt(g, S.unit, 104, 120, 11, 'rgba(255,255,255,.55)', { w: 600 });
+      zt(g, S.gear, 258, 86, 48, S.gear === 'R' ? '#ffb238' : '#fff', { i: true, w: 800 }); zt(g, 'x1000 rpm', 258, 120, 9, 'rgba(255,255,255,.5)', { w: 600 });
+    },
+  };
+})();
+// ---- the Aventador SVJ (the owner's picture): an arch of revs from 0 to 10, yellow running into red, over a big gear
+// letter on a field of hexagons, the speed at the lower right
+const svjCluster = (() => {
+  const pal = { fill: '#f5d21f', num: '#f3ecc6', plate: 'rgba(8,8,7,.92)', gear: '#ff3b30', italic: true }, small = ringCluster(pal), C = [180, 226, 188], A0 = 207, A1 = 333, N = 64;
+  const seg = (g, k, color) => { const a = A0 + (A1 - A0) * k / N; zarc(g, C[0], C[1], C[2], a + 0.25, a + (A1 - A0) / N - 0.25, 12, color); };
+  const col = (k, on) => { const f = k / N, fr = CAR.redline / 1000 / tachMax; return f >= fr ? (on ? '#ff2a1f' : 'rgba(255,42,31,.3)') : f > fr - 0.14 ? (on ? '#ff9a1f' : 'rgba(255,154,31,.2)') : (on ? '#f5d21f' : 'rgba(245,210,31,.14)'); };
+  return {
+    face(g, L) {
+      if (L.compact) return small.face(g, L);
+      zPanel(g, L, pal.plate);
+      g.save(); zrr(g, 1, 1, L.W - 2, L.H - 2, 18); g.clip(); g.strokeStyle = 'rgba(255,255,255,.05)'; g.lineWidth = 1;
+      for (let row = 0; row < 7; row++) for (let c = 0; c < 12; c++) { const x = 60 + c * 22 + (row % 2) * 11, y = 78 + row * 19; g.beginPath(); for (let k = 0; k < 6; k++) { const a = (60 * k + 30) * D2R; g[k ? 'lineTo' : 'moveTo'](x + Math.cos(a) * 12, y + Math.sin(a) * 12); } g.closePath(); g.stroke(); }
+      g.restore();
+      for (let k = 0; k < N; k++) seg(g, k, col(k, false));
+      for (let k = 0; k <= tachMax; k++) { const a = (A0 + (A1 - A0) * k / tachMax) * D2R; zt(g, String(k), C[0] + Math.cos(a) * (C[2] - 19), C[1] + Math.sin(a) * (C[2] - 19), 13, k >= CAR.redline / 1000 ? '#ff5a4f' : pal.num, { i: true, w: 700 }); }
+      zt(g, 'CORSA', 116, 104, 10, '#ff3b30', { i: true, w: 700 });
+    },
+    live(g, S, L) {
+      if (L.compact) return small.live(g, S, L);
+      g.save(); g.shadowColor = '#f5d21f'; g.shadowBlur = 6; for (let k = 0; k < Math.round(S.f * N); k++) seg(g, k, col(k, true)); g.restore();
+      zt(g, S.gear, 180, 112, 62, S.gear === 'R' ? '#ffb238' : '#ff3b30', { i: true, w: 800 });
+      zt(g, String(S.spd), 286, 160, 28, '#fff', { a: 'right', i: true, w: 800 }); zt(g, S.unit, 290, 166, 10, 'rgba(255,255,255,.6)', { a: 'left', w: 600 });
+      zt(g, `${Math.round(S.rpm / 10) * 10} rpm`, 64, 164, 10, 'rgba(255,255,255,.5)', { a: 'left', w: 600 });
+    },
+  };
+})();
+// ---- the S2000: an arc of orange bars for the revs over a big orange digital speed
+const s2kCluster = (() => {
+  const OR = '#ff7a14', pal = { fill: OR, num: '#ffb066', plate: 'rgba(6,5,4,.92)', ink: OR, gear: OR }, small = ringCluster(pal), C = [180, 198, 162], A0 = 211, A1 = 329, N = 54;
+  const seg = (g, k, color) => { const a = A0 + (A1 - A0) * k / N; zarc(g, C[0], C[1], C[2], a + 0.22, a + (A1 - A0) / N - 0.22, 15, color); };
+  return {
+    face(g, L) {
+      if (L.compact) return small.face(g, L);
+      zPanel(g, L, pal.plate); const fr = CAR.redline / 1000 / tachMax;
+      for (let k = 0; k < N; k++) seg(g, k, k / N >= fr ? 'rgba(255,40,30,.22)' : 'rgba(255,122,20,.12)');
+      for (let k = 0; k <= tachMax; k++) { const a = (A0 + (A1 - A0) * k / tachMax) * D2R; zt(g, String(k), C[0] + Math.cos(a) * (C[2] - 20), C[1] + Math.sin(a) * (C[2] - 20), 12, k >= CAR.redline / 1000 ? '#ff4a3d' : pal.num, { w: 700 }); }
+      // fuel and temperature: the two short bar scales in the lower corners
+      for (const [x, n, t] of [[26, 6, 'E     F'], [274, 4, 'C     H']]) { for (let k = 0; k < 8; k++) { g.fillStyle = k < n ? 'rgba(255,122,20,.8)' : 'rgba(255,122,20,.14)'; g.fillRect(x + k * 7.5, 150, 5.5, 9); } zt(g, t, x + 29, 167, 8, 'rgba(255,176,102,.7)', { w: 600 }); }
+    },
+    live(g, S, L) {
+      if (L.compact) return small.live(g, S, L);
+      const fr = CAR.redline / 1000 / tachMax;
+      g.save(); g.shadowColor = OR; g.shadowBlur = 7; for (let k = 0; k < Math.round(S.f * N); k++) seg(g, k, k / N >= fr ? '#ff3a2a' : OR); g.restore();
+      g.save(); g.shadowColor = OR; g.shadowBlur = 10; zt(g, String(S.spd), 196, 116, 64, OR, { a: 'right', i: true, w: 800 }); g.restore();
+      zt(g, S.unit, 202, 134, 12, '#ffb066', { a: 'left', w: 600 });
+      zt(g, S.gear, 256, 142, 22, S.gear === 'R' ? '#ffd27a' : '#ffb066', { w: 800 });
+    },
+  };
+})();
+// ---- the faces and needles of the analog cars
+const twin = (l, r) => [{ role: l, cx: 90, cy: 86, r: 78 }, { role: r, cx: 270, cy: 86, r: 78 }];
+const three = (l, r, rs = 52) => [{ role: l, cx: 54, cy: 106, r: rs }, { role: 'tach', cx: 180, cy: 90, r: 84 }, { role: r, cx: 306, cy: 106, r: rs }];
+const RO_TWIN = { x: 180, y: 160, w: 96, h: 30 }, RO_MID = { x: 180, y: 152, w: 64, h: 24 };
+const WHITE = { face: '#0a0a0b', face2: '#17181b', tick: '#f2f2f2', num: '#f2f2f2' };
+let carbonPat = null;
+const carbonFace = (g, d) => {   // a carbon-fibre weave under the dial (the Challenger insert the owner sent)
+  if (!carbonPat) { const c = document.createElement('canvas'); c.width = c.height = 8; const q = c.getContext('2d'); q.fillStyle = '#0b0b0c'; q.fillRect(0, 0, 8, 8); q.fillStyle = '#232427'; q.fillRect(0, 0, 4, 4); q.fillRect(4, 4, 4, 4); q.fillStyle = '#17181a'; q.fillRect(1, 1, 2, 2); q.fillRect(5, 5, 2, 2); carbonPat = g.createPattern(c, 'repeat'); }
+  g.save(); g.fillStyle = carbonPat; g.transform(0.7, 0.7, -0.7, 0.7, d.cx, d.cy); g.fill(); g.restore();
+  const gr = g.createRadialGradient(d.cx, d.cy, d.r * 0.3, d.cx, d.cy, d.r); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.55)'); g.beginPath(); g.arc(d.cx, d.cy, d.r, 0, 7); g.fillStyle = gr; g.fill();
+};
+const GAUGES = {
+  supra: analogCluster({ mph: 180, dials: three('boost', 'speed', 54), readout: RO_MID, style: { ...WHITE, needle: '#ff5a1f', ring: 'rgba(255,255,255,.12)' } }),
+  a90: a90Cluster,
+  csl: bmwMCluster,
+  e92: analogCluster({ mph: 200, dials: twin('speed', 'tach'), readout: RO_TWIN, warn: 1.5, style: { face: '#101114', face2: '#23252a', tick: '#f4f4f4', num: '#f4f4f4', needle: '#e3202a', bezel: ['#8b8f96', '#2a2c30'] } }),
+  x5: analogCluster({ mph: 160, dials: twin('speed', 'tach'), readout: RO_TWIN, style: { face: '#060607', face2: '#101011', tick: '#f0f0f0', num: '#f0f0f0', needle: '#ff6a14', ring: '#ff6a14', glow: 'rgba(255,106,20,.7)' }, read: { ink: '#ffb27a', gear: '#ffb27a' } }),
+  i8: twinRings({ mph: 180, fill: '#ff5a1a', num: '#ffd0b0', tick: 'rgba(255,140,90,.7)', track: 'rgba(255,90,26,.14)', plate: 'rgba(8,5,4,.92)', ink: '#fff', gear: '#fff' }),
+  // the owner: "for a c8 but use it for the c7": the C8 Z06's centre ring, white running into yellow, the gear and speed inside it
+  c7: ringCluster({ fill: '#ffd21a', num: '#f1f3f5', plate: 'rgba(6,7,9,.92)', italic: true, w: 9,
+    sides(g) { zt(g, 'TRACK', 56, 60, 12, '#ffd21a', { i: true, w: 800 }); zt(g, 'RPM', 56, 108, 9, 'rgba(255,255,255,.5)', { w: 600 }); zt(g, 'BOOST', 304, 108, 9, 'rgba(255,255,255,.5)', { w: 600 }); zt(g, 'Z06', 304, 60, 14, '#f1f3f5', { i: true, w: 800 }); },
+    sidesLive(g, S) { zt(g, String(Math.round(S.rpm / 10) * 10), 56, 90, 20, '#fff', { i: true }); g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(276, 86, 56, 7); g.fillStyle = '#ffd21a'; g.fillRect(276, 86, 56 * S.boost, 7); } }),
+  zl1: analogCluster({ mph: 220, dials: [{ role: 'speed', cx: 88, cy: 84, r: 70 }, { role: 'tach', cx: 272, cy: 84, r: 70 }], hoods: true, readout: { x: 180, y: 158, w: 96, h: 32 }, style: { ...WHITE, needle: '#e3202a', italic: true, redNums: true } }),
+  hc: analogCluster({ mph: 200, dials: twin('tach', 'speed'), readout: RO_TWIN, style: { faceFn: carbonFace, tick: '#fafafa', num: '#fafafa', needle: '#e3202a', ring: '#b5121b', italic: true, weight: 800, redNums: true }, read: { gear: '#ff4a4a' } }),
+  viper: analogCluster({ mph: 220, dials: [{ role: 'aux', cx: 52, cy: 108, r: 44, label: 'oil' }, { role: 'tach', cx: 180, cy: 90, r: 84 }, { role: 'speed', cx: 308, cy: 108, r: 50 }], readout: RO_MID, style: { ...WHITE, needle: '#e3202a', ring: '#b5121b', italic: true, redNums: true }, read: { gear: '#ff4a4a' } }),
+  gtr: analogCluster({ mph: 220, dials: [{ role: 'speed', cx: 60, cy: 104, r: 56 }, { role: 'tach', cx: 186, cy: 90, r: 84 }, { role: 'boost', cx: 312, cy: 112, r: 42 }], readout: { x: 186, y: 152, w: 64, h: 24 }, style: { ...WHITE, needle: '#e3202a', bezel: ['#a9adb3', '#3a3d42'] } }),
+  r34: analogCluster({ mph: 200, dials: three('boost', 'speed', 54), readout: RO_MID, style: { face: '#0b0808', face2: '#1d1213', tick: '#f2f2f2', num: '#f2f2f2', needle: '#ff3a1f', redNums: true } }),
+  cgt: analogCluster({ mph: 220, dials: three('speed', 'aux', 54), readout: RO_MID, style: { ...WHITE, needle: '#ff4a1f', bezel: ['#c9cdd2', '#565a60'] } }),
+  gt3: analogCluster({ mph: 220, dials: three('speed', 'aux', 54), readout: RO_MID, style: { ...WHITE, needle: '#ffd400', glow: 'rgba(255,212,0,.6)', bezel: ['#3a3c40', '#131416'], redNums: true }, read: { gear: '#ffd400' } }),
+  mcl: ringCluster({ fill: '#eef3f7', num: '#eef3f7', plate: 'rgba(6,7,9,.92)', gear: '#ff8a1f', w: 6,
+    sides(g) { zt(g, 'TRACK', 56, 62, 11, '#ff8a1f', { w: 800 }); zt(g, 'RPM', 56, 108, 9, 'rgba(255,255,255,.5)', { w: 600 }); zt(g, 'ACTIVE', 304, 62, 11, 'rgba(255,255,255,.7)', { w: 800 }); },
+    sidesLive(g, S) { zt(g, String(Math.round(S.rpm / 10) * 10), 56, 90, 20, '#fff'); } }),
+  // Ferrari: the yellow rev counter with black numerals (the owner's F430 cluster picture), the speed on a panel beside it
+  f812: analogCluster({ mph: 220, dials: [{ role: 'aux', cx: 52, cy: 108, r: 44, label: 'oil', style: { face: '#0a0a0b', face2: '#17181b', tick: '#f2f2f2', num: '#f2f2f2', dim: 'rgba(255,255,255,.5)' } }, { role: 'tach', cx: 180, cy: 90, r: 84 }, { role: 'speed', cx: 308, cy: 108, r: 50, style: { face: '#0a0a0b', face2: '#17181b', tick: '#f2f2f2', num: '#f2f2f2', dim: 'rgba(255,255,255,.5)' } }], readout: RO_MID,
+    style: { face: '#f2c200', face2: '#ffdd3c', tick: '#111', num: '#111', dim: 'rgba(0,0,0,.6)', needle: '#d2161f', hub: '#111', red: '#c8102e', bezel: ['#bfc3c8', '#4a4d52'], italic: true, weight: 800 } }),
+  svj: svjCluster,
+  r8: analogCluster({ mph: 200, dials: twin('tach', 'speed'), readout: RO_TWIN, style: { ...WHITE, needle: '#e3202a', bezel: ['#d5d8dc', '#6b6f75'] }, read: { ink: '#ff5a4a', gear: '#ff5a4a', dim: 'rgba(255,90,74,.7)' } }),
+  nsx: analogCluster({ mph: 180, dials: twin('tach', 'speed'), readout: RO_TWIN, style: { ...WHITE, needle: '#ff7a14', glow: 'rgba(255,122,20,.5)' } }),
+  s2k: s2kCluster,
+  fl5: twinRings({ mph: 180, tachLeft: true, fill: '#f3f5f7', num: '#eef1f4', plate: 'rgba(6,7,9,.92)', gear: '#ff3030' }),
+  miata: analogCluster({ mph: 160, dials: three('aux', 'speed', 54), readout: RO_MID, style: { ...WHITE, needle: '#f4f4f4', hub: '#1b1c1f', redNums: true } }),
+  eclipse: analogCluster({ mph: 160, dials: [{ role: 'boost', cx: 50, cy: 110, r: 42 }, { role: 'speed', cx: 160, cy: 90, r: 80 }, { role: 'tach', cx: 296, cy: 100, r: 60 }], readout: { x: 160, y: 150, w: 64, h: 24 }, style: { ...WHITE, needle: '#ff6a14' } }),
+};
+GAUGES.default = GAUGES.gtr;
+const gaugeFor = (id) => GAUGES[id] || GAUGES[baseOf(id)] || GAUGES[CAR_DEFS[id]?.variantOf] || GAUGES.default;
+// the size of the picture: twice as wide as it is high on a computer, one square dial on a phone
+function gaugeLayout() {
+  const cl = $('cluster'), d = parseFloat(getComputedStyle(cl).getPropertyValue('--d')) || 224, compact = isTouch || innerWidth < 1060;
+  const w = Math.round(compact ? d : d * 1.84), h = Math.round(compact ? d : d * 0.92), px = Math.min(2, devicePixelRatio || 1);
+  const cv = GZ.cv ||= $('gauge'); GZ.g ||= cv.getContext('2d');
+  if (cv.width !== Math.round(w * px) || cv.height !== Math.round(h * px)) { cv.width = Math.round(w * px); cv.height = Math.round(h * px); cv.style.width = w + 'px'; cv.style.height = h + 'px'; cl.style.width = w + 'px'; GZ.key = ''; }
+  cl.classList.toggle('compact', compact);
+  return { W: compact ? 180 : 360, H: 180, compact, k: cv.width / (compact ? 180 : 360) };
+}
 function buildTach() {
   tachMax = rig ? rig.def.tach : 10;
-  const red = CAR.redline / 1000; tachRed = clamp(red / tachMax, 0, 1);
-  const NS = 'http://www.w3.org/2000/svg', mk = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
-  for (const id of ['dialTrack', 'tachFill', 'dialSegCut']) $(id).setAttribute('d', dialArc(DIAL.r, 0, 1));
-  $('dialRed').setAttribute('d', dialArc(DIAL.r, tachRed, 1));
-  const g = $('tachNums'); g.replaceChildren();
-  for (let i = 0; i <= tachMax * 2; i++) {
-    const f = i / (tachMax * 2), major = i % 2 === 0, hot = f >= tachRed - 1e-6, [x0, y0] = dialAt(major ? 99 : 100.5, f), [x1, y1] = dialAt(105, f);
-    g.append(mk('line', { x1: x0.toFixed(2), y1: y0.toFixed(2), x2: x1.toFixed(2), y2: y1.toFixed(2), class: (major ? '' : 'minor') + (hot ? ' red' : '') }));
-    if (major) { const [tx, ty] = dialAt(70, f), t = mk('text', { x: tx.toFixed(2), y: ty.toFixed(2), class: i / 2 >= Math.ceil(red) ? 'red' : '' }); t.textContent = i / 2; g.append(t); }
+  tachRed = clamp(CAR.redline / 1000 / tachMax, 0, 1);
+  GZ.fam = getComputedStyle(document.documentElement).getPropertyValue('--f-display') || 'sans-serif';
+  GZ.key = '';
+  // the maker's badge beside the gauge (the pictures on the garage's keys; Ferrari's is the owner's photo of the key)
+  const logo = $('gaugeLogo'), brand = rig ? brandOf(rig.def.id) : '', file = !brand ? null : brand === 'Ferrari' ? 'ferrarikey' : KEY_LOGO_FILES[brand];
+  logo.hidden = !file; if (file && logo.dataset.f !== file) { logo.dataset.f = file; logo.src = `keylogo-${file}.png`; logo.alt = brand; logo.classList.toggle('tall', brand === 'Ferrari'); }
+  drawGauge();
+}
+function drawGauge() {
+  if (!$('gauge') || $('hud').hidden) return;
+  const L = gaugeLayout(), g = GZ.g, des = gaugeFor(rig ? rig.def.id : 'default');
+  const key = `${rig ? rig.def.id : ''}|${state.units}|${GZ.cv.width}|${L.compact}|${tachMax}|${CAR.redline}`;
+  if (key !== GZ.key) {
+    GZ.key = key; GZ.L = L;
+    const f = GZ.face ||= document.createElement('canvas'); f.width = GZ.cv.width; f.height = GZ.cv.height;
+    const q = f.getContext('2d'); q.setTransform(L.k, 0, 0, L.k, 0, 0); q.clearRect(0, 0, L.W, L.H);
+    des.face(q, L);
   }
-  updateTachDial(car ? car.rpm : 0);
+  const S = { rpm: car.rpm, f: clamp(car.rpm / (tachMax * 1000), 0, 1), spd: Math.round(Math.abs(car.vx) * speedUnit()), unit: state.units === 'mph' ? 'mph' : 'km/h', boost: clamp(car.boost || 0, 0, 1),
+    gear: car.gear < 0 ? 'R' : (car.speed < 0.3 && car.throttle < 0.05 && car.gear === 1 ? 'N' : String(car.gear)) };
+  g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, GZ.cv.width, GZ.cv.height); g.drawImage(GZ.face, 0, 0);
+  g.setTransform(GZ.L.k, 0, 0, GZ.L.k, 0, 0);
+  des.live(g, S, GZ.L);
+  $('cluster').classList.toggle('hot', S.f >= tachRed);
 }
-function updateTachDial(rpm) {
-  const f = clamp(rpm / (tachMax * 1000), 0, 1);
-  $('tachFill').style.strokeDasharray = `${(f * 1000).toFixed(1)} 1000`;
-  $('dialTip').setAttribute('transform', `rotate(${(DIAL.a0 + DIAL.sweep * f).toFixed(2)} 110 110)`);
-  $('cluster').classList.toggle('hot', f >= tachRed);
-}
+function updateTachDial() { drawGauge(); }
+addEventListener('resize', () => { GZ.key = ''; });
 buildTach();
 let hudLast = 0;
 function updateHud(now) {
@@ -6939,9 +7341,9 @@ function updateWorld(dt, x, z, yaw) {
   carShadow.visible = room && !!rig;
   if (carShadow.visible) { const b = rig.bounds; carShadow.scale.set((b.max.x - b.min.x) * 1.3, (b.max.z - b.min.z) * 1.1, 1); carShadow.position.set(x, roadY + 0.03, z); carShadow.rotation.y = yaw; }
   world.lightsDim = room ? 0 : 1;
-  world.hemi.intensity = room ? 0.7 : 0.6;
+  world.hemi.intensity = room ? 0.7 : world.nightHemi ?? 0.6;   // (v98: nightHemi and nightMoon, the highway's own night)
   world.hemi.color.set(room ? 0xb8c4d6 : 0x25245a); world.hemi.groundColor.set(room ? 0x1a1c22 : 0x0a0710);
-  world.moon.intensity = room ? 0.08 : 0.32;
+  world.moon.intensity = room ? 0.08 : world.nightMoon ?? 0.32;
   scene.background.set(room ? 0x000000 : 0x02030a);
 }
 // The car against the barriers: a wall hit kicks the camera, throws sparks and makes a noise.
@@ -9141,51 +9543,119 @@ function rebase() {
   if (state.garage) { garage.group.position.x -= rb.dx; garage.group.position.z -= rb.dz; garage.group.updateMatrixWorld(true); camera.position.x -= rb.dx; camera.position.z -= rb.dz; roomTime = 0; }
 }
 // ---------------------------------------------------------------- police
-// The pursuit. From the moment the car is up the ramp and on the interstate, Charger units chase it: the first
-// joins from behind straight away, another every 35 s or so (up to four). They are always a little quicker than
-// you (more when far back), so a clean run holds them off and every lift, crash or jam lets them close in. One on
-// your bumper or rear quarter fills the busted meter, and a full meter ends the run. A unit left far behind drops
-// out (points) and another comes in from behind. Every couple of kilometres a spike strip goes down across some
-// lanes ahead (nothing on the road warns of it), a unit parked by it and a warning on screen that shows the open
-// lanes; run over it and the run is over.
+// v98, the owner: "the cop cars come up too fast you can never lose them, the spike strips are sort of hard to dodge, I
+// dont like the police! indicator or the spike strips dodged indicators that come up ... it feels like theyre always
+// too fast and always catch up to you and they also clip through cars. rework the police indicator". The chase, again:
+//  - It comes and goes. A run starts quiet; after a few seconds on the highway a patrol car picks you up from behind
+//    and a pursuit begins. Get every unit more than 220 m behind you for 8 seconds and you have escaped: points, the
+//    panel clears, and the road is yours for half a minute or so before the next one.
+//  - Units are real cars (traffic.js updateCop): a top speed and real acceleration, never more than about 35 mph
+//    quicker than you as they close, and always a little slower than the car you are in can go. Flat out on a clear
+//    road you pull away; traffic, bends, road works and mistakes let them back. They no longer drive through traffic.
+//  - Heat: one unit at first; every 40 s a pursuit lasts adds a level (up to four): one more unit, each a little
+//    faster, and from level three spike strips. Backup only joins while a unit still has you in sight. Escaping takes
+//    a level off for the next pursuit.
+//  - A unit left 280 m behind for four seconds gives up (points). Taking an exit shakes off every unit that is not
+//    right behind you; the ones that are follow you down the ramp onto the next highway.
+//  - Spike strips: always two neighbouring lanes on one side with the other two wide open, laid further ahead, warned
+//    of from further away, and less often.
+//  - No banners. What used to flash across the screen ("Police!", "Dodged the spikes", "Outran a unit") is a quiet
+//    line on the panel.
+const HEAT_TOP = [62, 68, 74, 80], EVADE_T = 8, CONTACT = 220;
 const police = { enabled: true,   // v34: always on (the user took the Settings switch out)
-  on: false, chaseT: 0, catch: 0, spawnT: 0, units: 1, outran: 0, dodged: 0, nextStrip: 0, alertT: 0, warned: null, ptsAcc: 0, hud: '', light: new THREE.PointLight(0xff2020, 0, 30, 2), siren: 0 };
+  on: false, state: 'clear', heat: 1, heat0: 1, chaseT: 0, pursuitT: 0, calm: 10, evade: 0, catch: 0, spawnT: 0, units: 1, outran: 0, dodged: 0, escapes: 0, nextStrip: 0, alertT: 0, warned: null, ptsAcc: 0, hud: '', note: '', noteT: 0, light: new THREE.PointLight(0xff2020, 0, 30, 2), siren: 0 };
 // (police.light is not in the scene: syncFxLights lends its settings to one of the garage's lights)
 const isChaser = (c) => c.cop.mode === 'chase' || c.cop.mode === 'pit';
 const nearestLane = (u) => LANE_CENTERS.reduce((b, c, k) => (Math.abs(c - u) < Math.abs(LANE_CENTERS[b] - u) ? k : b), 0);
 let frameDtReal = 0;
+// how fast the car being driven can go flat out, m/s: the fastest speed at which some gear still pulls harder than
+// the air holds it back (worked out once per car, for the police's top speed)
+const carTop = { spec: null, v: 70 };
+function carTopSpeed() {
+  if (carTop.spec === CAR) return carTop.v;
+  let top = 30;
+  for (let v = 30; v < 140; v += 0.5) {
+    for (const g of CAR.gears) {
+      const rpm = v / CAR.wheelR * 9.5493 * g * CAR.final; if (rpm > CAR.limiter || rpm < CAR.idle) continue;
+      if ((curve(CAR.torque, rpm) + curve(CAR.boostTorque, rpm)) * g * CAR.final * CAR.eff / CAR.wheelR >= CAR.drag * v * v + CAR.rollRes) { top = v; break; }
+    }
+  }
+  carTop.spec = CAR; carTop.v = top; return top;
+}
 function policeQuiet() {
   if (!(state.lightbar && rig?.kinds.lbL && state.driving)) police.light.intensity = 0;
   audio.siren(0, 1); $('wanted').classList.remove('on'); $('spikeWarn').hidden = true;
+}
+// a line on the panel for a few seconds (what the banners used to shout)
+function policeNote(text, sec = 2.6) { police.note = text; police.noteT = sec; }
+// a unit waiting on the shoulder up ahead, lights going, that pulls out as you come up to it
+function spawnAhead(W) {
+  const s = W.s + 520 + Math.random() * 160, R = world.road;
+  R.ensure(Math.ceil((s + 300) / 2));
+  if (R.rampAt(s, 260) || R.closureAt(s, 420, 160) || R.tunnelAt(s, 120)) return null;
+  const pc = traffic.spawnParkedCop(s, 17.7, 0.22);
+  if (pc) pc.cop.join = 'ahead';
+  return pc;
 }
 function policeUpdate(dt) {
   const cops = traffic.ready && traffic.kinds.cop ? traffic.cops : [];
   const W = world.lastLoc;
   if (!COPS_LIVE || !state.driving || state.garage || !police.enabled || !W) { policeQuiet(); return; }
   const over = state.over;
-  // the chase starts once the car is up the ramp and on the interstate itself
+  // the police are about once the car is up the ramp and on the highway itself
   if (!police.on) {
     if (over || W.s < RAMP.sM + 30 || W.u > 17.2 || !traffic.kinds.cop) { policeQuiet(); return; }
-    Object.assign(police, { on: true, chaseT: 0, catch: 0, spawnT: 0, outran: 0, dodged: 0, ptsAcc: 0, warned: null, nextStrip: W.s + 1500 + Math.random() * 700 });
+    Object.assign(police, { on: true, state: 'clear', heat: 1, heat0: 1, chaseT: 0, pursuitT: 0, calm: 9 + Math.random() * 6, evade: 0, catch: 0, spawnT: 0, outran: 0, dodged: 0, escapes: 0, ptsAcc: 0, warned: null, note: '', noteT: 0, nextStrip: 0 });
     prepCops();
-    policeBanner('Police!', true); audio.chime(4); cam.kick = Math.max(cam.kick, 0.3);
   }
-  if (!over) police.chaseT += dt;
-  const chasers = cops.filter(isChaser);
-  // two units from the start, another every 30 s up to four; they push harder the longer it goes on
-  police.units = Math.min(4, 2 + Math.floor(police.chaseT / 30));
-  traffic.copTune.push = 1 + Math.min(0.3, police.chaseT / 400);
-  // units join from behind, 70-100 m back and already quicker than you, one every few seconds
-  police.spawnT -= dt;
-  if (!over && chasers.length < police.units && police.spawnT <= 0) {
-    const v = traffic.spawnCop(W.s, W.u, Math.max(0, car.vx), 70 + Math.random() * 30);
-    police.spawnT = v ? 2.5 + Math.random() * 1.5 : 0.8;
-    if (v && police.chaseT > 3) toast(`Police ×${chasers.length + 1}`, 1200);
-  }
-  // left far behind: out of the chase (points); another comes in later
-  for (const c of chasers) if (W.s - c.s > 700) {
-    c.cop.mode = 'leave'; police.spawnT = Math.max(police.spawnT, 6);
-    if (!over) { police.outran++; addPoints(1000); policeBanner('Outran a unit  +1,000'); }
+  const chasers = cops.filter(isChaser), onRoad = !world.onRamp && W.u < 17.6;
+  // how good the units are: their top speed climbs with the heat but stays under what your car can do
+  traffic.copTune.vTop = Math.max(50, Math.min(HEAT_TOP[police.heat - 1], carTopSpeed() * (0.84 + 0.035 * police.heat)));
+  traffic.copTune.accel = 6 + 0.6 * police.heat;
+  let nearD = 1e9; for (const c of chasers) nearD = Math.min(nearD, Math.abs(W.s - c.s));
+  // an exit: the units right behind you follow you down the ramp, the rest miss it
+  const ex = world.onExit;
+  if (ex) for (const c of chasers) { if (c.cop.ramp || c.cop.missed) continue; if (W.s - c.s < 120 && c.s < ex.sN - 12) c.cop.ramp = ex; else c.cop.missed = true; }
+  if (police.state === 'clear') {
+    for (const c of chasers) c.cop.mode = 'leave';
+    if (!over && onRoad) police.calm -= dt;
+    if (police.calm <= 0 && !over && onRoad) {
+      // picked up: a patrol car comes up from behind
+      const v = traffic.spawnCop(W.s, W.u, Math.max(0, car.vx), 130 + Math.random() * 50);
+      if (v) { Object.assign(police, { state: 'pursuit', pursuitT: 0, evade: 0, heat: police.heat0, spawnT: 7, nextStrip: W.s + 1800 + Math.random() * 900 }); audio.chime(4); }
+      else police.calm = 1;
+    }
+  } else {
+    if (!over) { police.chaseT += dt; police.pursuitT += dt; }
+    police.heat = Math.min(4, police.heat0 + Math.floor(police.pursuitT / 40));
+    police.units = police.heat;
+    const contact = nearD < CONTACT;
+    // backup: one more unit at a time, from behind or waiting up ahead, and only while a unit has you in sight
+    police.spawnT -= dt;
+    if (!over && onRoad && contact && chasers.length < police.units && police.spawnT <= 0) {
+      let v = police.heat >= 2 && Math.random() < 0.4 ? spawnAhead(W) : null;
+      v ||= traffic.spawnCop(W.s, W.u, Math.max(0, car.vx), 170 + Math.random() * 60);
+      police.spawnT = v ? 7 + Math.random() * 4 : 1;
+    }
+    // left behind: out of the chase (points, if it ever got near you)
+    for (const c of chasers) {
+      const back = W.s - c.s;
+      c.cop.far = back > 280 ? (c.cop.far || 0) + dt : 0;
+      if (back > 450 || c.cop.far > 4 || back < -320) {
+        c.cop.mode = 'leave';
+        if (!over && c.cop.engaged) { police.outran++; addPoints(1000); policeNote('Unit shaken off  +1,000'); }
+      }
+    }
+    // getting away: nobody within 220 m for eight seconds
+    if (!over) {
+      police.evade = contact ? Math.max(0, police.evade - dt * 2.5) : police.evade + dt;
+      if (police.evade >= EVADE_T) {
+        const pts = 2000 + 1000 * police.heat;
+        police.escapes++; addPoints(pts); policeNote(`Escaped  +${pts.toLocaleString()}`, 3.4); audio.chime(7);
+        for (const c of cops) { if (isChaser(c)) c.cop.mode = 'leave'; else if (c.cop.mode === 'parked') c.cop.join = false; }
+        Object.assign(police, { state: 'clear', calm: 32 + Math.random() * 28, heat0: Math.max(1, police.heat - 1), evade: 0, catch: 0 });
+      }
+    }
   }
   // the nearest unit carries the point light and the siren (quiet once the end card is up)
   let near = null, nd = 1e9;
@@ -9200,8 +9670,11 @@ function policeUpdate(dt) {
     const rel = (near.v - Math.max(0, car.vx)) * (near.s < W.s ? 1 : -1);
     audio.siren(clamp(1.1 - nd / 130, 0, 1), clamp(1 + rel / 340, 0.85, 1.15));
   } else { police.light.intensity = 0; audio.siren(0, 1); }
-  // the busted meter: a unit within a car length or so of you fills it (faster with two, much faster if you're
-  // slow or stopped); clear of them it drains
+  // The busted meter. You are busted when they stop you, not when one of them is merely behind you: a unit within a
+  // car length or so fills the meter only once you are down to 55 mph or less (faster the slower you are, much faster
+  // at a standstill); between 55 and 100 mph it takes two of them boxing you in; above that nothing fills it, and it
+  // drains whenever they are not on you. So their job is to slow you (a nudge to spin you, a block, traffic), and
+  // yours is to keep moving.
   let press = 0;
   for (const c of chasers) {
     if (!c.pose) continue;
@@ -9209,54 +9682,78 @@ function policeUpdate(dt) {
     if (d < 8) press += d < 5.5 ? 1 : (8 - d) / 2.5;
   }
   if (!over) {
-    const sp = car.speed, slow = sp < 3 ? 2.6 : sp < 15 ? 1.8 : 1;
-    police.catch = press > 0 ? Math.min(1, police.catch + dt * 0.36 * Math.min(press, 2.5) * slow) : Math.max(0, police.catch - dt * 0.24);
+    const sp = car.speed, slow = sp < 3 ? 2.6 : sp < 15 ? 1.8 : sp < 25 ? 1 : sp < 45 && press >= 1.5 ? 0.5 : 0;
+    police.catch = press > 0 && slow > 0 && police.state === 'pursuit' ? Math.min(1, police.catch + dt * 0.3 * Math.min(press, 2.5) * slow) : Math.max(0, police.catch - dt * 0.3);
     if (police.catch >= 1) gameOver('busted');
-    // points for every second the chase goes on, more with more units on you
-    police.ptsAcc += dt * 20 * Math.max(1, chasers.length);
-    if (police.ptsAcc >= 10) { const n = Math.floor(police.ptsAcc); state.score += n; police.ptsAcc -= n; }
-    // spike strips: one goes down well ahead every couple of kilometres once the chase is under way
-    if (police.chaseT > 18 && !spikes.list.some((st) => !st.done) && W.s + 760 >= police.nextStrip) layStrip(W.s + 760, W);
+    // points for every second a pursuit goes on, more with more units on you
+    if (police.state === 'pursuit') { police.ptsAcc += dt * 20 * Math.max(1, chasers.length); if (police.ptsAcc >= 10) { const n = Math.floor(police.ptsAcc); state.score += n; police.ptsAcc -= n; } }
+    // spike strips: from heat three, one goes down a kilometre ahead every few kilometres (never at road works, an
+    // exit or a tunnel mouth: if one of those is where it would go, it waits)
+    if (police.state === 'pursuit' && police.heat >= 3 && onRoad && !spikes.list.some((st) => !st.done) && W.s + STRIP_AHEAD >= police.nextStrip) {
+      const s = W.s + STRIP_AHEAD, R = world.road;
+      R.ensure(Math.ceil((s + 300) / 2));
+      if (R.closureAt(s, 600, 300) || R.rampAt(s, 300) || R.tunnelAt(s, 150)) police.nextStrip = W.s + STRIP_AHEAD + 350; else layStrip(s, W);
+    }
   }
   spikesCheck(W);
   traffic.hazards = traffic.hazards.filter((h) => spikes.list.includes(h.st));
-  spikeWarning(dt, W);
-  // the badge: units on you, and the busted meter
+  policeHud(dt, chasers, W, nearD);
+}
+// The panel: PURSUIT (or LOSING THEM, as the escape meter fills), the heat, a strip with a dot for each unit placed by
+// how far behind you it is (the white marker is you; the ticks are 100 m apart), how many and how near, and the
+// meter: red while you are being boxed in, green while you are getting away.
+function policeHud(dt, chasers, W, nearD) {
   if (!wantedPlaced) wantedPlaced = placeWanted();
-  const el = $('wanted'), n = chasers.length, hud = `${n}|${Math.round(police.catch * 100)}`;
-  if (over) { el.classList.remove('on'); return; }
-  if (!el.classList.contains('on')) el.classList.add('on');
+  const el = $('wanted');
+  police.noteT -= dt;
+  const pursuit = police.state === 'pursuit', note = police.noteT > 0 ? police.note : '';
+  const show = !state.over && (pursuit || !!note);
+  if (el.classList.contains('on') !== show) el.classList.toggle('on', show);
+  if (!show) return;
+  const n = chasers.length, evading = pursuit && police.evade > 0.5, danger = police.catch > 0.02;
+  const meter = danger ? police.catch : evading ? police.evade / EVADE_T : 0;
+  const nearTxt = n && nearD < 1e8 ? (state.units === 'mph' ? `${Math.round(nearD * 3.281 / 10) * 10} ft` : `${Math.round(nearD)} m`) : '';
+  const hud = `${police.state}|${police.heat}|${n}|${evading}|${danger}|${Math.round(meter * 100)}|${note}|${nearTxt}`;
   if (hud !== police.hud) {
     police.hud = hud;
-    el.classList.toggle('calm', n === 0);
-    el.classList.toggle('danger', police.catch > 0.02);
-    $('wantedText').textContent = n ? `Police ×${n}` : 'No units near';
-    $('wantedChip').textContent = n ? 'Pursuit' : 'Police';
-    const pips = $('wantedUnits'), want = Math.min(n, 8);
-    while (pips.children.length < want) pips.append(document.createElement('i'));
-    while (pips.children.length > want) pips.lastChild.remove();
-    $('heatBar').style.setProperty('--h', `${Math.round(police.catch * 100)}%`);
+    el.classList.toggle('clear', !pursuit); el.classList.toggle('evading', evading); el.classList.toggle('danger', danger);
+    el.classList.toggle('hot', pursuit && nearD < 90); el.classList.toggle('note', !!note);
+    $('wantedText').textContent = !pursuit ? 'Clear' : evading && !danger ? 'Losing them' : 'Pursuit';
+    [...$('pqHeat').children].forEach((c, k) => c.classList.toggle('on', k < police.heat));
+    $('pqUnits').textContent = n ? `${n} unit${n === 1 ? '' : 's'}` : 'No units in sight';
+    $('pqNear').textContent = nearTxt ? `Nearest ${nearTxt}` : '';
+    $('pqMeterLbl').textContent = danger ? 'Busted' : 'Escape';
+    $('pqMeter').style.setProperty('--h', `${Math.round(meter * 100)}%`);
+    if (note) $('pqNote').textContent = note;
   }
+  // the dots: 320 m of road behind you across the strip, you at its right-hand end; a unit ahead of you sits past the marker
+  const track = $('pqTrack');
+  while (track.children.length - 1 < n) track.append(document.createElement('i'));
+  while (track.children.length - 1 > n) track.lastChild.remove();
+  chasers.forEach((c, k) => {
+    const back = W.s - c.s, dot = track.children[k + 1];
+    dot.style.left = `${(back >= 0 ? 84 * (1 - Math.min(1, back / 320)) : 84 + Math.min(14, -back / 60 * 14)).toFixed(1)}%`;
+    dot.classList.toggle('far', back > 300);
+  });
 }
 function addPoints(n) { state.score += n; if (state.score > state.bestScore) { state.bestScore = state.score; store.set('bestScore', state.score); } renderTiming(); }
-// a unit touching you is as good as a second on your bumper
+// a unit touching you is as good as a moment on your bumper
 function copContact(res, veh) {
-  if (!veh.cop || !police.on || state.over || veh.cop.mode === 'parked') return;
-  police.catch = Math.min(1, police.catch + clamp(res.impact * 0.04, 0.05, 0.2));
+  if (!veh.cop || !police.on || state.over || veh.cop.mode === 'parked' || police.state !== 'pursuit') return;
+  police.catch = Math.min(1, police.catch + clamp(res.impact * 0.03, 0.03, 0.12));
 }
-// A strip across two (sometimes three) lanes, usually including yours, never all four; a unit is parked on the
-// shoulder just past it, lights going. Other drivers move out of the closed lanes.
+// A strip across the two left lanes or the two right ones (half the time the pair you are in), stopping 45 cm short
+// of the middle of the road so the open half is a little wider than its two lanes; a unit is parked on the shoulder
+// just past it, lights going. Other drivers move out of the closed lanes.
+const STRIP_AHEAD = 1000;
 function layStrip(s, W) {
-  const me = nearestLane(W.u), n = police.chaseT > 120 && Math.random() < 0.5 ? 3 : 2;
-  const set = new Set();
-  if (Math.random() < 0.85) set.add(me);
-  while (set.size < n) set.add(Math.floor(Math.random() * 4));
-  const st = spikes.place(s, [...set]);
+  const mine = nearestLane(W.u) <= 1, left = Math.random() < 0.5 ? mine : !mine;
+  const st = spikes.place(s, left ? [0, 1] : [2, 3], 0.45);
   traffic.hazards.push({ s, spans: st.spans, lanes: st.lanes, open: st.open, st });
   traffic.thin(W.s + 170, s + 40, st.lanes);
   const pc = traffic.spawnParkedCop(s + 16, 17.7, 0.32);
   if (pc) pc.cop.join = true;   // pulls out after you once you're by
-  police.nextStrip = s + 1700 + Math.random() * 1300;
+  police.nextStrip = s + 2600 + Math.random() * 1900;
   return st;
 }
 // the wheels in road coordinates, this frame and last: a tyre that rolls over a strip ends the run
@@ -9275,38 +9772,132 @@ function spikesCheck(W) {
   prevWheels = now;
   for (const st of spikes.list) if (!st.done && W.s > st.s + 6) {
     st.done = true;
-    if (!st.hit && !state.over && police.on) { police.dodged++; addPoints(1500); policeBanner('Dodged the spikes  +1,500'); }
+    if (!st.hit && !state.over && police.on) { police.dodged++; addPoints(1500); policeNote('Spike strip cleared  +1,500'); }
   }
 }
-// the warning: distance and the lanes, closed in red, open in green, yours outlined; beeps as it gets close
+// The warning for what is coming up across the lanes: a spike strip (red) or road works (orange, v98, the owner: "the
+// game should alert you of that similar to the alert system for the spike strips"). Distance and the lanes, closed
+// ones hatched, open in green, yours outlined; it beeps as a strip gets close.
 const fmtNear = (m) => (state.units === 'mph' ? `${Math.max(0, Math.round(m * 3.281 / 50) * 50).toLocaleString()} ft` : `${Math.max(0, Math.round(m / 10) * 10)} m`);
-function spikeWarning(dt, W) {
+function hazardWarning(dt, W) {
   const el = $('spikeWarn');
-  const st = state.over ? null : spikes.ahead(W.s), d = st ? st.s - W.s : Infinity;
-  const show = d < 720;
+  if (!W || !state.driving || state.garage || state.over) { if (!el.hidden) el.hidden = true; police.warned = null; return; }
+  const st = spikes.ahead(W.s), dS = st ? st.s - W.s : Infinity;
+  let cl = world.road.closureAt(W.s, 760); if (cl && W.s > cl.s0 + cl.taper) cl = null;   // once you are past the taper there is nothing left to warn of
+  const dC = cl ? Math.max(0, cl.s0 - W.s) : Infinity;
+  const works = dC < dS, hz = works ? cl : st, d = works ? dC : dS;
+  const show = works ? !!cl : dS < 950;
   if (el.hidden === show) el.hidden = !show;
   if (!show) { police.warned = null; return; }
-  if (police.warned !== st) { police.warned = st; police.alertT = 0.9; audio.alert(false); el.dataset.lanes = ''; }
-  const txt = fmtNear(d);
+  if (police.warned !== hz) {
+    police.warned = hz; police.alertT = 0.9; audio.alert(false); el.dataset.lanes = '';
+    el.classList.toggle('works', works);
+    $('swTitle').textContent = works ? (cl.n === 2 ? `${cl.side > 0 ? 'Right' : 'Left'} 2 lanes closed` : `${cl.side > 0 ? 'Right' : 'Left'} lane closed`) : 'Spike strip';
+  }
+  const txt = d < 12 && works ? 'Now' : fmtNear(d);
   if ($('swDist').textContent !== txt) $('swDist').textContent = txt;
-  const me = nearestLane(W.u), key = `${st.lanes.join('')}|${me}`;
-  if (el.dataset.lanes !== key) { el.dataset.lanes = key; [...$('swLanes').children].forEach((c, k) => { c.className = (st.lanes.includes(k) ? 'x' : 'ok') + (k === me ? ' me' : ''); }); }
+  const me = nearestLane(W.u), key = `${hz.lanes.join('')}|${me}`;
+  if (el.dataset.lanes !== key) { el.dataset.lanes = key; [...$('swLanes').children].forEach((c, k) => { c.className = (hz.lanes.includes(k) ? 'x' : 'ok') + (k === me ? ' me' : ''); }); }
   el.classList.toggle('near', d < 260);
-  if (d < 320) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(true); police.alertT = d < 150 ? 0.32 : 0.6; } }
-}
-function policeBanner(text, red) {
-  const el = $('cc'); el.textContent = text; el.classList.toggle('red', !!red);
-  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  if (works) { if (d < 280 && hz.lanes.includes(me)) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(false); police.alertT = 0.9; } } }
+  else if (d < 380) { police.alertT -= dt; if (police.alertT <= 0) { audio.alert(true); police.alertT = d < 150 ? 0.32 : 0.6; } }
 }
 // off switch / new run: the cops go home, the strips come up
 function policeEnd() {
   if (traffic.ready) traffic.clearCops();
   traffic.hazards = []; spikes.clear(); prevWheels = null;
-  Object.assign(police, { on: false, catch: 0, chaseT: 0, warned: null, hud: '' });
+  Object.assign(police, { on: false, state: 'clear', heat: 1, heat0: 1, catch: 0, chaseT: 0, pursuitT: 0, evade: 0, warned: null, hud: '', note: '', noteT: 0 });
   police.light.intensity = 0; audio.siren(0, 1);
   $('spikeWarn').hidden = true; $('wanted').classList.remove('on', 'danger');
 }
 
+// ---------------------------------------------------------------- highways, exits and road works (v98)
+// The owner: "add exit ramps with an indicator to where they are that will take you onto a new highway that is
+// different somehow and stop rendering the highway you were currenly on ... lanes should close down and narrow
+// sometimes and the game should alert you". world.js lays the exits and closures out; this is the game's side:
+//  - the exit sign on screen (the next exit's number, the highway it leads to, how far), from a mile out;
+//  - taking it: 36 m past the ramp's far end the picture dips to black for a moment, the old highway is thrown away
+//    and the next one is built, and the car carries on up its entrance ramp at the speed it was doing, with any unit
+//    that was right behind it still there;
+//  - the highway's name on a card as a run starts and after each exit;
+//  - the drums at road works, knocked flying by the car (a little speed lost each).
+const hwy = { phase: '', t: 0, to: null, count: 0, exit: null, cardT: 0, drumT: 0 };
+const pickHighway = (not) => { const list = HIGHWAYS.filter((h) => h !== not); return list[(Math.random() * list.length) | 0]; };
+function highwayCard(hw, kicker = 'Now on', sec = 3.6) {
+  const sh = $('hwShield'); sh.textContent = hw.route; sh.className = hw.shield;
+  $('hwKicker').textContent = kicker; $('hwName').textContent = hw.name; $('hwTag').textContent = hw.tag;
+  $('hwCard').classList.add('show'); hwy.cardT = sec;
+}
+function switchHighway() {
+  const to = hwy.to, W = world.lastLoc;
+  // where the car is across the ramp's lane and how it is pointed, to be put back the same on the new ramp
+  const lat = W ? clamp(W.u - 46, -1.5, 1.5) : 0, psi = W ? clamp(wrapAngle(car.yaw - W.th), -0.25, 0.25) : 0;
+  const follow = []; let lost = 0;
+  if (traffic.ready && police.on) for (const c of traffic.cops) { if (!isChaser(c)) continue; if (c.cop.ramp) follow.push({ gap: clamp(W.s - c.s, 14, 140), v: c.v }); else if (c.cop.engaged) lost++; }
+  world.newRoad(undefined, to, { entry: true, exitNo: world.road.exitNo });
+  traffic.reset(); traffic.applyDensity(); spikes.clear(); prevWheels = null; police.warned = null;
+  skids.trails.clear(); skids.reset?.();
+  const s = RAMP.sA + 16, p = world.rampPose(s), th = p.yaw;
+  const x = p.x - Math.cos(th) * lat, z = p.z + Math.sin(th) * lat, yaw = th + psi;
+  // the camera keeps its place relative to the car
+  const dyaw = yaw - car.yaw, cs = Math.cos(dyaw), sn = Math.sin(dyaw), cx = camera.position.x - car.x, cz = camera.position.z - car.z;
+  camera.position.set(x + cx * cs + cz * sn, camera.position.y + p.y - roadY, z - cx * sn + cz * cs);
+  cam.yaw += dyaw; camY += p.y - roadY;
+  car.x = car.px = x; car.z = car.pz = z; car.yaw = car.pyaw = yaw;
+  world.update(0, { x, z, yaw, camX: camera.position.x, camY: camera.position.y, camZ: camera.position.z, headX: x, headY: p.y + 1, headZ: z, headOn: state.headOn, burst: true });
+  { const L = world.locate(x, z); world.lastLoc = L; roadY = L.y; roadG = L.g; roadTh = L.th; }
+  camPrev.copy(camera.position);
+  world.updateProbe(x, roadY, z, true);
+  // the police: the units that were on your bumper are still there; the rest are gone
+  for (const f of follow) {
+    const v = traffic.spawnCop(s, 46, Math.max(0, car.vx), f.gap);
+    if (v) { v.u = v.cop.uTarget = rampC(v.s, world.road.onRamp); v.cop.ramp = world.road.onRamp; v.cop.engaged = true; v.v = f.v; v.fade = 1; }
+  }
+  if (lost && !state.over) { police.outran += lost; addPoints(1000 * lost); policeNote(`${lost} unit${lost === 1 ? '' : 's'} lost at the exit  +${(1000 * lost).toLocaleString()}`, 3.4); }
+  hwy.count++; hwy.exit = null;
+  highwayCard(to, 'Now on');
+}
+function highwayUpdate(dt, dtReal) {
+  const W = world.lastLoc, ind = $('exitInd'), fade = $('roadFade');
+  // the card
+  if (hwy.cardT > 0) { hwy.cardT -= dtReal; if (hwy.cardT <= 0) $('hwCard').classList.remove('show'); }
+  // the dip to black and the change of highway
+  if (hwy.phase === 'out') {
+    hwy.t += dtReal; fade.style.opacity = clamp(hwy.t / 0.3, 0, 1);
+    if (hwy.t >= 0.34) { if (!state.over) switchHighway(); hwy.phase = 'in'; hwy.t = 0; }
+  } else if (hwy.phase === 'in') {
+    hwy.t += dtReal; fade.style.opacity = 1 - clamp((hwy.t - 0.22) / 0.6, 0, 1);
+    if (hwy.t >= 0.84) { hwy.phase = ''; fade.style.opacity = 0; }
+  }
+  if (!W || !state.driving || state.garage) { if (!ind.hidden) ind.hidden = true; return; }
+  const onExit = world.onExit;
+  if (onExit && !hwy.phase && !state.over && W.s > onExit.sA + EXIT_GO) { hwy.phase = 'out'; hwy.t = 0; hwy.to = onExit.to; }
+  // the sign: the exit coming up (from a mile out), or the one you are on
+  const ex = onExit || world.road.nextExitAfter(W.s);
+  const d = ex ? ex.sM - W.s : Infinity, show = !!ex && !state.over && (!!onExit || d < 1650);
+  if (ind.hidden === show) ind.hidden = !show;
+  if (show) {
+    if (hwy.exit !== ex) {
+      hwy.exit = ex;
+      $('exNo').textContent = `Exit ${ex.no}`; $('exName').textContent = ex.to.name;
+      const sh = $('exShield'); sh.textContent = ex.to.route; sh.className = ex.to.shield;
+    }
+    const txt = onExit ? '' : d > 0 ? (state.units === 'mph' ? (d > 320 ? `${(d / 1609.344).toFixed(1)} mi` : fmtNear(d)) : (d > 950 ? `${(d / 1000).toFixed(1)} km` : fmtNear(d))) : 'Now';
+    if ($('exDist').textContent !== txt) $('exDist').textContent = txt;
+    const hint = onExit ? 'Leaving' : d < 600 ? 'Keep right' : '';
+    if ($('exHint').textContent !== hint) $('exHint').textContent = hint;
+    ind.classList.toggle('now', !onExit && d < 600);
+  }
+  // road works: the drums
+  if (!state.over || state.over.t < 2.4) {
+    const n = world.hitDrums(car, carDims());
+    if (n) {
+      car.vx *= Math.pow(0.988, n);
+      cam.kick = Math.min(1, cam.kick + 0.12 * n); audio.impact(clamp(0.16 + 0.05 * n, 0.15, 0.4));
+      state.combo = 0; state.comboT = 0;
+    }
+  }
+}
 // ---------------------------------------------------------------- the police cars
 // Full-detail Chargers (the car-select Charger's geometry and materials, merged for the road: see buildCopModel) for
 // units within ~30 m of you that are alongside or ahead (in the main view); the rest, including one sitting on your
@@ -9522,7 +10113,7 @@ function gameOver(reason) {
   if (state.over || !state.driving) return;
   const o = state.over = { reason, t: 0, card: false, ang: null, spark: 0 };
   keys.clear(); for (const k in touchState) touchState[k] = false;
-  o.stats = { dist: state.dist, chase: police.chaseT, vmax: state.vmax, outran: police.outran, dodged: police.dodged };
+  o.stats = { dist: state.dist, chase: police.chaseT, vmax: state.vmax, outran: police.outran, dodged: police.dodged, escapes: police.escapes, highways: hwy.count + 1 };
   if (state.score > state.bestScore) { state.bestScore = state.score; store.set('bestScore', state.score); o.newBest = state.score > 0; }
   if (state.dist > state.bestRun) { state.bestRun = state.dist; store.set('bestRun', state.bestRun); o.newRun = true; }
   // the units close in round the car
@@ -9531,7 +10122,7 @@ function gameOver(reason) {
   $('overTitle').textContent = reason === 'spikes' ? 'Spiked' : 'Busted';
   $('overSub').textContent = reason === 'spikes' ? 'Tires shredded on a spike strip' : 'The police caught you';
   $('overStats').innerHTML = '';
-  $('spikeWarn').hidden = true; $('touch').hidden = true; $('wanted').classList.remove('on', 'danger');
+  $('spikeWarn').hidden = true; $('touch').hidden = true; $('wanted').classList.remove('on', 'danger'); $('exitInd').hidden = true;
   drift.active = false; $('drift').classList.add('fade'); state.combo = 0; state.comboT = 0;
   if (reason === 'spikes') audio.blowout(); else audio.bust();
   cam.kick = 1;
@@ -9602,7 +10193,7 @@ function showOverCard(o) {
   const s = o.stats, best = '<em>Best</em>';
   const row = (k, v, cls = '', badge = '') => `<div class="orow ${cls}"><span>${k}</span><b>${v}${badge}</b></div>`;
   $('overStats').innerHTML = row('Distance', fmtDist(s.dist), '', o.newRun ? best : '') + row('Time in pursuit', fmtClock(s.chase))
-    + row('Top speed', fmtSpeed(s.vmax)) + row('Units outrun', s.outran) + row('Spike strips dodged', s.dodged)
+    + row('Top speed', fmtSpeed(s.vmax)) + row('Highways driven', s.highways) + row('Pursuits escaped', s.escapes) + row('Units shaken off', s.outran) + row('Spike strips cleared', s.dodged)
     + row('Score', state.score.toLocaleString(), 'big', o.newBest ? best : '') + row('Best score', state.bestScore.toLocaleString());
   $('over').classList.add('card');
   $('overRetry').focus({ preventScroll: true });
@@ -9728,6 +10319,7 @@ function frameInner(now) {
     state.wasBurnout = car.burnout;
     updateEffects(dt);
     if (!state.over) { updateDrift(dt); updateScore(dt); }
+    highwayUpdate(dt, dtReal);
   } else if (state.garage) updateGarageRev(dt);
   const live = state.driving && !state.garage;
   const alpha = live ? acc / STEP : 1;
@@ -9758,6 +10350,7 @@ function frameInner(now) {
   {
     const W = world.car, fx = playerLampFx();
     policeUpdate(dt);
+    hazardWarning(dt, world.lastLoc);
     traffic.update(state.ready ? dt : 0, { loc: W, camera, garage: state.garage, room: roomUp(), speedAlong: Math.max(0, car.vx * Math.cos(car.yaw - roadTh)), playerLamps: fx.lamps, playerPool: fx.pool, playerBeams: playerBeams() });
     updateCopVisuals(dt);
     spikes.show(!roomUp());
@@ -9823,6 +10416,7 @@ function startDriving() {
   audio.start();
   syncButtons(); renderTiming();
   canvas.focus({ preventScroll: true });
+  highwayCard(world.road.theme, 'Starting on', 3.4);
 }
 function openCredits() { $('credits').hidden = false; $('closeCredits').focus(); }
 function closeCredits() { $('credits').hidden = true; if (state.paused) $('pauseMenu').querySelector('[data-p="credits"]').focus({ preventScroll: true }); else canvas.focus({ preventScroll: true }); }
@@ -10017,8 +10611,17 @@ window.__game = {
   flame, doShift, drift, exhaust, updateEffects, startTorch, fx,
   audio, MUSIC, GEN_SONGS, makeSynth, eyePoint, steeringWheelOf, rigs, CAR_DEFS, rain, setWeather, setTrafficLevel, RAMP, police, KITS, PART_LABELS, applyMods, openGarage, closeGarage, switchCar, activateCar, ensureRig, pickTitleCar, setFocus, renderGarage, gcam, garageRev, carDamage, repairDamage, damageSummary, addDent, addCrack, dropBumper, DMG, underglow, exhaust, PERF, peakHp, nitro, NOS, fireNitro, purge, loadBuilds, saveBuild, loadBuild, carbonMat, carbonLod, carbonUnwrap, carbonTune, garage, contactShadow, carShadow,
   get rig() { return rig; }, get mods() { return mods; }, set mods(m) { mods = m; },
-  spikes, mirror, copFleet, prepCops, gameOver, layStrip, policeUpdate, updateCopVisuals, renderMirror, measureMirror, get over() { return state.over; },
+  spikes, mirror, copFleet, prepCops, gameOver, layStrip, policeUpdate, hwy, switchHighway, highwayUpdate, hazardWarning, HIGHWAYS, carTopSpeed, updateCopVisuals, renderMirror, measureMirror, get over() { return state.over; },
   setMod(k, v) { mods[k] = v; applyMods(); if (state.garage) renderGarage(); },
+  // (v98, tests) a car's gauges drawn on a canvas of their own: f = how far round the rev counter, spd = the speed shown
+  GAUGES, drawGauge,
+  gaugePreview(id, f = 0.55, spd = 87, compact = false, gear = '3') {
+    const def = CAR_DEFS[id], keep = [tachMax, CAR.redline]; tachMax = def.tach; CAR.redline = def.spec.redline;
+    const L = { W: compact ? 180 : 360, H: 180, compact, k: 2 }, c = document.createElement('canvas'); c.width = L.W * 2; c.height = 360;
+    const q = c.getContext('2d'); q.setTransform(2, 0, 0, 2, 0, 0);
+    const des = gaugeFor(id); des.face(q, L); des.live(q, { rpm: f * tachMax * 1000, f, spd, unit: state.units === 'mph' ? 'mph' : 'km/h', boost: 0.5, gear }, L);
+    [tachMax, CAR.redline] = keep; return c;
+  },
   KW, keyBrands, pickBrand, keyAt, lookAtKeys, leaveKeyWall, chooseCar, roadQ, renderScale, syncRenderScale, gcam, get gBrand() { return gBrand; }, get gTab() { return gTab; },
   advance(sec, input = {}, withTraffic = false) {
     const fixed = typeof input === 'function' ? input : Object.assign({ throttle: 0, brake: 0, steer: 0, handbrake: false }, input);

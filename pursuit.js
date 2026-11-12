@@ -43,8 +43,9 @@ export class SpikeStrips {
     this.spikeGeo = new THREE.ConeGeometry(0.014, 0.075, 6).translate(0, 0.034 + 0.0375, 0);
     this.linkGeo = new THREE.BoxGeometry(0.03, 0.026, 0.42).translate(0, 0.02, 0);
   }
-  // lanes: indices 0..3 to close. Returns the strip.
-  place(s, lanes) {
+  // lanes: indices 0..3 to close. inset (v98, the owner: "the spike strips are sort of hard to dodge"): the strip
+  // stops this far short of the open lanes, so the gap is wider than the lanes it leaves. Returns the strip.
+  place(s, lanes, inset = 0) {
     const W = this.world;
     W.road.ensure?.(s / ROAD_DS + 30);
     lanes = [...new Set(lanes)].sort((a, b) => a - b);
@@ -53,7 +54,7 @@ export class SpikeStrips {
       const [a, b] = laneSpan(k), last = spans[spans.length - 1];
       if (last && Math.abs(last[1] - a) < 0.01) last[1] = b; else spans.push([a, b]);
     }
-    for (const sp of spans) { if (sp[0] < U_IN + 0.01) sp[0] = U_MED; if (sp[1] > U_IN + LANE * 4 - 0.01) sp[1] = U_PAVE; }
+    for (const sp of spans) { if (sp[0] < U_IN + 0.01) sp[0] = U_MED; else sp[0] += inset; if (sp[1] > U_IN + LANE * 4 - 0.01) sp[1] = U_PAVE; else sp[1] -= inset; }
     const open = [0, 1, 2, 3].filter((k) => !lanes.includes(k));
     const g = new THREE.Group(); g.name = 'spike strip'; g.rotation.order = 'YXZ';
     // the strip itself
@@ -103,7 +104,7 @@ export class SpikeStrips {
       for (const [s0, s1, u] of wheels) {
         // the tyre's footprint (±0.15 m) swept from last frame to this one touches the strip
         if (Math.min(s0, s1) - 0.15 > st.s || Math.max(s0, s1) + 0.15 < st.s) continue;
-        if (st.spans.some(([a, b]) => u > a - 0.1 && u < b + 0.1)) return st;
+        if (st.spans.some(([a, b]) => u > a + 0.02 && u < b - 0.02)) return st;   // (v98: the middle of the tyre has to be on it; it used to reach 10 cm past each end)
       }
     }
     return null;

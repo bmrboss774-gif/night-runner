@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { LANE_CENTERS, ROAD_DS, glowMaterial, GLOW as GLOW_U, SHARED } from './world.js';
+import { LANE_CENTERS, ROAD_DS, glowMaterial, GLOW as GLOW_U, SHARED, rampC } from './world.js';
 // headlight beam strength (the weather turns it up)
 export const BEAM = { gain: { value: 0.05 } };
 
@@ -119,8 +119,12 @@ export class Traffic {
     // skipped here; copTune = how fast they may go relative to the player; hazards = spike strips across lanes
     // ({ s, spans: [[u0, u1]...], lanes, open }) that the police steer round and other drivers move over for
     this.copHero = false;
-    // push: scales how much quicker than the player they run (the game raises it as a chase goes on)
-    this.copTune = { push: 1, vAbs: 160, accel: 11 };
+    // v98, the owner: "the cop cars come up too fast you can never lose them ... they also clip through cars". A unit
+    // is a real car now: vTop is its top speed and accel its pull away from rest (the game sets both from the heat
+    // of the chase and the car you are in); it no longer runs at your speed plus whatever it takes.
+    this.copTune = { vTop: 62, accel: 6.5 };
+    // things standing in the road that the car can hit but nobody drives: the arrow board at a lane closure
+    this.statics = []; this.clSeen = new Set();
     // drivers edge over to open a gap when you come up between two of them (see updateVehicle)
     this.giveRoom = true;
     this.hazards = [];
@@ -249,7 +253,8 @@ export class Traffic {
     if (this.populated) this.populate(this.player.s, false, true);
   }
   applyDensity() {
-    const L = TRAFFIC_LEVELS[this.density || 'light'], low = (this.quality ?? 2) < 1 ? 0.7 : 1;
+    // (v98) each highway is busier or quieter than the Settings level by its own factor
+    const L = TRAFFIC_LEVELS[this.density || 'light'], low = ((this.quality ?? 2) < 1 ? 0.7 : 1) * (this.world.road?.theme?.traffic ?? 1);
     SAME.n = Math.round(L.same * low); ONCOMING.n = Math.round(L.oncoming * low);
     SAME.gap = ONCOMING.gap = L.gap;
   }
@@ -349,7 +354,8 @@ export class Traffic {
   laneU(dir, lane) { return dir > 0 ? LANE_CENTERS[lane] : -LANE_CENTERS[lane]; }
   makeVehicle(dir, s, lane, v) {
     const kinds = Object.keys(this.kinds).filter((k) => !TRAFFIC_KINDS[k].part);
-    let name = pick(kinds.map((k) => [k, TRAFFIC_KINDS[k].weight]));
+    const lorries = this.world.road?.theme?.trucks ?? 1;   // (v98) how many of them are lorries depends on the highway
+    let name = pick(kinds.map((k) => [k, TRAFFIC_KINDS[k].weight * (TRAFFIC_KINDS[k].truck ? lorries : 1)]));
     const spec = TRAFFIC_KINDS[name];
     if (spec.truck && lane < 2) lane = 2 + (Math.random() < 0.5 ? 1 : 0);
     const kind = this.kinds[name];
@@ -384,14 +390,15 @@ export class Traffic {
         if (o.gone) return false;
         if (o.cop) return true;
         if (o.dir !== dir) return true;
+        if (o.parked) return (o.s - sCar) > -cfg.behind;
         const rel = (o.s - sCar) * dir;
         const out = rel < -cfg.behind || rel > cfg.ahead + 120 || o.s < 30;
         return !out;
       });
-      let have = this.vehicles.filter((o) => o.dir === dir && !o.cop).length;
+      let have = this.vehicles.filter((o) => o.dir === dir && !o.cop && !o.parked).length;
       // a quieter setting: drop the cars farthest from you (out of sight first)
       if (have > cfg.n) {
-        const mine = this.vehicles.filter((o) => o.dir === dir && !o.cop).sort((a, b) => Math.abs(b.s - sCar) - Math.abs(a.s - sCar));
+        const mine = this.vehicles.filter((o) => o.dir === dir && !o.cop && !o.parked).sort((a, b) => Math.abs(b.s - sCar) - Math.abs(a.s - sCar));
         const drop = new Set(mine.slice(0, have - cfg.n).filter((o) => refill || Math.abs(o.s - sCar) > 400));
         this.vehicles = this.vehicles.filter((o) => !drop.has(o)); have -= drop.size;
       }
@@ -407,10 +414,12 @@ export class Traffic {
         if (s < 80) continue;
         if (Math.abs(rel) < 45) continue;
         const lane = Math.floor(Math.random() * 4);
+        if (dir > 0) { const cl = W.road.closureAt(s, 260, 20); if (cl && cl.lanes.includes(lane)) continue; }   // (v98) not in a lane that is shut for road works
         if (!this.laneFree(dir, lane, s, cfg.gap, cfg.gap)) continue;
         W.road.ensure(Math.ceil((s + 400) / ROAD_DS));
         const veh = this.makeVehicle(dir, s, lane);
         if (!this.kinds[veh.kind]) continue;
+        if (dir > 0 && veh.lane !== lane) { const cl = W.road.closureAt(s, 260, 20); if (cl && cl.lanes.includes(veh.lane)) continue; }
         if (!this.laneFree(dir, veh.lane, s, cfg.gap + veh.front, cfg.gap + veh.rear)) continue;
         // match the speed of whatever is ahead in that lane so it doesn't spawn into a pile-up
         veh.fade = fill ? 1 : 0;
@@ -424,7 +433,7 @@ export class Traffic {
   // A pursuit car joins behind the player and tries to sit on their bumper, then on their rear quarter (a PIT
   // nudge: the ordinary collision does the rest). It reads the road like traffic does (s along, u across), but
   // steers continuously instead of lane by lane.
-  spawnCop(sPlayer, uPlayer, vPlayer, gap = rand(70, 100)) {
+  spawnCop(sPlayer, uPlayer, vPlayer, gap = rand(160, 220)) {
     const kind = this.kinds.cop; if (!kind) return null;
     // the player's lane, or one either side of it, whichever has the most room behind the player
     const near = LANE_CENTERS.reduce((b, c, k) => (Math.abs(c - uPlayer) < Math.abs(LANE_CENTERS[b] - uPlayer) ? k : b), 0);
@@ -438,12 +447,12 @@ export class Traffic {
     }
     const veh = {
       kind: 'cop', dir: 1, s, lane, from: lane, to: lane, laneT: 1, u: LANE_CENTERS[lane], du: 0,
-      v: Math.max(vPlayer + 14, 30), v0: 80, acc: 0, brake: false, color: 0xffffff,
+      v: clamp(vPlayer + 3, 24, this.copTune.vTop), v0: 80, acc: 0, brake: false, color: 0xffffff,   // (v98: it joins at about your speed, was 14 m/s quicker)
       len: kind.dims[2], halfW: kind.dims[0] / 2 - 0.12, front: kind.dims[2] / 2, rear: kind.dims[2] / 2, mass: 2050,
       spin: 0, signal: 0, signalT: 0, think: 0, hitT: 0, wob: 0, wobV: 0, fade: 0, lat: 0, latV: 0, yawOff: 0,
       // short following distance and hard braking: they tailgate traffic and dive round it
       T: 0.35, lcDur: 2, a: 8, b: 9, politeness: 0,
-      cop: { mode: 'chase', side: Math.random() < 0.5 ? -1 : 1, t: 0, pitT: 0, phase: Math.random(), gapT: 0, uTarget: LANE_CENTERS[lane], lost: 0 },
+      cop: { mode: 'chase', side: Math.random() < 0.5 ? -1 : 1, t: 0, pitT: 0, phase: Math.random(), gapT: 0, uTarget: LANE_CENTERS[lane], lost: 0, far: 0, engaged: false, ramp: null },
     };
     this.vehicles.push(veh);
     return veh;
@@ -460,6 +469,34 @@ export class Traffic {
   get cops() { return this.vehicles.filter((v) => v.cop); }
   dismissCops() { for (const v of this.vehicles) if (v.cop) v.cop.mode = 'leave'; }
   clearCops() { this.vehicles = this.vehicles.filter((v) => !v.cop); }
+  // What is in a unit's way (v98, the owner: "they also clip through cars"). Until now a unit only looked at the lane
+  // its centre was in, so it slid sideways through cars beside it and drove into the back of anything it straddled.
+  // This looks at where the bodies really are: `lead` is the nearest vehicle ahead whose body overlaps this one's
+  // path, and uMin..uMax is how far it can move across before it would touch a vehicle alongside.
+  copSpace(veh) {
+    let lead = null, bd = 1e9, uMin = -1e9, uMax = 1e9;
+    for (const o of this.vehicles) {
+      if (o === veh || o.dir !== veh.dir || o.gone) continue;
+      const ds = o.s - veh.s;
+      if (ds > 260 || ds < -40) continue;
+      const need = veh.halfW + o.halfW + 0.5, du = o.u - veh.u;
+      if (ds > 0 && Math.abs(du) < need) { const gap = ds - o.rear - veh.front; if (gap < bd) { bd = gap; lead = o; } }
+      // alongside (or about to be, at the speed it is closing): a wall on that side
+      const reach = ds > 0 ? o.rear + veh.front + 2 + Math.max(0, veh.v - o.v) * 0.9 : o.front + veh.rear + 2;
+      if (Math.abs(ds) < reach) { if (du >= 0) uMax = Math.min(uMax, o.u - need); else uMin = Math.max(uMin, o.u + need); }
+    }
+    return { lead: lead ? { gap: bd, v: lead.v, o: lead } : null, uMin, uMax };
+  }
+  // metres of clear road ahead of a unit along the line u across the road
+  corridorGap(veh, u) {
+    let g = 1e9;
+    for (const o of this.vehicles) {
+      if (o === veh || o.dir !== veh.dir || o.gone) continue;
+      const ds = o.s - veh.s;
+      if (ds > -(o.front + veh.rear + 1) && ds < 260 && Math.abs(o.u - u) < veh.halfW + o.halfW + 0.5) g = Math.min(g, ds - o.rear - veh.front);
+    }
+    return g;
+  }
   updateCop(veh, dt) {
     const c = veh.cop, p = this.player, W = this.world, T = this.copTune;
     c.t += dt;
@@ -467,43 +504,64 @@ export class Traffic {
     if (c.mode === 'parked') {
       veh.v = 0; veh.acc = 0; veh.brake = false; veh.du = 0; veh.lat = 0; veh.latV = 0; veh.hitT = 0;
       veh.fade = Math.min(1, veh.fade + dt * 1.5);
-      if (c.join && ahead > 30) { c.mode = 'chase'; c.uTarget = veh.u; c.gapT = 0; }
+      // a unit at a roadblock pulls out once you are by; one waiting on the shoulder ('ahead') pulls out as you come up to it
+      if (c.join === 'ahead' ? ahead > -230 : c.join && ahead > 30) { c.mode = 'chase'; c.uTarget = veh.u; c.gapT = 0; }
       veh.gone = ahead > 700 || ahead < -1800;
       return;
     }
     if (veh.wob && c.mode !== 'parked') veh.wob *= Math.exp(-dt * 2);   // a unit pulling out straightens up
-    // Speed: whatever it takes to stay on you (v27.2: the user wanted them "right on my ass"). Far back they run flat
-    // out, up to 35 m/s (~80 mph) quicker than you, easing to a few m/s quicker as they close, so the gap shuts in
-    // seconds at any speed; only traffic holds them up. Capped at 160 m/s, well past any car's top speed.
-    const pv = Math.max(0, p.v), bonus = ahead > 150 ? 35 : ahead > 80 ? 22 : ahead > 40 ? 12 : 5;
-    const vMax = Math.min(T.vAbs, Math.max(50, pv + bonus * T.push));
-    // above its cap this goes negative: the car eases off, but the car-following model below takes sqrt(a·b),
-    // so it gets a floor of 0.5 there
-    let uT, sGap, aMax = T.accel * (1 - Math.pow(Math.max(0, veh.v) / vMax, 3));
+    // Speed (v98). A unit has a top speed (T.vTop) and pulls like a quick saloon; it closes on you no faster than
+    // 16 m/s (about 35 mph) and eases to your own speed as it arrives, so it draws up to your bumper instead of
+    // arriving like a missile. Go faster than its top speed and it falls back.
+    const pv = Math.max(0, p.v), vMax = T.vTop;
+    let uT, sGap, aMax = T.accel * (1 - Math.pow(Math.max(0, veh.v) / vMax, 2));
     if (c.mode === 'leave') { uT = LANE_CENTERS[3]; sGap = 1e9; aMax = 2; veh.v0 = 30; }
     else {
       // behind the player: close up; once close and matched, swing out to a rear quarter for a few seconds
-      if (c.mode === 'chase') { if (ahead < 9 && ahead > 3 && Math.abs(p.v - veh.v) < 6) { c.gapT += dt; if (c.gapT > 1.2) { c.mode = 'pit'; c.pitT = 0; c.side = p.u > LANE_CENTERS[1] + 1 ? -1 : p.u < LANE_CENTERS[1] - 1 ? 1 : (Math.random() < 0.5 ? -1 : 1); } } else c.gapT = 0; }
-      else if (c.mode === 'pit') { c.pitT += dt; if (c.pitT > 5 || ahead > 16 || ahead < -8) { c.mode = 'chase'; c.gapT = 0; } }
+      if (c.mode === 'chase') { if (ahead < 9 && ahead > 3 && Math.abs(p.v - veh.v) < 6) { c.gapT += dt; if (c.gapT > 1.6) { c.mode = 'pit'; c.pitT = 0; c.side = p.u > LANE_CENTERS[1] + 1 ? -1 : p.u < LANE_CENTERS[1] - 1 ? 1 : (Math.random() < 0.5 ? -1 : 1); } } else c.gapT = 0; }
+      else if (c.mode === 'pit') { c.pitT += dt; if (c.pitT > 4 || ahead > 16 || ahead < -8) { c.mode = 'chase'; c.gapT = -2.5; } }   // (and a breather before it tries again)
       if (c.mode === 'pit') { uT = p.u + c.side * 2.1; sGap = 1.6; }           // front wheel at the player's rear quarter
-      else { uT = p.u + Math.sin(c.t * 0.7 + c.phase * 6) * 0.6; sGap = 6.5; }
+      else { uT = p.u + Math.sin(c.t * 0.7 + c.phase * 6) * 0.6; sGap = 7.5; }
     }
+    if (ahead < 60) c.engaged = true;   // it has been on you (the game only counts a unit as shaken off if it had)
     // longitudinal: close the gap, match the speed, don't run into traffic (the player is fair game)
-    let vWant = c.mode === 'leave' ? 30 : clamp(p.v + (ahead - sGap) * 0.9, 0, vMax);
+    let vWant = c.mode === 'leave' ? 30
+      : ahead < -5 ? clamp(pv - 7 + ahead * 0.05, 14, vMax)                       // in front of you (it pulled out ahead): a little slower than you, until you come up to it
+        : clamp(pv + clamp((ahead - sGap) * 0.3, -8, 16), 0, vMax);
     const laneNow = LANE_CENTERS.reduce((b, l, k) => (Math.abs(l - veh.u) < Math.abs(LANE_CENTERS[b] - veh.u) ? k : b), 0);
     veh.lane = veh.from = veh.to = laneNow; veh.laneT = 1;
-    const lead = this.leaderOf(veh, laneNow);
+    // following one of the game's ramps (an exit the player took, or the entrance of the highway it led to): the
+    // unit keeps to the ramp's lane until the ramp joins the road
+    let onRamp = false;
+    if (c.ramp) {
+      const rp = c.ramp, inside = veh.s >= rp.lo - 2 && veh.s <= rp.hi + 2, done = rp.dir > 0 ? veh.s > rp.sM - 30 : false;
+      if (!inside || done) { if (rp.dir > 0 || !inside) c.ramp = null; }
+      else { uT = rampC(veh.s, rp) + clamp(p.u - rampC(p.s, rp), -1, 1) * 0.5; onRamp = (rp.sN - veh.s) * rp.dir > 0; }
+    }
+    const space = onRamp ? { lead: null, uMin: -1e9, uMax: 1e9 } : this.copSpace(veh);
+    const lead = space.lead;
     let acc = clamp((vWant - veh.v) * 0.8, -9, aMax);
-    if (lead && !lead.o.player) {
+    if (lead) {
       const a2 = this.idm({ ...veh, a: Math.max(0.5, aMax) }, veh.v, lead, Math.max(vWant, 5));
       acc = Math.min(acc, a2);
-      // a civilian ahead: dive into the freer neighbouring lane early, rather than braking behind it
-      if (lead.gap < 40 + veh.v * 1.4 && c.mode !== 'leave') {
-        let best = uT, bestGap = lead.gap;
-        for (const dl of [-1, 1]) { const l = laneNow + dl; if (l < 0 || l > 3) continue; const L2 = this.leaderOf(veh, l); const g = L2 ? L2.gap : 1e9; if (g > bestGap + 8) { bestGap = g; best = LANE_CENTERS[l]; } }
-        uT = best;
+      // a vehicle ahead: pick the clearest way through early, rather than braking behind it. The four lanes and the
+      // hard shoulder are each weighed by the open road ahead in them, less how far across they are and how far
+      // from you; one it cannot reach (a vehicle alongside in the way) or that is shut for road works is out.
+      if (lead.gap < 50 + veh.v * 1.8 && c.mode !== 'leave' && !c.ramp) {
+        const cl = W.road.closureAt(veh.s, 160 + veh.v * 3), shoulder = !cl && !W.road.rampAt(veh.s + 80, 160) && !W.road.isBridge(Math.round(veh.s / ROAD_DS) + 30);
+        let best = uT, bestScore = Math.min(lead.gap, 170) - 2 * Math.abs(veh.u - p.u) + 10;
+        for (let k = 0; k < 5; k++) {
+          if (k === 4 ? !shoulder : cl && cl.lanes.includes(k)) continue;
+          const cu = k === 4 ? 17.7 : LANE_CENTERS[k];
+          if (cu < space.uMin - 0.3 || cu > space.uMax + 0.3) continue;
+          const sc = Math.min(this.corridorGap(veh, cu), 170) - 5 * Math.abs(cu - veh.u) - 2 * Math.abs(cu - p.u) - (k === 4 ? 12 : 0);
+          if (sc > bestScore) { bestScore = sc; best = cu; }
+        }
+        if (best !== uT) { uT = best; c.dodge = best; c.dodgeT = 1.2; }
       }
     }
+    // (it holds the way through it picked for a moment, so it does not weave back behind the car it is passing)
+    if (c.dodgeT > 0) { c.dodgeT -= dt; if (!lead || lead.gap > 30) { if (Math.abs(ahead) > 25) uT = c.dodge; } }
     // spike strips: the police know where they are, and take an open lane past them
     for (const hz of this.hazards) {
       const d = hz.s - veh.s;
@@ -515,19 +573,30 @@ export class Traffic {
         uT = best;
       }
     }
+    // road works: they keep to the lanes that are open
+    if (!onRamp) { const cl = W.road.closureAt(veh.s, 70 + veh.v * 2.6); if (cl && veh.s < cl.s1 - 10) uT = clamp(uT, LANE_CENTERS[cl.open[0]] - 0.5, LANE_CENTERS[cl.open[cl.open.length - 1]] + 0.5); }
     if (!Number.isFinite(acc)) acc = 0;
     veh.acc = lerp(Number.isFinite(veh.acc) ? veh.acc : 0, acc, 1 - Math.exp(-dt * 5));
     veh.v = Math.max(0, veh.v + veh.acc * dt);
+    // and it never drives into the back of what is in front of it
+    if (lead && !lead.o.player) { if (lead.gap < 0.8) veh.v = Math.min(veh.v, Math.max(0, lead.v - 0.5)); else veh.v = Math.min(veh.v, lead.v + Math.sqrt(2 * 9 * lead.gap)); }
     if (!Number.isFinite(veh.v)) veh.v = Math.max(0, p.v);
     veh.s += veh.v * dt;
     if (!Number.isFinite(veh.s)) veh.s = p.s - 80;
     veh.brake = veh.acc < -1.5;
-    // lateral: head for the target, limited by speed (no sideways teleporting)
-    uT = clamp(uT, LANE_CENTERS[0] - 0.9, LANE_CENTERS[3] + 1.0);
+    // lateral: head for the target, limited by speed (no sideways teleporting) and by the vehicles alongside
+    if (!c.ramp) uT = clamp(uT, LANE_CENTERS[0] - 0.9, c.dodgeT > 0 && c.dodge > 17 ? 17.8 : LANE_CENTERS[3] + 1.0);
+    if (space.uMin > space.uMax) uT = veh.u;   // boxed in on both sides: hold the line
+    else uT = clamp(uT, space.uMin, space.uMax);
     c.uTarget = lerp(c.uTarget, uT, 1 - Math.exp(-dt * 2.5));
     const maxDu = 1.0 + veh.v * 0.11;
     const du = clamp((c.uTarget - veh.u) * 1.8, -maxDu, maxDu);
     let uNew = veh.u + du * dt + veh.lat;
+    if (space.uMin <= space.uMax) {
+      // already overlapping a vehicle alongside (it moved over, or this one was shoved): ease apart, never through
+      if (uNew > space.uMax) uNew = Math.max(space.uMax, veh.u - 3 * dt);
+      if (uNew < space.uMin) uNew = Math.min(space.uMin, veh.u + 3 * dt);
+    }
     if (!Number.isFinite(uNew)) { uNew = c.uTarget = LANE_CENTERS[1]; veh.lat = 0; }
     veh.du = dt > 0 ? (uNew - veh.u) / dt : 0; veh.u = uNew;
     veh.lat *= Math.exp(-dt * 3); veh.latV = 0;
@@ -537,7 +606,37 @@ export class Traffic {
     veh.hitT = 0;
     // out of the picture: far behind for a while, or leaving and gone
     if (ahead > 420) c.lost += dt; else c.lost = Math.max(0, c.lost - dt * 2);
-    veh.gone = (c.mode === 'leave' && ahead > 300) || ahead > 900 || ahead < -300;
+    veh.gone = (c.mode === 'leave' && ahead > 300) || ahead > 900 || ahead < -400;
+  }
+  // (v98) a vehicle standing in the road: a works pick-up in a closed lane, hazards and a beacon going
+  spawnParked(name, s, u) {
+    if (!this.kinds[name]) return null;
+    const veh = this.makeVehicle(1, s, 3, 0);
+    const kind = this.kinds[name], spec = TRAFFIC_KINDS[name];
+    Object.assign(veh, { kind: name, u, v: 0, v0: 1, parked: true, hitT: 1e9, fade: 0, color: 0xe9e9e6, len: kind.dims[2], halfW: kind.dims[0] / 2 - 0.12, front: kind.dims[2] / 2, rear: kind.dims[2] / 2, mass: spec.mass, lane: LANE_CENTERS.reduce((b, l, k) => (Math.abs(l - u) < Math.abs(LANE_CENTERS[b] - u) ? k : b), 0) });
+    veh.from = veh.to = veh.lane;
+    this.vehicles.push(veh);
+    return veh;
+  }
+  // road works coming up: put the works pick-up in the closed lanes and note the arrow board as something solid
+  syncClosures(sCar) {
+    const R = this.world.road;
+    for (const cl of R.closures) {
+      if (cl.s0 > sCar + 1100 || cl.s1 < sCar - 300) continue;
+      if (this.clSeen.has(cl)) continue;
+      this.clSeen.add(cl);
+      R.ensure(Math.ceil((cl.s1 + 400) / ROAD_DS));
+      this.spawnParked('f150', cl.truck.s, cl.truck.u);
+      this.statics.push({ static: true, cl, s: cl.board.s, u: cl.board.u, dir: 1, v: 0, du: 0, wob: 0, lat: 0, latV: 0, wobV: 0, hitT: 0, signal: 0, mass: 5000, dims: [2.3, 3.6, 2.2] });
+    }
+    this.statics = this.statics.filter((st) => st.cl.s1 > sCar - 300 && R.closures.includes(st.cl));
+    for (const st of this.statics) { st.v = 0; st.pose = this.pose(st); }
+  }
+  // the lane closure a vehicle in `lane` is coming up to (or is inside), or null
+  closureFor(veh, lane, look = 420) {
+    if (veh.dir < 0) return null;
+    const cl = this.world.road.closureAt(veh.s, look);
+    return cl && cl.lanes.includes(lane) && veh.s < cl.s1 - 30 ? cl : null;
   }
 
   // ---- driving
@@ -583,12 +682,13 @@ export class Traffic {
     if (veh.dir < 0) return 0;
     for (const o of this.vehicles) {
       if (!o.cop || (o.cop.mode !== 'chase' && o.cop.mode !== 'pit') || o.lane !== lane) continue;
-      const d = veh.s - o.s; if (d > 0 && d < 60 && o.v > veh.v + 2) return 1;
+      const d = veh.s - o.s; if (d > 0 && d < 110 && o.v > veh.v + 2) return 1;   // (v98: from 110 m, was 60: the units can no longer barge through, so drivers clear the way sooner)
     }
     return 0;
   }
   closedAhead(veh, lane) {
     for (const hz of this.hazards) { const d = (hz.s - veh.s) * veh.dir; if (veh.dir > 0 && d > 0 && d < 380 && hz.lanes.includes(lane)) return 1; }
+    if (this.closureFor(veh, lane, 520)) return 2;   // (v98) road works: twice as pressing as a spike strip, and from further off
     return 0;
   }
   // clear other drivers out of some lanes over a stretch of road (where a strip is about to go down)
@@ -603,7 +703,7 @@ export class Traffic {
     for (const dl of [-1, 1]) {
       const lane = veh.lane + dl;
       if (lane < 0 || lane > 3) continue;
-      if (spec.truck && lane < 2) continue;
+      if (spec.truck && lane < 2 && !this.closureFor(veh, veh.lane, 520)) continue;   // (a lorry keeps right, unless its lane is shut ahead)
       const lead = this.leaderOf(veh, lane), fol = this.followerOf(veh, lane);
       if (lead && lead.gap < 10 + veh.v * 0.4) continue;
       if (fol) {
@@ -616,7 +716,7 @@ export class Traffic {
       // keep right: a small bonus for moving right, a threshold for moving left; get out of a lane that a spike
       // strip closes up ahead; and get out of the way of a police car coming up fast behind
       const gain = aNew - aCur + (dl > 0 ? 0.25 : -0.35) - (veh.lane === 0 && dl < 0 ? 9 : 0) + 4 * (this.closedAhead(veh, veh.lane) - this.closedAhead(veh, lane))
-        + 3 * (this.copBehind(veh, veh.lane) - this.copBehind(veh, lane));
+        + 6 * (this.copBehind(veh, veh.lane) - this.copBehind(veh, lane));
       if (gain > bestGain) { bestGain = gain; bestLane = lane; }
     }
     if (bestLane >= 0 && Math.random() < 0.85) { veh.to = bestLane; veh.signal = bestLane > veh.lane ? 1 : -1; veh.signalT = rand(0.9, 1.6); }
@@ -625,6 +725,7 @@ export class Traffic {
     if (veh.cop) return this.updateCop(veh, dt);
     const spec = TRAFFIC_KINDS[veh.kind];
     veh.fade = Math.min(1, veh.fade + dt * 0.8);
+    if (veh.parked) { veh.v = 0; veh.acc = 0; veh.brake = false; veh.du = 0; veh.lat *= Math.exp(-dt * 3); veh.latV = 0; veh.wobV += (-veh.wob * 9 - veh.wobV * 3.5) * dt; veh.wob += veh.wobV * dt; veh.hitT = 1e9; return; }
     // lane change: indicate, then move over three seconds or so
     if (veh.signal && veh.laneT >= 1 && veh.to !== veh.lane) {
       veh.signalT -= dt;
@@ -660,6 +761,14 @@ export class Traffic {
       const lanes = veh.laneT < 1 ? [veh.from, veh.to] : [veh.lane];
       acc = veh.a;
       for (const l of lanes) acc = Math.min(acc, this.idm(veh, veh.v, this.leaderOf(veh, l)));
+      // (v98) road works: a driver still in a lane that is shut slows for the drums as for a stopped car, and waits
+      // there for a gap to move over
+      for (const l of lanes) {
+        const cl = this.closureFor(veh, l, 320);
+        if (!cl) continue;
+        const outer = cl.side > 0 ? l === 3 : l === 0, stop = cl.s0 + cl.taper * (cl.n === 2 ? (outer ? 0.2 : 0.68) : 0.45) - 4, gap = stop - veh.s - veh.front;
+        if (gap > 0.5) acc = Math.min(acc, this.idm(veh, veh.v, { gap, v: 0 }));
+      }
     }
     veh.acc = lerp(veh.acc, acc, 1 - Math.exp(-dt * 6));
     veh.v = Math.max(0, veh.v + veh.acc * dt);
@@ -669,7 +778,7 @@ export class Traffic {
     // knocked sideways by a hit: settle back into the lane
     veh.latV += (-veh.lat * 3 - veh.latV * 2.6) * dt; veh.lat += veh.latV * dt;
     veh.wobV += (-veh.wob * 9 - veh.wobV * 3.5) * dt; veh.wob += veh.wobV * dt;
-    if (veh.hitT <= 0 && veh.laneT >= 1) { veh.think -= dt; if (veh.think <= 0) { veh.think = rand(0.8, 2.2); this.think(veh); } }
+    if (veh.hitT <= 0 && veh.laneT >= 1) { veh.think -= dt; if (veh.think <= 0) { veh.think = this.closureFor(veh, veh.lane, 520) ? rand(0.25, 0.6) : rand(0.8, 2.2); this.think(veh); } }
   }
 
   // ---- placing a vehicle in the world (render space)
@@ -707,6 +816,7 @@ export class Traffic {
     p.lanes = []; for (let k = 0; k < 4; k++) if (Math.abs(L.u - LANE_CENTERS[k]) < 2.9) p.lanes.push(k);
     if (!this.populated) { this.populate(L.s, true); this.populated = true; }
     this.spawnTimer -= dt; if (this.spawnTimer <= 0) { this.spawnTimer = 0.25; this.populate(L.s); }
+    this.syncClosures(L.s);
     const sub = Math.min(dt, 0.05);
     for (const veh of this.vehicles) this.updateVehicle(veh, sub);
     this.blink = (this.blink + dt) % 0.8;
@@ -786,6 +896,7 @@ export class Traffic {
         }
         veh.cop.flash = left ? 1 : -1; veh.cop.pulse = pulse;
       }
+      if (veh.parked) { const ph = (this.blink / 0.8 * 2) % 1; if (ph < 0.3) addLamp(this.local(p, 0, kind.dims[1] + 0.12, -0.2), 2.2 * f, 1.05 * f, 0.1 * f, 2.6); }   // (v98) the works pick-up's amber beacon
       if (spec.markers) for (const m of spec.markers) { const q = this.local(p, m[0], m[1], m[2]); addLamp(q, 1.0 * f * 0.55, 0.45 * f * 0.55, 0.06 * f * 0.55, 0.55); }
       if (tp) for (const m of this.kinds.trailer.spec.rearMarkers) { const q = this.local(tp, m[0], m[1], m[2]); addLamp(q, 0.8 * f * 0.6, 0.02 * f * 0.6, 0.01 * f * 0.6, 0.5); }
       // pools of light on the road
@@ -862,14 +973,14 @@ export class Traffic {
 
   // ---- contact with the player's car: oriented boxes in the ground plane
   collide(car, dims, onHit) {
-    if (!this.ready || !this.enabled || !this.vehicles.length) return null;
+    if (!this.ready || !this.enabled || !(this.vehicles.length + this.statics.length)) return null;
     const pyaw = car.yaw, pc = Math.cos(pyaw), ps = Math.sin(pyaw);
     // Forgiving sides (v27.2): the boxes are measured over the door mirrors, so threading a gap clipped mirrors that
     // weren't touching anything. The player's box loses 12 cm a side, a civilian's 16 cm (police cars keep 10).
     const A = { x: car.x + ps * (dims.front - dims.rear) / 2, z: car.z + pc * (dims.front - dims.rear) / 2, hx: dims.hw - 0.12, hz: (dims.front + dims.rear) / 2, yaw: pyaw };
     let result = null;
-    for (const veh of this.vehicles) {
-      const parts = [[veh.pose, this.kinds[veh.kind].dims]];
+    for (const veh of (this.statics.length ? this.vehicles.concat(this.statics) : this.vehicles)) {
+      const parts = [[veh.pose, veh.dims || this.kinds[veh.kind].dims]];
       if (veh.trailerPose) parts.push([veh.trailerPose, this.kinds.trailer.dims]);
       for (const [p, dm] of parts) {
         if (!p || !Number.isFinite(p.x + p.z + p.yaw)) continue;
@@ -974,7 +1085,7 @@ export class Traffic {
   }
   // nearest traffic around the player (for camera/audio effects and tests)
   nearest(x, z) { let best = null, bd = 1e9; for (const v of this.vehicles) { if (!v.pose) continue; const d = Math.hypot(v.pose.x - x, v.pose.z - z); if (d < bd) { bd = d; best = v; } } return best ? { veh: best, d: bd } : null; }
-  reset() { this.vehicles = []; this.populated = false; this.hazards = []; }
+  reset() { this.vehicles = []; this.populated = false; this.hazards = []; this.statics = []; this.clSeen.clear(); }
   stats() {
     const per = {}; for (const v of this.vehicles) per[v.kind] = (per[v.kind] || 0) + 1;
     let calls = 0, tris = 0;
