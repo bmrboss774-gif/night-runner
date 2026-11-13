@@ -887,7 +887,7 @@ body.is-touch .cc{font-size:22px}
     <p class="credit-line"><span id="tCredit"></span></p>
     <button type="button" class="t-back" id="backBtn">← Back</button>
   </section>
-  <footer class="prompts" id="titleControls"><span><kbd>↑↓←→</kbd> Navigate</span><span><kbd>Enter</kbd> Select</span><span><kbd>Esc</kbd> Back</span><span class="prompts-right"><kbd>W A S D</kbd> Drive <kbd>+ −</kbd> Shift <kbd>Space</kbd> Handbrake <kbd>B</kbd> Workshop</span></footer>
+  <footer class="prompts" id="titleControls"><span><kbd>↑↓←→</kbd> Navigate</span><span><kbd>Enter</kbd> Select</span><span><kbd>Esc</kbd> Back</span><span class="prompts-right"><kbd>W A S D</kbd> Drive <kbd>+ −</kbd> Shift <kbd>Space</kbd> Drift <kbd>B</kbd> Workshop</span></footer>
 </div>
 
 <div class="page" id="settings" hidden role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
@@ -898,7 +898,7 @@ body.is-touch .cc{font-size:22px}
       <section class="set-row"><div class="set-k"><b>Mirror</b><small>The rear-view mirror at the top of the screen: your car's nose and everything behind it (V).</small></div><div class="seg"><button type="button" role="radio" data-set="mirror:on">On</button><button type="button" role="radio" data-set="mirror:off">Off</button></div></section>
       <section class="set-row" id="gfxRow"><div class="set-k"><b>Graphics</b><small>Drop a level if the frame rate stutters.</small></div><div class="seg"><button type="button" role="radio" data-set="gfx:2">High</button><button type="button" role="radio" data-set="gfx:1">Medium</button><button type="button" role="radio" data-set="gfx:0">Low</button></div></section>
       <section class="set-row"><div class="set-k"><b>Gearbox</b><small>Manual shifts with + and −, near the redline for a perfect shift.</small></div><div class="seg"><button type="button" role="radio" data-set="gearbox:manual">Manual</button><button type="button" role="radio" data-set="gearbox:auto">Automatic</button></div></section>
-      <section class="set-row"><div class="set-k"><b>Traction control</b><small>Off lets the back step out for drifts.</small></div><div class="seg"><button type="button" role="radio" data-set="tcs:on">On</button><button type="button" role="radio" data-set="tcs:off">Off</button></div></section>
+      <section class="set-row" hidden><div class="set-k"><b>Traction control</b><small>Off lets the back step out for drifts.</small></div><div class="seg"><button type="button" role="radio" data-set="tcs:on">On</button><button type="button" role="radio" data-set="tcs:off">Off</button></div></section>
       <section class="set-row"><div class="set-k"><b>Steering assist</b><small>Keys and touch: holds the car round bends and straightens it after a tap.</small></div><div class="seg"><button type="button" role="radio" data-set="assist:full">Full</button><button type="button" role="radio" data-set="assist:light">Light</button><button type="button" role="radio" data-set="assist:off">Off</button></div></section>
       <section class="set-row"><div class="set-k"><b>Units</b></div><div class="seg"><button type="button" role="radio" data-set="units:mph">mph</button><button type="button" role="radio" data-set="units:kmh">km/h</button></div></section>
       <section class="set-row"><div class="set-k"><b>Sound</b></div><div class="seg"><button type="button" role="radio" data-set="sound:on">On</button><button type="button" role="radio" data-set="sound:off">Off</button></div></section>
@@ -943,16 +943,15 @@ body.is-touch .cc{font-size:22px}
     <div class="vitals" id="vitals" title="Fuel: fill up at a gas station. Damage: at 100% the car is wrecked."><span>Fuel</span><i class="vbar fuel" id="vFuel"><b></b></i><span>Damage</span><i class="vbar dmg" id="vDmg"><b></b></i></div>
     <div class="shiftlights" id="shiftLights"><i class="g"></i><i class="g"></i><i class="y"></i><i class="y"></i><i class="r"></i></div>
     <div class="gaugebox"><canvas class="gauge" id="gauge" width="2" height="2"></canvas></div>
-    <div class="cluster-foot"><button class="unit" id="unit" title="Switch mph / km/h">mph</button><button class="gearbox" id="gearbox" title="Switch manual / automatic (G)"><span class="gear-label" id="gearLabel">Manual</span></button><button class="lamp" id="tcsLamp" title="Traction control (T)">TRAC OFF</button></div>
+    <div class="cluster-foot"><button class="unit" id="unit" title="Switch mph / km/h">mph</button><button class="gearbox" id="gearbox" title="Switch manual / automatic (G)"><span class="gear-label" id="gearLabel">Manual</span></button><button class="lamp" id="tcsLamp" hidden>TRAC OFF</button></div>
     <span id="speed" hidden>0</span><span id="gear" hidden>1</span><span id="rpm" hidden>850</span>
   </div>
   <dl class="keys panel" id="keys">
     <dt><kbd>W</kbd><kbd>S</kbd></dt><dd>Throttle / brake · reverse</dd>
     <dt><kbd>A</kbd><kbd>D</kbd></dt><dd>Steer</dd>
-    <dt><kbd>Space</kbd></dt><dd>Handbrake</dd>
+    <dt><kbd>Space</kbd></dt><dd>Drift (hold)</dd>
     <dt><kbd>W</kbd><kbd>S</kbd></dt><dd>Both at a stop: burnout</dd>
     <dt><kbd>+</kbd><kbd>−</kbd></dt><dd>Shift up / down</dd>
-    <dt><kbd>T</kbd></dt><dd>Traction control (off to drift)</dd>
     <dt><kbd>G</kbd></dt><dd>Manual / automatic</dd>
     <dt><kbd>C</kbd></dt><dd>Camera</dd>
     <dt><kbd>R</kbd></dt><dd>Back to the start</dd>
@@ -1028,7 +1027,7 @@ body.is-touch .cc{font-size:22px}
   <div class="grp">
     <div class="stack">
       <button class="tbtn small nos" id="nosBtn" hidden>NO2</button>
-      <button class="tbtn small" data-k="hand">E-brake</button>
+      <button class="tbtn small" data-k="hand">Drift</button>
       <button class="tbtn" data-k="brake">Brake</button>
     </div>
     <button class="tbtn gas" data-k="gas">Gas</button>
@@ -1209,14 +1208,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=db59b25b3c';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=db59b25b3c';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=db59b25b3c';
-import { createShowroom, TOWER } from './showroom.js?b=db59b25b3c';
-import { setChameleon } from './paintfx.js?b=db59b25b3c';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=db59b25b3c';
-import { SpikeStrips, Mirror } from './pursuit.js?b=db59b25b3c';
-import { Rain } from './rain.js?b=db59b25b3c';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=56a2ff5b4d';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=56a2ff5b4d';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=56a2ff5b4d';
+import { createShowroom, TOWER } from './showroom.js?b=56a2ff5b4d';
+import { setChameleon } from './paintfx.js?b=56a2ff5b4d';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=56a2ff5b4d';
+import { SpikeStrips, Mirror } from './pursuit.js?b=56a2ff5b4d';
+import { Rain } from './rain.js?b=56a2ff5b4d';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1690,6 +1689,9 @@ const WEATHER = { grip: 1 };
 // changes nothing, so the shot also shoves the car forward directly, `push` m/s^2 (physicsStep): it surges at any speed.
 // `purge` is how long the four jets blow when it goes off.
 const NOS = { gain: 0.7, push: 4.2, burn: 4.2, refill: 18, purge: 1.35 };
+// The drift (v120, hold Space): vIn = the speed (m/s) it needs; turn = how much tighter than the tyres' own limit the
+// path turns; angle = the body's angle to its path at full steering (rad); scrub = speed it costs at full steering (m/s2).
+const DRIFT = { vIn: 7, turn: 1.4, angle: 0.5, scrub: 1.4 };
 const LAUNCH_FADE = [4, 25];   // (v97) where a car's launch grip fades out, m/s, unless its spec says otherwise
 class Vehicle {
   constructor() { this.tcs = true; this.manual = true; this.reset(0, 0, 0); }
@@ -1698,7 +1700,7 @@ class Vehicle {
       x, z, yaw, px: x, pz: z, pyaw: yaw, vx: 0, vy: 0, r: 0, steer: 0, gear: 1, rpm: CAR.idle, shiftT: 0,
       lonAcc: 0, latAcc: 0, axS: 0, revHold: 0, alphaF: 0, alphaR: 0, spinning: false, omegaF: 0, omegaR: 0,
       brakeLight: false, skidF: 0, skidR: 0, throttle: 0, limiter: false, limiterT: 0, tcsActive: false, hbTimer: 0,
-      burnout: false, boost: 0, slipV: 0, shiftEvent: null, driftAssist: 0, nitro: 0,
+      burnout: false, boost: 0, slipV: 0, shiftEvent: null, driftAssist: 0, nitro: 0, drift: 0,
     });
   }
   get speed() { return Math.hypot(this.vx, this.vy); }
@@ -1952,12 +1954,38 @@ class Vehicle {
       }
     }
     this.prevBeta = beta;
-    this.lonAcc = Fx / m; this.latAcc = Fy / m;
-    this.axS += (this.lonAcc - this.axS) * Math.min(1, dt * 10);
+    // ---- the drift (v120). The owner: "make it so that space is to drift get rid of the traction control feature ...
+    // when u hold space to drift it drifts u but basically just turns you more and u can never spin out". While the
+    // drift is held the tyres' sideways forces are not what moves the car: its path turns at a rate the steering sets
+    // (DRIFT.turn times what the tyres could hold, so a drift is the tighter way round), the body is swung to a set
+    // angle inside that path (DRIFT.angle at full steering) and held there, and it keeps the speed the engine, the
+    // brakes and the air give it, less a little scrub. Nothing in it can add up to a spin. Let go and the angle is
+    // wound off the same way (phase 2) before the tyres take over again, so the car leaves the drift straight.
     const vxOld = this.vx;
-    this.vx += (Fx / m + this.vy * this.r) * dt;
-    this.vy += (Fy / m - vxOld * this.r) * dt;
-    this.r += (Mz / CAR.Iz) * dt;
+    {
+      const v0 = Math.hypot(this.vx, this.vy), want = !!inp.drift && this.gear > 0 && this.vx > 0 && !this.burnout;
+      if (want && v0 > DRIFT.vIn) this.drift = 1;
+      else if (this.drift === 1) this.drift = 2;
+      if (this.drift === 2 && Math.abs(beta) < 0.035) this.drift = 0;
+      if (this.drift && (v0 < 3 || this.vx <= 0)) this.drift = 0;
+    }
+    if (this.drift) {
+      const hold = this.drift === 1, v0 = Math.hypot(this.vx, this.vy), si = clamp(inp.steer, -1, 1), g = CAR.muR * WEATHER.grip * (GRAV + CAR.downforce * v0 * v0 / m);   // (what the tyres could hold here, wing and all)
+      const om = si * Math.min(hold ? 1.8 : 1.2, (hold ? DRIFT.turn : 0.9) * g / Math.max(v0, 5));   // how fast the path turns
+      const bT = hold ? -si * DRIFT.angle * smooth01(DRIFT.vIn, 18, v0) : 0;                          // the body's angle to the path
+      this.r += (om - (hold ? 3.6 : 6) * (bT - beta) - this.r) * Math.min(1, dt * 14);
+      const aL = (clamp(req, -capR, capR) + Fxf + drag) / m - (hold ? DRIFT.scrub * Math.abs(si) : 0);
+      const v1 = Math.max(0, v0 + aL * dt), b1 = clamp(beta + (om - this.r) * dt, -0.8, 0.8);
+      this.vx = v1 * Math.cos(b1); this.vy = v1 * Math.sin(b1);
+      this.lonAcc = aL; this.latAcc = v1 * om;
+      if (hold || Math.abs(b1) > 0.1) spinning = true;   // (smoke and marks from the rear tyres)
+    } else {
+      this.lonAcc = Fx / m; this.latAcc = Fy / m;
+      this.vx += (Fx / m + this.vy * this.r) * dt;
+      this.vy += (Fy / m - vxOld * this.r) * dt;
+      this.r += (Mz / CAR.Iz) * dt;
+    }
+    this.axS += (this.lonAcc - this.axS) * Math.min(1, dt * 10);
 
     const stopping = (brk > 0.05 || hb) && thr < 0.05;
     if (stopping && vxOld !== 0 && Math.sign(this.vx) !== Math.sign(vxOld)) this.vx = 0;
@@ -2599,7 +2627,7 @@ let patchT = 0;
 
 // ---------------------------------------------------------------- car model
 const car = new Vehicle();
-car.tcs = store.get('tcs', true);
+car.tcs = true;   // (v120: always on; the owner: 'get rid of the traction control feature'. Space drifts instead.)
 car.manual = store.get('manual', true);
 const carRoot = new THREE.Group();
 const bodyPivot = new THREE.Group();
@@ -5839,7 +5867,6 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'Escape' && $('settings').hidden && $('credits').hidden) openPause();
   else if (e.code === 'KeyR') resetCar();
   else if (e.code === 'KeyM') toggleSound();
-  else if (e.code === 'KeyT') toggleTcs();
   else if (e.code === 'KeyH') { $('keys').hidden = !$('keys').hidden; store.set('keysHidden', $('keys').hidden); }
   else if (e.code === 'KeyU') toggleUnits();
   else if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'KeyP') doShift(1);
@@ -5907,7 +5934,7 @@ function readInput(dt) {
   if (analog) inp.steer = st;
   else inp.steer = keySteer(inp.steer, st, car.speed, dt);   // v91: gentle at first, quick when held (see keySteer)
   inp.stick = analog;
-  inp.handbrake = hb;
+  inp.handbrake = false; inp.drift = hb;   // (v120: Space, the pad's A or B and the touch button drift the car; there is no handbrake to pull)
 }
 
 // ---------------------------------------------------------------- audio
@@ -6814,7 +6841,8 @@ function toast(text, ms = 1100) {
 }
 function cycleCamera() { state.cam = (state.cam + 1) % CAMS.length; store.set('cam', state.cam); toast(CAMS[state.cam]); }
 function toggleSound() { audio.start(); audio.setMuted(!audio.muted); syncButtons(); toast(audio.muted ? 'Sound off' : 'Sound on'); }
-function toggleTcs() { car.tcs = !car.tcs; store.set('tcs', car.tcs); syncButtons(); toast(car.tcs ? 'Traction control on' : 'Traction control off'); }
+function toggleTcs() { return;   // (v120: no traction control switch)
+  car.tcs = !car.tcs; store.set('tcs', car.tcs); syncButtons(); toast(car.tcs ? 'Traction control on' : 'Traction control off'); }
 function toggleUnits() { state.units = state.units === 'mph' ? 'kmh' : 'mph'; store.set('units', state.units); syncButtons(); renderTiming(); }
 function toggleGearbox() { car.manual = !car.manual; store.set('manual', car.manual); syncButtons(); toast(car.manual ? 'Manual gearbox' : 'Automatic gearbox'); }
 function shiftNote(text, cls) {
@@ -11830,7 +11858,7 @@ for (const b of document.querySelectorAll('[data-set]')) b.addEventListener('cli
   else if (k === 'sound') { audio.start(); audio.setMuted(v === 'off'); syncButtons(); syncSettings(); }
   else if (k === 'radio') audio.radioToggle(v === 'on');
   else if (k === 'gearbox') { car.manual = v === 'manual'; store.set('manual', car.manual); syncButtons(); syncSettings(); }
-  else if (k === 'tcs') { car.tcs = v === 'on'; store.set('tcs', car.tcs); syncButtons(); syncSettings(); }
+  else if (k === 'tcs') { return; car.tcs = v === 'on'; store.set('tcs', car.tcs); syncButtons(); syncSettings(); }
   else if (k === 'assist') { state.assist = v; store.set('assist', v); syncSettings(); }   // v91: steering assist (see ASSIST)
 });
 // start screen -> car select

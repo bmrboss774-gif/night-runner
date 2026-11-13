@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { LANE_CENTERS, ROAD_DS, glowMaterial, GLOW as GLOW_U, SHARED, rampC } from './world.js?b=db59b25b3c';
+import { LANE_CENTERS, ROAD_DS, glowMaterial, GLOW as GLOW_U, SHARED, rampC } from './world.js?b=56a2ff5b4d';
 // headlight beam strength (the weather turns it up)
 export const BEAM = { gain: { value: 0.05 } };
 
