@@ -834,7 +834,7 @@ body.is-touch .cc{font-size:22px}
   <section class="t-start" id="tStart">
     <h1 class="t-logo"><span>Night</span><span>Runner</span></h1>
     <nav class="tiles" id="tMenu" aria-label="Main menu">
-      <button type="button" class="tile tile-main" id="startBtn" data-i="0"><i>Play</i><span>Start</span><small>Pick a car and drive</small></button>
+      <button type="button" class="tile tile-main" id="startBtn" data-i="0"><i>Play</i><span>Start</span><small>Pick a car and take it round the mountain</small></button>
       <button type="button" class="tile" id="titleSettings" data-i="1"><i>Setup</i><span>Settings</span><small>Graphics · gearbox · sound</small></button>
       <button type="button" class="tile" id="titleCredits" data-i="2"><i>Info</i><span>Credits</span><small>Models and sounds</small></button>
     </nav>
@@ -1208,14 +1208,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=9873a30970';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=9873a30970';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=9873a30970';
-import { createShowroom, TOWER } from './showroom.js?b=9873a30970';
-import { setChameleon } from './paintfx.js?b=9873a30970';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=9873a30970';
-import { SpikeStrips, Mirror } from './pursuit.js?b=9873a30970';
-import { Rain } from './rain.js?b=9873a30970';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=dca8f9c776';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=dca8f9c776';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=dca8f9c776';
+import { createShowroom, TOWER } from './showroom.js?b=dca8f9c776';
+import { setChameleon } from './paintfx.js?b=dca8f9c776';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=dca8f9c776';
+import { SpikeStrips, Mirror } from './pursuit.js?b=dca8f9c776';
+import { Rain } from './rain.js?b=dca8f9c776';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -2167,7 +2167,7 @@ const traffic = new Traffic({ renderer, scene, world, base: './' });
 // they were. Everything the highway game was is still in this file behind this one switch (and in dev/ backups), for
 // whatever of it the racing game that comes next wants back.
 const OPEN = true;
-if (OPEN) { world.setOpen(true); traffic.empty = true; document.body.classList.add('open-area'); }
+if (OPEN) { world.setOpen(true); world.setTrack(); traffic.empty = true; document.body.classList.add('open-area'); }   // (v122: setTrack, the mountain circuit, in place of the bare apron)
 // v119, the owner: "make it daytime remove the rain". DAY: a clear blue afternoon (world.setDay): the sun and the car's
 // shadow under it, no rain, and the car's headlight beams off (its lamps still show lit, as running lights do).
 const DAY = OPEN;
@@ -6833,6 +6833,7 @@ const state = {
   ready: false, driving: false, paused: false, simTime: 0, lightbar: false, headOn: true,
   cam: store.get('cam', 0), units: store.get('units', 'mph'), assist: store.get('assist', 'full'),
   t060: null, t060Start: null, armed060: true,
+  lap: { t0: null, half: false, prev: null, last: null, n: 0 },
   dist: 0, bestRun: store.get('bestRun', 0), gfx: GFX_LOCK ?? store.get('gfx', isTouch ? 1 : 2),
   vmax: 0, bestDrift: store.get('bestDrift', 0),
   damage: 0, fuel: 1, fuelWarned: false,   // (v101) how wrecked the car is (0..1) and how full its tank (1..0)
@@ -6881,7 +6882,7 @@ function syncButtons() {
   $('soundLbl').textContent = audio.muted ? 'Sound off' : 'Sound on';
   $('tcsLamp').classList.toggle('on', !car.tcs);
   $('unit').textContent = state.units === 'mph' ? 'mph' : 'km/h';
-  $('t060Label').textContent = state.units === 'mph' ? '0–60 mph' : '0–100 km/h';
+  $('t060Label').textContent = world.track ? 'Best lap' : state.units === 'mph' ? '0–60 mph' : '0–100 km/h';
 }
 // The ramp's garage button (v33): shown from the start of a run until the car first leaves the entrance ramp (past the
 // nose where it joins the interstate: `world.onRamp`, worked out in each physics step), then gone until the next run.
@@ -6906,7 +6907,7 @@ function resetCar(quiet) {
   camera.position.set(p.x - Math.sin(p.yaw) * 6, roadY + 1.8, p.z - Math.cos(p.yaw) * 6); camPrev.copy(camera.position);
   gcam.t.set(p.x, roadY + 0.6, p.z);
   drift.active = false; drift.points = 0; $('drift').classList.add('fade');
-  state.t060Start = null; state.armed060 = true; state.dist = 0; state.vmax = 0; state.t060 = null;
+  state.t060Start = null; state.armed060 = true; state.dist = 0; state.vmax = 0; state.t060 = null; state.lap = { t0: null, half: false, prev: null, last: null, n: 0 };
   state.score = 0; state.distPts = 0; state.combo = 0; state.comboT = 0;
   if (quiet !== true) { state.damage = 0; state.fuel = 1; state.fuelWarned = false; if (rig) repairDamage(rig); }   // (v101) a new run starts with a sound car and a full tank
   nitro.charge = 1; nitro.burn = 0; nitro.purge = 0;
@@ -7107,8 +7108,15 @@ const speedUnit = () => (state.units === 'mph' ? MPH : KMH);
 const fmtSpeed = (ms) => `${Math.round(ms * speedUnit())} ${state.units === 'mph' ? 'mph' : 'km/h'}`;
 const fmtDist = (m) => (state.units === 'mph' ? `${(m / 1609.344).toFixed(1)} mi` : `${(m / 1000).toFixed(1)} km`);
 function renderTiming() {
+  if (world.track) {   // (v122) on the circuit the panel is this lap's time, the top speed and the car's best lap
+    const lap = state.lap, best = +store.get('lap_' + baseOf(activeId), 0) || 0;
+    if (!renderTiming.labelled) { renderTiming.labelled = true; $('tdist').previousElementSibling.textContent = 'Lap'; $('t060Label').textContent = 'Best lap'; }
+    $('tdist').textContent = lap.t0 != null ? fmtLap(state.simTime - lap.t0).slice(0, -1) : '—';
+    $('t060').textContent = best ? fmtLap(best) : '—';
+  } else {
   $('t060').textContent = state.t060 != null ? state.t060.toFixed(2) + ' s' : '—';
   $('tdist').textContent = state.dist > 5 ? fmtDist(state.dist) : '—';
+  }
   $('tvmax').textContent = state.vmax > 1 ? fmtSpeed(state.vmax) : '—';
   const sc = $('tscore'), txt = state.score.toLocaleString();
   if (sc.textContent !== txt) sc.textContent = txt;
@@ -7122,8 +7130,24 @@ function updateTiming() {
   else if (state.armed060 && car.vx > 0.15) { state.armed060 = false; state.t060Start = state.simTime; }
   if (state.t060Start != null && sp >= unitTarget && state.simTime - state.t060Start > 0.5) { state.t060 = state.simTime - state.t060Start; state.t060Start = null; renderTiming(); toast(`${state.units === 'mph' ? '0–60' : '0–100'} in ${state.t060.toFixed(2)} s`); }
   if (state.t060Start != null && car.vx < 0) state.t060Start = null;
-
+  // (v122) laps of the circuit: the clock starts the first time the car crosses the line going forwards, and a lap
+  // counts when it comes round to the line again having been through the half-way point
+  if (world.track && world.lastLoc) {
+    const lap = state.lap, frac = world.lastLoc.s / world.track.L;
+    if (frac > 0.4 && frac < 0.6) lap.half = true;
+    if (lap.prev != null && lap.prev > 0.9 && frac < 0.1 && car.vx > 0) {
+      if (lap.t0 != null && lap.half) {
+        lap.last = state.simTime - lap.t0; lap.n++;
+        const key = 'lap_' + baseOf(activeId), best = +store.get(key, 0) || 0, isBest = !best || lap.last < best;
+        if (isBest) store.set(key, +lap.last.toFixed(3));
+        toast(`Lap ${lap.n}: ${fmtLap(lap.last)}${isBest ? ' · best' : ''}`, 3200); audio.chime(isBest ? 7 : 4);
+      }
+      lap.t0 = state.simTime; lap.half = false;
+    }
+    lap.prev = frac;
+  }
 }
+const fmtLap = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`;
 // ---------------------------------------------------------------- the gauges (v99)
 // v98 gave every car a gauge of its own, drawn mostly from memory, with the maker's badge standing beside it. The
 // owner: "redo them properly for every single car, including special variants like the fast and furious cars. I dont
@@ -8501,7 +8525,7 @@ function vitalsUpdate(dt) {
   if (state.fuel <= 0 && car.speed < 3 && state.leftRamp) gameOver('fuel');
 }
 function onWall(hit) {
-  takeDamage(hit);
+  if (!OPEN) takeDamage(hit);   // (v122: the circuit's rails knock the car about but do not wreck it)
   if (hit.impact > 0.8) { state.combo = 0; state.comboT = 0; }
   if (hit.impact > wallFx.impact) wallFx.impact = hit.impact;
   if (hit.scrape > wallFx.scrape) wallFx.scrape = hit.scrape;
