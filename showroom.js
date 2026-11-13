@@ -21,8 +21,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { lodObject, LAMP_MAX } from './lod.js?b=e7a408c0f7';
-import { setChameleon } from './paintfx.js?b=e7a408c0f7';   // (the same address the page uses: one copy of it)
+import { lodObject, LAMP_MAX } from './lod.js?b=d06c7df3b2';
+import { setChameleon } from './paintfx.js?b=d06c7df3b2';   // (the same address the page uses: one copy of it)
 
 const D2R = Math.PI / 180;
 // (v112, the owner: "expand the collection so there is room for more cars on each level and basically add 3 more car spots on each side

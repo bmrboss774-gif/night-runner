@@ -163,12 +163,12 @@ let worker = null, workerBad = false, jobs = new Map(), seq = 0;
 export function simplify(raw, target = 26000) {
   if (!worker && !workerBad) {
     try {
-      worker = new Worker(new URL('./lod-worker.js?b=e7a408c0f7', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./lod-worker.js?b=d06c7df3b2', import.meta.url), { type: 'module' });
       worker.onmessage = (e) => { const j = jobs.get(e.data.id); if (!j) return; jobs.delete(e.data.id); if (e.data.error) j.no(new Error(e.data.error)); else j.ok(e.data.parts); };
       worker.onerror = () => { workerBad = true; worker = null; for (const j of jobs.values()) j.retry(); jobs.clear(); };
     } catch (e) { workerBad = true; worker = null; }
   }
-  const onPage = () => import('./lod-core.js?b=e7a408c0f7').then((m) => m.simplifyParts(raw.parts, target));
+  const onPage = () => import('./lod-core.js?b=d06c7df3b2').then((m) => m.simplifyParts(raw.parts, target));
   if (!worker) return onPage();
   return new Promise((ok, no) => { const id = ++seq; jobs.set(id, { ok, no, retry: () => onPage().then(ok, no) }); worker.postMessage({ id, parts: raw.parts, target }); });
 }

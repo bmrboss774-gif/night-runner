@@ -1121,7 +1121,8 @@ body.is-touch .cc{font-size:22px}
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/dry-grass-d1484537470441b999d37077aeb9b47a" target="_blank" rel="noopener">Dry grass</a>” by <a href="https://sketchfab.com/Pixel-bit" target="_blank" rel="noopener">Pixel-bit</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/damaged-rough-dirty-asphalt-road-ab422881d7dd48b7b60fce036cdd179c" target="_blank" rel="noopener">Damaged Rough dirty asphalt road</a>” by <a href="https://sketchfab.com/matousekfoto" target="_blank" rel="noopener">matousekfoto</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/furrow-in-the-meadow-44d00438d7204f189323223f942525e5" target="_blank" rel="noopener">Furrow in the meadow</a>” by <a href="https://sketchfab.com/Tomhaj" target="_blank" rel="noopener">Tomhaj</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
-      <p class="note">Changes made for this game: the guardrail's panel is repeated along the track, each leaning and stained a little differently; the grass clumps are scattered and some tinted green; the two ground scans were drawn flat from above and their edges blended so they repeat, as the textures of the track's tarmac and grass.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/road-texture-68131a487ace4005963ccb0dccabe2af" target="_blank" rel="noopener">Road texture</a>” by <a href="https://sketchfab.com/DaveTse" target="_blank" rel="noopener">DaveTse</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p class="note">Changes made for this game: one carriageway of the road texture is used, resized, as the track's tarmac, with wear drawn over it; the guardrail's panel is repeated along the track, each leaning and stained a little differently; the grass clumps are scattered and some tinted green; the two ground scans were drawn flat from above and their edges blended so they repeat, as the grain of the tarmac and the texture of the grass.</p>
       <h3>Traffic</h3>
       <p>The traffic is based on these models, all licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>:</p>
       <ul class="credit-list">
@@ -1214,14 +1215,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=e7a408c0f7';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=e7a408c0f7';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=e7a408c0f7';
-import { createShowroom, TOWER } from './showroom.js?b=e7a408c0f7';
-import { setChameleon } from './paintfx.js?b=e7a408c0f7';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=e7a408c0f7';
-import { SpikeStrips, Mirror } from './pursuit.js?b=e7a408c0f7';
-import { Rain } from './rain.js?b=e7a408c0f7';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=d06c7df3b2';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=d06c7df3b2';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=d06c7df3b2';
+import { createShowroom, TOWER } from './showroom.js?b=d06c7df3b2';
+import { setChameleon } from './paintfx.js?b=d06c7df3b2';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=d06c7df3b2';
+import { SpikeStrips, Mirror } from './pursuit.js?b=d06c7df3b2';
+import { Rain } from './rain.js?b=d06c7df3b2';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
