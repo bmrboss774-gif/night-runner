@@ -505,7 +505,7 @@ export function createShowroom({ parent, rows, defs, displayFont = 'Arial Narrow
   let loading = null;
   function loadCars(decoder) {
     loading ||= (async () => {
-      const res = await fetch('showroom-cars.txt?v=109'); if (!res.ok) throw new Error('showroom cars ' + res.status);
+      const res = await fetch('showroom-cars.txt?v=115'); if (!res.ok) throw new Error('showroom cars ' + res.status);
       const bin = atob((await res.text()).trim()), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       const loader = new GLTFLoader(); if (decoder) loader.setMeshoptDecoder(decoder);
       const gltf = await new Promise((ok, no) => loader.parse(bytes.buffer, '', ok, no));
