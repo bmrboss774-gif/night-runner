@@ -6,7 +6,7 @@
 // bridges, retroreflective paint, markers and signs that light up in the headlights, a wet road and open
 // water with planar reflections, and a live reflection probe that rides with the car for its paint.
 import * as THREE from 'three';
-import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=8d0cf4843c';   // (v122) the mountain circuit
+import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=ab6084dc96';   // (v122) the mountain circuit
 
 // ---------------------------------------------------------------- layout (metres; u = lateral offset, + = right of the median)
 const DS = 2, CHUNK = 50, CH_LEN = DS * CHUNK;
@@ -878,12 +878,14 @@ vec3 alpine(vec3 wp, vec3 nW, float forest, out float rough) {
   // grass (v124, the owner: "grass doesnt look realsitic"): a scan of a real meadow (grass, dead stalks, fallen
   // leaves, worn strips), laid twice at different angles and sizes and mixed by a slow noise so its rows never line
   // up; greener on some slopes and yellower on others, with dry patches. Its own colours, not a tint over a grey photo.
-  vec3 mA = texture2D(tMeadow, rot2(wp.xz, 0.35) / vec2(3.3, 1.09)).rgb, mB = texture2D(tMeadow, rot2(wp.xz, -1.05) / vec2(7.9, 2.6) + 0.37).rgb;
-  vec3 mead = mix(mA, mB, smoothstep(0.35, 0.65, nC.g));
+  // (v127, the owner: "the grass still doesnt look right": no more fallen leaves. The ground is the grass picture from
+  // the owner's own grass model, close to and again much larger and turned, its own patchiness kept and its colour set
+  // to living grass; the blades that stand on it near the track are that model's too, in the same greens.)
+  vec3 mA = texture2D(tMeadow, rot2(wp.xz, 0.35) / 4.6).rgb / vec3(0.061, 0.054, 0.016), mB = texture2D(tMeadow, rot2(wp.xz, -1.05) / 21.0 + 0.37).rgb / vec3(0.061, 0.054, 0.016);
+  vec3 mead = mA * (0.45 + 0.55 * mB);
   float hue = clamp(nA.r * 1.5 - 0.25 + (nB.g - 0.5) * 0.7, 0.0, 1.0);
-  vec3 grass = mead * mix(vec3(0.66, 0.98, 0.50), vec3(1.16, 1.14, 0.62), hue) * (0.74 + 0.52 * nB.b) * (0.9 + 0.2 * nD.b);
-  grass = mix(grass, mead * vec3(1.22, 1.04, 0.62), smoothstep(0.62, 0.8, nB.r) * 0.6);                    // drier, yellower patches
-  grass = mix(grass, vec3(0.105, 0.085, 0.06) * (0.6 + 0.8 * nD.g), smoothstep(0.80, 0.9, nC.r) * smoothstep(0.5, 0.7, nB.g) * 0.7);   // bare earth showing through here and there
+  vec3 grass = mead * mix(vec3(0.034, 0.055, 0.015), vec3(0.068, 0.085, 0.025), hue) * (0.78 + 0.44 * nB.b) * (0.9 + 0.2 * nD.b);
+  grass = mix(grass, mead * vec3(0.092, 0.086, 0.032), smoothstep(0.64, 0.82, nB.r) * 0.5);                 // drier, yellower patches
   vec3 an = abs(nW); an /= (an.x + an.y + an.z);
   float rl = dot(texture2D(tRock, wp.zy / 14.0).rgb * an.x + texture2D(tRock, wp.xy / 14.0).rgb * an.z + texture2D(tRock, wp.xz / 14.0).rgb * an.y, vec3(0.3, 0.6, 0.1));
   // limestone: pale grey, weathered darker in streaks
@@ -902,7 +904,7 @@ vec3 alpine(vec3 wp, vec3 nW, float forest, out float rough) {
 function alpineMaterial(tex) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0, envMapIntensity: 0.3 });
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.trackMeadow } });
+    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.envGround } });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aForest; varying vec3 vWP; varying vec3 vNW; varying float vForest;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = objectNormal; vForest = aForest;');
@@ -911,7 +913,7 @@ function alpineMaterial(tex) {
       .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb = alpine(vWP, normalize(vNW), vForest, aRough);')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = aRough;');
   };
-  m.customProgramCacheKey = () => 'nr-alpine7';
+  m.customProgramCacheKey = () => 'nr-alpine9';
   return m;
 }
 // The circuit's surface, one strip rail to rail: tarmac with a darker, rubbered line down its middle, a white line
@@ -933,7 +935,7 @@ function trackMaterial(tex, L = 3962) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0, envMapIntensity: 0.3 });
   const TW = 6.055, TH = 2.451, GW = 8.337, GH = 1.621, repA = Math.round(L / TW), repB = Math.round(L / (TH * 1.31)), repG = Math.round(L / GW);
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.trackMeadow }, tTar: { value: tex.trackTarmac }, tTarN: { value: tex.trackTarmacN }, tGrv: { value: tex.trackGravel }, tGrvN: { value: tex.trackGravelN } });
+    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.envGround }, tTar: { value: tex.trackTarmac }, tTarN: { value: tex.trackTarmacN }, tGrv: { value: tex.trackGravel }, tGrvN: { value: tex.trackGravelN } });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aKerb; attribute vec2 aFwd; varying vec3 vWP; varying vec2 vRoad; varying float vKerb; varying vec2 vFwd; varying vec3 vGN;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoad = uv; vKerb = aKerb; vFwd = aFwd; vGN = objectNormal;');
@@ -992,7 +994,7 @@ function trackMaterial(tex, L = 3962) {
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = aRough;')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  normal = normalize((viewMatrix * vec4(aWN, 0.0)).xyz);');
   };
-  m.customProgramCacheKey = () => 'nr-track10';
+  m.customProgramCacheKey = () => 'nr-track12';
   return m;
 }
 
@@ -1111,6 +1113,8 @@ const TREE_CARDS = [ // u0, v0 (trunk), u1, v1 in the flipped sheet; aspect = wi
   [1729, 1283, 2018, 1775], [0, 1532, 362, 2048], [816, 1533, 1258, 2046], [1312, 1533, 1691, 2037],
 ].map(([x0, y0, x1, y1]) => ({ r: [x0 / 2048, y0 / 2048, x1 / 2048, y1 / 2048], aspect: (x1 - x0) / (y1 - y0) }));
 const CARD_WEIGHT = [3, 3, 1, 1.4, 1.5, 1, 1.2, 1.6, 1.4];
+const SHADOW_PX = HALF ? 1024 : 2048;
+const SHADOW_R = 44;   // (v127) half the side of the square of ground the sun's shadows are worked out for, m
 const RAIL_CUT = { value: new THREE.Vector4(0, 0, 0, 0) };   // (v124) x, z of the car and the radius inside which the plain far rail is not drawn (the modelled one is)
 const TREE_FILL = { value: 0 };   // (v123) by day a tree's shaded side is lit by the leaves round it, not black: this much of its own colour is added back
 function treeMaterial(tex) {
@@ -1133,6 +1137,14 @@ function treeMaterial(tex) {
   m.customProgramCacheKey = () => 'nr-tree2';
   return m;
 }
+// (v127) what a photographed tree looks like to the sun: the same card, the same cut-out, so its shadow is a tree's
+function treeDepthMaterial(tex) {
+  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: tex.trees, alphaTest: 0.42, side: THREE.DoubleSide });
+  m.onBeforeCompile = (shader) => { shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute vec4 aCard;').replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = mix(aCard.xy, aCard.zw, uv);'); };
+  m.customProgramCacheKey = () => 'nr-treedepth';
+  return m;
+}
+const NEAR_TREES = 46;
 function treeGeometry() {
   const g = new THREE.BufferGeometry(), pos = [], uv = [], idx = [];
   for (let q = 0; q < 2; q++) {
@@ -1655,7 +1667,8 @@ export class World {
       greenSteel: L('green_steel.jpg'), underside: L('underside.jpg'), beams: L('beams.jpg'), trees: L('trees.webp', { repeat: false }),
       waterN: L('water_n.jpg', { srgb: false }),
       // (v124) baked from two free scans of real ground (build/prep/trk-bake.mjs): worn tarmac 3.08 x 1.84 m, meadow about 3.3 x 1.1 m
-      trackMeadow: L('track_meadow.jpg', { aniso: a }),
+      // (v127) from the owner's "game parts" collection: "Realtime Grass" by mfhscoobydoo, its ground picture and its three plates of blades
+      envGround: L('env_ground.jpg', { aniso: a }), envBlades: L('env_blades.png', { repeat: false, aniso: 4 }),
       // (v126) the road scans from the owner's Blender project, baked flat (build/prep/bl-bake.py, trk-tile.mjs): the
       // tarmac is 6.06 x 2.45 m at 1.5 mm a pixel, the gravel 8.34 x 1.62 m at 2 mm; half that on touch screens
       trackTarmac: L(`track_tarmac${HALF}.jpg`, { aniso: a }), trackTarmacN: L(`track_tarmac_n${HALF}.jpg`, { aniso: a, srgb: false }),
@@ -1804,7 +1817,7 @@ export class World {
         }
         return mesh(pos, idx, this.mat.alpine, { aForest: fo }, nor);
       };
-      this.land = grid(cx - IN, cz - IN, 2 * IN, CELL, null);
+      this.land = grid(cx - IN, cz - IN, 2 * IN, CELL, null); this.land.receiveShadow = true;
       // (how far inside the fine piece's edge a point is: the coarse piece sinks from there, 6 m within two of its own squares)
       this.landFar = grid(-SIZE / 2, -SIZE / 2, SIZE, BIG, (x, z) => 6 * Math.min(1, Math.max(0, (IN - Math.max(Math.abs(x - cx), Math.abs(z - cz))) / (2 * BIG))));
     }
@@ -1817,7 +1830,7 @@ export class World {
       for (let z = cz - REACH; z < cz + REACH; z += STEP) for (let x = cx - REACH; x < cx + REACH; x += STEP) {
         const px = x + (rnd() - 0.5) * STEP * 0.9, pz = z + (rnd() - 0.5) * STEP * 0.9, r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd();
         if (gr.forest(px, pz, 0, 0, 100) < 0.05) continue;                    // (the cheap part first: is this in a wood at all)
-        const d = gr.dist(px, pz); if (d < WALL + 4) continue;
+        const d = gr.dist(px, pz); if (d < NEAR_TREES) continue;   // (v127: within NEAR_TREES of the track the trees are the modelled ones, see dressEnv)
         const h = gr.surface(px, pz), slope = Math.hypot(gr.H(px + 3, pz) - gr.H(px - 3, pz), gr.H(px, pz + 3) - gr.H(px, pz - 3)) / 6;
         if (r1 > gr.forest(px, pz, h, slope, d) * 0.94) continue;
         const pick = r2 * tot, card = cum.findIndex((v) => pick <= v), key = Math.floor((px - cx + REACH) / TILE) + 8 * Math.floor((pz - cz + REACH) / TILE);
@@ -1830,7 +1843,7 @@ export class World {
         const im = new THREE.InstancedMesh(this.treeGeo.clone(), this.mat.trees, inst.length), aCard = new Float32Array(inst.length * 4), aTint = new Float32Array(inst.length * 3);
         inst.forEach(([x, y, z, Ht, card, rot, tint], k) => { const C = TREE_CARDS[card]; qn.setFromAxisAngle(up, rot); sc.set(Ht * C.aspect, Ht, Ht * C.aspect); pv.set(x, y, z); mtx.compose(pv, qn, sc); im.setMatrixAt(k, mtx); aCard.set(C.r, k * 4); aTint.set([tint * 0.95, tint, tint * 0.9], k * 3); });
         im.geometry.setAttribute('aCard', new THREE.InstancedBufferAttribute(aCard, 4)); im.geometry.setAttribute('aTint', new THREE.InstancedBufferAttribute(aTint, 3));
-        im.computeBoundingSphere(); this.layer(im, false, false); G.add(im); this.treeCount += inst.length;
+        im.computeBoundingSphere(); this.layer(im, false, false); G.add(im); this.treeCount += inst.length;   // (no shadows from these: they stand 46 m and more from the road, and drawing thousands of cut-out cards into the shadow map cost more than everything else)
       }
     }
     // 5. the rails (v123, the owner: "the guardrails more detailed"): two corrugated beams one over the other each side,
@@ -1891,13 +1904,13 @@ export class World {
       const bb = geo.boundingBox, len = bb.max.x - bb.min.x; geo.translate(-bb.min.x, -bb.min.y, 0);
       // (its metal map made the beams a black mirror under this game's lighting: galvanised steel is drawn here as a dull, pale surface with the model's own colour, dents and roughness)
       const mat = seg.material; mat.metalnessMap = null; mat.metalness = 0.12; mat.envMapIntensity = 0.5; mat.side = THREE.DoubleSide; mat.emissive = new THREE.Color(0x15171a); mat.needsUpdate = true;
-      const RAILN = 58, im = new THREE.InstancedMesh(geo, mat, 2 * RAILN); im.frustumCulled = false; im.castShadow = false; this.layer(im, false, false); G.add(im);
+      const RAILN = 58, im = new THREE.InstancedMesh(geo, mat, 2 * RAILN); im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true; this.layer(im, false, false); G.add(im);
       this.railNear = { im, RAILN, len, at: -1, ks: this.railKs, face: -1 };   // (face: the model's posts are on its -z side; they go on the side away from the track)
       this.updateDress(this.lastLoc || this.locate(0, 0), true);
     }
     // grass
-    const clumps = []; grassScene.updateMatrixWorld(true);
-    grassScene.traverse((o) => { if (!o.isMesh) return; const g = o.geometry.clone().applyMatrix4(o.matrixWorld); g.computeBoundingBox(); const b = g.boundingBox; g.translate(-(b.min.x + b.max.x) / 2, -b.min.y - 0.04, -(b.min.z + b.max.z) / 2); clumps.push({ g, map: o.material.map }); });
+    const clumps = []; if (grassScene) grassScene.updateMatrixWorld(true);   // (v127: no longer handed over: the blades of dressEnv took the dry clumps' place)
+    if (grassScene) grassScene.traverse((o) => { if (!o.isMesh) return; const g = o.geometry.clone().applyMatrix4(o.matrixWorld); g.computeBoundingBox(); const b = g.boundingBox; g.translate(-(b.min.x + b.max.x) / 2, -b.min.y - 0.04, -(b.min.z + b.max.z) / 2); clumps.push({ g, map: o.material.map }); });
     if (clumps.length) {
       const gm = new THREE.MeshLambertMaterial({ map: clumps[0].map, alphaTest: 0.38, side: THREE.DoubleSide });
       gm.onBeforeCompile = (shader) => { shader.uniforms.uTreeFill = TREE_FILL; shader.vertexShader = shader.vertexShader.replace('#include <beginnormal_vertex>', 'vec3 objectNormal = normalize(vec3(position.x * 0.5, 1.0, position.z * 0.5));\n  #ifdef USE_TANGENT\n  vec3 objectTangent = vec3( tangent.xyz );\n  #endif'); shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTreeFill;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * uTreeFill * 0.5;'); };
@@ -1920,6 +1933,103 @@ export class World {
       }
       this.tuftCount = total;
     }
+    this.updateDress(this.lastLoc || this.locate(0, 0), true);
+  }
+  // ---- the scenery from the owner's "game parts" collection (v127, the owner: "every part of the environment apart from
+  // the shape of the track needs upgrading ... in my game parts folder on sketchfab there are tons of elements"). The
+  // game hands over one file of models (build/prep/env-props.mjs) once it has loaded:
+  //  - trees: "Low Poly Tree Scene Free" by Nicholas-3D. Every tree within NEAR_TREES m of the track is this model
+  //    (a real trunk and leaves, turned and sized differently each time); from further than 230 m along the road it is
+  //    swapped for a photographed card (135 m: a frame cost 22 ms with them modelled out to 230 m, v127). The woods beyond that band stay cards.
+  //  - rocks: "40 Rocks" by FifthElement, twelve of its stones, scattered singly and in groups beyond the rails.
+  //  - grass: the three plates of blades of "Realtime Grass" by mfhscoobydoo, about 210,000 of them along the whole
+  //    track from the verge out to 40 m, swaying a little. They are worked out a few hundred at a time over the
+  //    first seconds (nearest the car first), so nothing stalls.
+  // Everything is kept in 100 m lengths of track and only the lengths near the car are drawn.
+  dressEnv(envScene) {
+    const tr = this.track, gr = this.ground, { WALL, HW } = TRACK, N = tr.N, G = this.trackGroup, E = WALL + 0.6, CH = 50;
+    const geo = {}; envScene.updateMatrixWorld(true); envScene.traverse((o) => { if (o.isMesh) geo[o.name] = o; });
+    const right = (k) => [-Math.cos(tr.T[k]), Math.sin(tr.T[k])], rnd = mulberry32(1127);
+    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), P = new THREE.Vector3(), Sc = new THREE.Vector3(), C = new THREE.Color(), Ev = new THREE.Euler();
+    const bark = geo.tree_bark, leaves = geo.tree_leaves;
+    if (bark) { bark.material.envMapIntensity = 0.3; }
+    if (leaves) { const m = leaves.material; m.envMapIntensity = 0.3; m.emissive = new THREE.Color(0.055, 0.065, 0.045); m.emissiveMap = m.map; m.alphaTest = 0.45; m.transparent = false; m.side = THREE.DoubleSide; m.needsUpdate = true; }
+    const rocks = []; for (let i = 0; i < 12; i++) if (geo['rock_' + i]) rocks.push(geo['rock_' + i].geometry);
+    const rockMat = rocks.length ? geo.rock_0.material : null; if (rockMat) { rockMat.envMapIntensity = 0.3; rockMat.color.setRGB(2.3, 2.3, 2.2); /* the stones' picture is dark grey: this makes them the pale limestone of the mountains */ }
+    // the blades: three quads crossed at 60 degrees, a metre wide and half a metre tall, its foot at the ground
+    const bg = new THREE.BufferGeometry(), bp = [], buv = [], bi = [];
+    for (let q = 0; q < 3; q++) { const a = q * Math.PI / 3, cx = Math.cos(a) * 0.5, cz = Math.sin(a) * 0.5, b = bp.length / 3; bp.push(-cx, 0, -cz, cx, 0, cz, cx, 0.5, cz, -cx, 0.5, -cz); buv.push(0, 0, 1, 0, 1, 1, 0, 1); bi.push(b, b + 1, b + 2, b, b + 2, b + 3); }
+    bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3)); bg.setAttribute('normal', new THREE.Float32BufferAttribute(bp.map((_, k) => (k % 3 === 1 ? 1 : 0)), 3)); bg.setAttribute('uv', new THREE.Float32BufferAttribute(buv, 2)); bg.setIndex(bi);
+    const bladeMat = new THREE.MeshLambertMaterial({ map: this.tex.envBlades, alphaTest: 0.3, side: THREE.DoubleSide });
+    bladeMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = SHARED.uTime; shader.uniforms.uTreeFill = TREE_FILL;
+      shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aPlate; uniform float uTime;')
+        .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = vec2(uv.x, 1.0 - (aPlate + 1.0 - uv.y * 0.985 - 0.008) / 3.0);')
+        .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);\n  #ifdef USE_TANGENT\n  vec3 objectTangent = vec3( tangent.xyz );\n  #endif')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  { vec3 ip = instanceMatrix[3].xyz; float w = uv.y * uv.y; transformed.x += sin(uTime * 1.9 + ip.x * 0.7 + ip.z * 0.4) * 0.05 * w; transformed.z += cos(uTime * 1.5 + ip.z * 0.6) * 0.04 * w; }');
+      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTreeFill;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * uTreeFill * 0.45;');
+    };
+    bladeMat.customProgramCacheKey = () => 'nr-blade1';
+    this.envB = []; this.envQueue = []; let nTree = 0, nRock = 0;
+    for (let c0 = 0; c0 < N; c0 += CH) {
+      const c1 = Math.min(N, c0 + CH), mid = Math.min(N - 1, c0 + (CH >> 1)), B = { x: tr.X[mid], z: tr.Z[mid], near: [], far: [], grass: [], all: [], c0, c1 };
+      // trees
+      const T = [];
+      for (let k = c0; k < c1; k += 3) for (const sg of [-1, 1]) for (let u = WALL + 4.5; u < NEAR_TREES; u += 6.2) {
+        const [rx, rz] = right(k), uu = sg * (u + (rnd() - 0.5) * 5), f = (rnd() - 0.5) * 5, x = tr.X[k] + rx * uu + Math.sin(tr.T[k]) * f, z = tr.Z[k] + rz * uu + Math.cos(tr.T[k]) * f, r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd();
+        const d = gr.dist(x, z); if (d < WALL + 3.5 || d < Math.abs(uu) - 6) continue;                 // (clear of the rails, and of any other part of the track that comes by here)
+        const h = gr.surface(x, z); if (r1 > gr.forest(x, z, h, 0.3, d) * 0.94) continue;
+        T.push([x, h - 0.25, z, 1.05 + r2 * 0.85, r3 * 6.283, r4]);
+      }
+      if (T.length && bark && leaves) {
+        const ib = new THREE.InstancedMesh(bark.geometry, bark.material, T.length), il = new THREE.InstancedMesh(leaves.geometry, leaves.material, T.length), ic = new THREE.InstancedMesh(this.treeGeo.clone(), this.mat.trees, T.length), aCard = new Float32Array(T.length * 4), aTint = new Float32Array(T.length * 3), card = TREE_CARDS[7];
+        T.forEach(([x, y, z, sc, rot, r], i) => { P.set(x, y, z); Q.setFromAxisAngle(up, rot); Sc.set(sc, sc * (0.92 + 0.2 * r), sc); M.compose(P, Q, Sc); ib.setMatrixAt(i, M); il.setMatrixAt(i, M); C.setRGB(0.26 + 0.14 * r, 0.31 + 0.12 * r, 0.26 + 0.1 * r); il.setColorAt(i, C); C.setRGB(0.8, 0.76, 0.7); ib.setColorAt(i, C);   // (the leaf picture is a bright spring green: these bring it to a tree's)
+          const Ht = 8.8 * sc; Sc.set(Ht * card.aspect, Ht, Ht * card.aspect); M.compose(P, Q, Sc); ic.setMatrixAt(i, M); aCard.set(card.r, i * 4); aTint.set([0.6 + 0.2 * r, 0.74 + 0.2 * r, 0.5], i * 3); });
+        ic.geometry.setAttribute('aCard', new THREE.InstancedBufferAttribute(aCard, 4)); ic.geometry.setAttribute('aTint', new THREE.InstancedBufferAttribute(aTint, 3));
+        for (const m of [ib, il, ic]) { m.computeBoundingSphere(); m.castShadow = m !== ic; m.visible = false; this.layer(m, false, false); G.add(m); B.all.push(m); }   // (the far cards throw none: they are beyond the shadows' square)
+        ib.receiveShadow = il.receiveShadow = true;
+        B.near.push(ib, il); B.far.push(ic); nTree += T.length;
+      }
+      // rocks: one piece of geometry for the whole length
+      if (rocks.length) {
+        const pos = [], nor = [], uv = [], idx = [], v = new THREE.Vector3(), n3 = new THREE.Matrix3();
+        const put = (x, z, sc) => { const g = rocks[(rnd() * rocks.length) | 0], y = gr.surface(x, z), b = pos.length / 3, pa = g.attributes.position, na = g.attributes.normal, ua = g.attributes.uv; Ev.set((rnd() - 0.5) * 0.5, rnd() * 6.283, (rnd() - 0.5) * 0.5); Q.setFromEuler(Ev); P.set(x, y, z); Sc.set(sc, sc * (0.7 + rnd() * 0.5), sc); M.compose(P, Q, Sc); n3.getNormalMatrix(M);
+          for (let i = 0; i < pa.count; i++) { v.fromBufferAttribute(pa, i).applyMatrix4(M); pos.push(v.x, v.y, v.z); v.fromBufferAttribute(na, i).applyMatrix3(n3).normalize(); nor.push(v.x, v.y, v.z); uv.push(ua.getX(i), ua.getY(i)); }
+          const ia = g.index; for (let i = 0; i < ia.count; i++) idx.push(b + ia.getX(i)); nRock++; };
+        for (let k = c0; k < c1; k += 2) for (const sg of [-1, 1]) {
+          if (rnd() > 0.2) continue;
+          const [rx, rz] = right(k), u = sg * (WALL + 1.2 + rnd() * rnd() * 46), x = tr.X[k] + rx * u, z = tr.Z[k] + rz * u; if (gr.dist(x, z) < WALL + 1) continue;
+          const big = rnd() < 0.25 ? 1.3 + rnd() * 2.2 : 0.35 + rnd() * 0.8; put(x, z, big);
+          if (big > 1.2) for (let j = 0, m = 2 + (rnd() * 4 | 0); j < m; j++) { const a = rnd() * 6.283, r = big * (0.6 + rnd() * 0.9), x2 = x + Math.cos(a) * r, z2 = z + Math.sin(a) * r; if (gr.dist(x2, z2) > WALL + 1) put(x2, z2, 0.25 + rnd() * 0.7); }
+        }
+        if (idx.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+          const m = new THREE.Mesh(g, rockMat); m.castShadow = m.receiveShadow = true; m.visible = false; this.layer(m, false, false); G.add(m); B.near.push(m); B.far.push(m); B.all.push(m); }
+      }
+      this.envB.push(B);
+    }
+    // the blades of one length of track, a few hundred at a time
+    const self = this;
+    this.bladeJob = function* (B) {
+      const L = [], r2 = mulberry32(B.c0 * 31 + 7);
+      const put = (k, u, sc) => { const [rx, rz] = right(k), f = r2() * tr.DS, x = tr.X[k] + rx * u + Math.sin(tr.T[k]) * f, z = tr.Z[k] + rz * u + Math.cos(tr.T[k]) * f, au = Math.abs(u), a = r2(), b = r2(), c = r2(), d = r2(); if (au > E + 2 && gr.dist(x, z) < WALL + 0.3) return; L.push(x, au < E ? tr.Y[k] : gr.surface(x, z), z, sc * (0.75 + 0.5 * a), b * 6.283, c, d); };
+      let n = 0;
+      for (let k = B.c0; k < B.c1; k++) {
+        for (const sg of [-1, 1]) {
+          const kerbSide = tr.kerb[k] && -sg * tr.kerb[k] > 0.5, g0 = HW + (kerbSide ? 1.4 : 0) + 1.55;
+          if (WALL - 0.2 > g0) for (let j = 0; j < 9; j++) put(k, sg * (g0 + r2() * (WALL - 0.2 - g0)), 0.45);                                // the verge: short
+          for (let j = 0; j < 34; j++) put(k, sg * (WALL + 0.25 + r2() * 12), 1.0);                                                          // behind the rail
+          for (let j = 0; j < 10; j++) put(k, sg * (WALL + 12 + r2() * 24), 1.6);                                                            // further out: fewer, larger
+        }
+        if (++n % 3 === 0) yield;
+      }
+      const cnt = L.length / 7, im = new THREE.InstancedMesh(bg, bladeMat, cnt), aPlate = new Float32Array(cnt);
+      for (let i = 0; i < cnt; i++) { const o = i * 7, sc = L[o + 3], c = L[o + 5], d = L[o + 6]; P.set(L[o], L[o + 1] - 0.03, L[o + 2]); Q.setFromAxisAngle(up, L[o + 4]); Sc.set(sc * 1.15, sc * (0.8 + 0.5 * d), sc * 1.15); M.compose(P, Q, Sc); im.setMatrixAt(i, M); aPlate[i] = (c * 3) | 0;
+        const dry = d > 0.9; C.setRGB(dry ? 0.72 : 0.40 + 0.14 * c, dry ? 0.66 : 0.56 + 0.16 * c, dry ? 0.42 : 0.44 + 0.1 * c); im.setColorAt(i, C); if (i % 4000 === 3999) yield; }
+      im.geometry = bg.clone(); im.geometry.setAttribute('aPlate', new THREE.InstancedBufferAttribute(aPlate, 1));
+      im.computeBoundingSphere(); im.castShadow = false; im.receiveShadow = true; im.visible = false; self.layer(im, false, false); G.add(im); B.grass.push(im); B.bladesDone = true; self.bladeCount = (self.bladeCount || 0) + cnt;
+    };
+    this.envCount = { trees: nTree, rocks: nRock };
+    for (const B of this.envB) B.on = null;
     this.updateDress(this.lastLoc || this.locate(0, 0), true);
   }
   // where the modelled rail panels stand and which batches of grass are drawn: both follow the car
@@ -1946,6 +2056,17 @@ export class World {
         rn.im.instanceMatrix.needsUpdate = true; if (rn.im.instanceColor) rn.im.instanceColor.needsUpdate = true;
       }
     }
+    if (this.envB) {
+      // each length of track: modelled trees and blades near, photographed trees further off, nothing past 900 m
+      let best = null, bd = 1e18;
+      for (const B of this.envB) { const d2 = (B.x - cxp) ** 2 + (B.z - czp) ** 2, st = d2 < 135 * 135 ? 2 : d2 < 900 * 900 ? 1 : 0;
+        if (st !== B.on) { B.on = st; for (const m of B.all) m.visible = false; if (st === 2) for (const m of B.near) m.visible = true; else if (st === 1) for (const m of B.far) m.visible = true; }
+        const gOn = d2 < 115 * 115; if (gOn !== B.gOn) { B.gOn = gOn; for (const m of B.grass) m.visible = gOn; }
+        if (!B.bladesDone && !B.job && d2 < bd) { bd = d2; best = B; } }
+      // blades still to be worked out: the nearest unfinished length, up to 3 ms of it a frame
+      if (!this.bladeRun && best && this.bladeJob) { best.job = true; this.bladeRun = { it: this.bladeJob(best), B: best }; }
+      if (this.bladeRun) { const t0 = performance.now(); let done = false; do { done = this.bladeRun.it.next().done; } while (!done && performance.now() - t0 < 3); if (done) { const B = this.bladeRun.B; for (const m of B.grass) m.visible = !!B.gOn; this.bladeRun = null; } }
+    }
     if (this.tufts) for (const g of this.tufts) { const on = (g.x - cxp) ** 2 + (g.z - czp) ** 2 < 240 * 240; if (on !== g.on) { g.on = on; for (const m of g.meshes) m.visible = on; } }
   }
   // ---- daytime (v119, the owner: "make it daytime remove the rain"). The moon's light becomes the sun: higher, warm
@@ -1955,7 +2076,7 @@ export class World {
   setDay(on = true) {
     this.day = !!on;
     if (!on) return;
-    this.moonDir.set(-0.42, 0.74, 0.52).normalize();
+    this.moonDir.set(-0.55, 0.5, 0.62).normalize();   // (v127: 31 degrees up, was 48: a later afternoon, so the trees' shadows reach across the road)
     const U = this.sky.material.uniforms;
     U.uDay.value = 1; U.uMoon.value.copy(this.moonDir); U.uHorizon.value.set(0xb4cbe6); U.uZenith.value.set(0x1552c8);
     this.fogClear = new THREE.Color(0xb4cbe6); this.fogRain = new THREE.Color(0xa9b4c2); this.fogK = this.track ? 0.3 : 0.5;
@@ -1963,7 +2084,9 @@ export class World {
     this.moon.intensity = this.nightMoon; this.hemi.intensity = this.nightHemi; this.hemi.color.set(this.hemiSky); this.hemi.groundColor.set(this.hemiGround);
     this.moon.castShadow = true;
     const sh = this.moon.shadow, c = sh.camera;
-    sh.mapSize.set(4096, 4096); c.left = -7; c.right = 7; c.top = 7; c.bottom = -7; c.near = 20; c.far = 110; c.updateProjectionMatrix(); sh.bias = -0.0004; sh.normalBias = 0.02;
+    // (v127, the owner: "everything needs realistic shadows": the shadow map is 96 m square now, was 14: the car, the
+    // trees, the rails and their posts and the rocks all throw shadows on the road, the grass and each other)
+    sh.mapSize.set(SHADOW_PX, SHADOW_PX); c.left = -SHADOW_R; c.right = SHADOW_R; c.top = SHADOW_R; c.bottom = -SHADOW_R; c.near = 20; c.far = 420; c.updateProjectionMatrix(); sh.bias = -0.0005; sh.normalBias = 0.06; sh.radius = 1.6;
     if (this.pad) this.pad.receiveShadow = true;
     const [far, near, lights] = this.horizon.children;
     far.material.color.set(0x91abcd); near.material.color.set(0x7b96b8); lights.visible = false;
@@ -2297,8 +2420,13 @@ export class World {
       u.copy(this.skyGlow0).multiplyScalar(1 + 1.4 * near);
     }
     // moonlight shadows follow the car
+    if (this.day) {   // the shadows' square sits ahead of the car, where the picture is (in steps of a few texels, so shadows do not swim)
+      const q = 0.5, tx = Math.round((st.x + Math.sin(st.yaw) * SHADOW_R * 0.62) / q) * q, tz = Math.round((st.z + Math.cos(st.yaw) * SHADOW_R * 0.62) / q) * q, ty = Math.round(L.y / q) * q;
+      this.moon.position.set(tx + this.moonDir.x * 220, ty + this.moonDir.y * 220, tz + this.moonDir.z * 220); this.moon.target.position.set(tx, ty, tz);
+    } else {
     this.moon.position.set(st.x + this.moonDir.x * 60, L.y + this.moonDir.y * 60, st.z + this.moonDir.z * 60);
     this.moon.target.position.set(st.x, L.y, st.z);
+    }
     this.updatePool(st);
     // headlights for the retroreflective shaders
     SHARED.uHeadPos.value.set(st.headX, st.headY, st.headZ);

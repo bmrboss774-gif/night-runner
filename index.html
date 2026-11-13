@@ -1119,9 +1119,10 @@ body.is-touch .cc{font-size:22px}
       <h3>The circuit</h3>
       <p>The road's tarmac and gravel are “Scan Broken road white” and “Scan Small rock road old” by <a href="https://www.blenderkit.com/" target="_blank" rel="noopener">Free poly</a> (River Yang, freepoly.org), from BlenderKit, released under <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0</a>.</p>
       <p>This work is based on “<a href="https://sketchfab.com/3d-models/guardrail-and-terminal-693dee3dc6a1495f90ab0ba1f8237cb4" target="_blank" rel="noopener">GuardRail and Terminal</a>” by <a href="https://sketchfab.com/xplanepilot" target="_blank" rel="noopener">xplanepilot</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
-      <p>This work is based on “<a href="https://sketchfab.com/3d-models/dry-grass-d1484537470441b999d37077aeb9b47a" target="_blank" rel="noopener">Dry grass</a>” by <a href="https://sketchfab.com/Pixel-bit" target="_blank" rel="noopener">Pixel-bit</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
-      <p>This work is based on “<a href="https://sketchfab.com/3d-models/furrow-in-the-meadow-44d00438d7204f189323223f942525e5" target="_blank" rel="noopener">Furrow in the meadow</a>” by <a href="https://sketchfab.com/Tomhaj" target="_blank" rel="noopener">Tomhaj</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
-      <p class="note">Changes made for this game: the two road scans were baked flat from above in Blender and their edges blended so they repeat; the guardrail's panel is repeated along the track, each leaning and stained a little differently; the grass clumps are scattered and some tinted green; the meadow scan was drawn flat from above and blended so it repeats, as the texture of the grass.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/low-poly-tree-scene-free-89daa5e21f0d4f08a59dba0d566e88bd" target="_blank" rel="noopener">Low Poly Tree Scene Free</a>” by <a href="https://sketchfab.com/Nicholas01" target="_blank" rel="noopener">Nicholas-3D</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/40-rocks-a6c5ab5b438f473cb1cafdf4099e1657" target="_blank" rel="noopener">40 Rocks</a>” by <a href="https://sketchfab.com/fifthelement" target="_blank" rel="noopener">FifthElement</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/realtime-grass-07d38555cae844f7abdeace9d19c4777" target="_blank" rel="noopener">Realtime Grass</a>” by <a href="https://sketchfab.com/mfhscoobydoo" target="_blank" rel="noopener">mfhscoobydoo</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p class="note">Changes made for this game: the two road scans were baked flat from above in Blender and their edges blended so they repeat; the guardrail's panel is repeated along the track, each leaning and stained a little differently; one tree of the tree scene is used, repeated at different sizes; twelve of the rocks are used, scattered; the grass model's ground picture colours the land and its blades are scattered along the track, tinted.</p>
       <h3>Traffic</h3>
       <p>The traffic is based on these models, all licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>:</p>
       <ul class="credit-list">
@@ -1214,14 +1215,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=8d0cf4843c';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=8d0cf4843c';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=8d0cf4843c';
-import { createShowroom, TOWER } from './showroom.js?b=8d0cf4843c';
-import { setChameleon } from './paintfx.js?b=8d0cf4843c';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=8d0cf4843c';
-import { SpikeStrips, Mirror } from './pursuit.js?b=8d0cf4843c';
-import { Rain } from './rain.js?b=8d0cf4843c';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=ab6084dc96';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=ab6084dc96';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=ab6084dc96';
+import { createShowroom, TOWER } from './showroom.js?b=ab6084dc96';
+import { setChameleon } from './paintfx.js?b=ab6084dc96';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=ab6084dc96';
+import { SpikeStrips, Mirror } from './pursuit.js?b=ab6084dc96';
+import { Rain } from './rain.js?b=ab6084dc96';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -12085,8 +12086,9 @@ function boot(data = {}) {
   traffic.setDensity(state.traffic);
   trafficLoad();
   // (v124) the circuit's two downloaded props: once they are in, the world stands them along the track
-  if (world.track) Promise.all([loadModel({ id: 'trkrail', files: { meshopt: { url: 'trk-rail.txt', size: 623056 }, plain: { url: 'trk-rail.txt', size: 623056 } } }, () => {}), loadModel({ id: 'trkgrass', files: { meshopt: { url: 'trk-grass.txt', size: 490928 }, plain: { url: 'trk-grass.txt', size: 490928 } } }, () => {})])
-    .then(([a, b]) => world.dressTrack(a.scene, b.scene)).catch((e) => console.warn('the circuit\'s props did not load', e));
+  if (world.track) loadModel({ id: 'trkrail', files: { meshopt: { url: 'trk-rail.txt', size: 623056 }, plain: { url: 'trk-rail.txt', size: 623056 } } }, () => {}).then((a) => world.dressTrack(a.scene, null)).catch((e) => console.warn('the circuit\'s rail did not load', e));
+  // (v127) the scenery from the owner's "game parts" collection: trees, rocks and grass
+  if (world.track) loadModel({ id: 'envprops', files: { meshopt: { url: 'env-props.txt', size: 2025312 }, plain: { url: 'env-props.txt', size: 2025312 } } }, () => {}).then((g) => world.dressEnv(g.scene)).catch((e) => console.warn('the scenery did not load', e));
   pickTitleCar(id, data);
 }
 window.claude?.hot?.snapshot?.(() => ({ driving: state.driving, carId: activeId }));
