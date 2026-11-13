@@ -1,5 +1,5 @@
 // (v105) the collection's cars: the simplifying is done here, off the page's own thread (see lod.js, lod-core.js)
-import { simplifyParts } from './lod-core.js?b=c20ede232b';
+import { simplifyParts } from './lod-core.js?b=e7a408c0f7';
 self.onmessage = async (e) => {
   const { id, parts, target } = e.data;
   try {

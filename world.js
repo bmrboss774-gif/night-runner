@@ -6,7 +6,7 @@
 // bridges, retroreflective paint, markers and signs that light up in the headlights, a wet road and open
 // water with planar reflections, and a live reflection probe that rides with the car for its paint.
 import * as THREE from 'three';
-import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=c20ede232b';   // (v122) the mountain circuit
+import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=e7a408c0f7';   // (v122) the mountain circuit
 
 // ---------------------------------------------------------------- layout (metres; u = lateral offset, + = right of the median)
 const DS = 2, CHUNK = 50, CH_LEN = DS * CHUNK;
@@ -870,16 +870,19 @@ float gLine(float x, float period, float w, float aa) {
 // bright alpine grass (yellower on some slopes, deeper green on others), pale grey limestone where the ground is steep
 // or high, and thin grey scree where rock gives way to grass.
 const ALPINE_GLSL = /* glsl */`
-uniform sampler2D tGrass; uniform sampler2D tRock; uniform sampler2D tNoise;
+uniform sampler2D tGrass; uniform sampler2D tRock; uniform sampler2D tNoise; uniform sampler2D tMeadow;
+vec2 rot2(vec2 p, float a) { float c = cos(a), s = sin(a); return vec2(c * p.x - s * p.y, s * p.x + c * p.y); }
 vec3 alpine(vec3 wp, vec3 nW, float forest, out float rough) {
   vec3 nA = texture2D(tNoise, wp.xz / 510.0).rgb, nB = texture2D(tNoise, wp.xz / 67.0 + 0.31).rgb, nC = texture2D(tNoise, wp.xz / 11.0 + 0.7).rgb, nD = texture2D(tNoise, wp.xz / 1.9 + 0.2).rgb;
-  // grass: the photograph's blades close to, its tufts and worn patches further off, and slow changes of colour across a hillside
-  vec3 gt = texture2D(tGrass, wp.xz / 3.2).rgb, gf = texture2D(tGrass, wp.xz / 23.0 + 0.4).rgb;
-  float gl = dot(gt, vec3(0.3, 0.6, 0.1)) / 0.085, gfl = dot(gf, vec3(0.3, 0.6, 0.1)) / 0.085;
-  float hue = clamp(nA.r * 1.5 - 0.25 + (nB.g - 0.5) * 0.7 + (nC.r - 0.5) * 0.3, 0.0, 1.0);
-  vec3 grass = mix(vec3(0.020, 0.060, 0.016), vec3(0.078, 0.125, 0.028), hue);
-  grass *= (0.25 + 0.75 * gl) * (0.6 + 0.4 * gfl) * (0.62 + 0.76 * nC.b) * (0.8 + 0.4 * nD.b) * (0.7 + 0.6 * nB.b);
-  grass = mix(grass, vec3(0.16, 0.17, 0.07) * (0.5 + 0.5 * gl), smoothstep(0.62, 0.8, nB.r) * 0.55);        // drier, yellower patches
+  // grass (v124, the owner: "grass doesnt look realsitic"): a scan of a real meadow (grass, dead stalks, fallen
+  // leaves, worn strips), laid twice at different angles and sizes and mixed by a slow noise so its rows never line
+  // up; greener on some slopes and yellower on others, with dry patches. Its own colours, not a tint over a grey photo.
+  vec3 mA = texture2D(tMeadow, rot2(wp.xz, 0.35) / vec2(3.3, 1.09)).rgb, mB = texture2D(tMeadow, rot2(wp.xz, -1.05) / vec2(7.9, 2.6) + 0.37).rgb;
+  vec3 mead = mix(mA, mB, smoothstep(0.35, 0.65, nC.g));
+  float hue = clamp(nA.r * 1.5 - 0.25 + (nB.g - 0.5) * 0.7, 0.0, 1.0);
+  vec3 grass = mead * mix(vec3(0.66, 0.98, 0.50), vec3(1.16, 1.14, 0.62), hue) * (0.74 + 0.52 * nB.b) * (0.9 + 0.2 * nD.b);
+  grass = mix(grass, mead * vec3(1.22, 1.04, 0.62), smoothstep(0.62, 0.8, nB.r) * 0.6);                    // drier, yellower patches
+  grass = mix(grass, vec3(0.105, 0.085, 0.06) * (0.6 + 0.8 * nD.g), smoothstep(0.80, 0.9, nC.r) * smoothstep(0.5, 0.7, nB.g) * 0.7);   // bare earth showing through here and there
   vec3 an = abs(nW); an /= (an.x + an.y + an.z);
   float rl = dot(texture2D(tRock, wp.zy / 14.0).rgb * an.x + texture2D(tRock, wp.xy / 14.0).rgb * an.z + texture2D(tRock, wp.xz / 14.0).rgb * an.y, vec3(0.3, 0.6, 0.1));
   // limestone: pale grey, weathered darker in streaks
@@ -898,7 +901,7 @@ vec3 alpine(vec3 wp, vec3 nW, float forest, out float rough) {
 function alpineMaterial(tex) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0, envMapIntensity: 0.3 });
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise });
+    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.trackMeadow } });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aForest; varying vec3 vWP; varying vec3 vNW; varying float vForest;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = objectNormal; vForest = aForest;');
@@ -907,7 +910,7 @@ function alpineMaterial(tex) {
       .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb = alpine(vWP, normalize(vNW), vForest, aRough);')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = aRough;');
   };
-  m.customProgramCacheKey = () => 'nr-alpine6';
+  m.customProgramCacheKey = () => 'nr-alpine7';
   return m;
 }
 // The circuit's surface, one strip rail to rail: tarmac with a darker, rubbered line down its middle, a white line
@@ -916,34 +919,62 @@ function alpineMaterial(tex) {
 function trackMaterial(tex) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0, envMapIntensity: 0.3 });
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tAsphalt: { value: tex.asphalt } });
+    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.trackMeadow }, tAsph: { value: tex.trackAsphalt } });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aKerb; varying vec3 vWP; varying vec2 vRoad; varying float vKerb;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoad = uv; vKerb = aKerb;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vWP; varying vec2 vRoad; varying float vKerb; uniform sampler2D tAsphalt;\n${ALPINE_GLSL}\nfloat aRough;`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWP; varying vec2 vRoad; varying float vKerb; uniform sampler2D tAsph;\n${ALPINE_GLSL}\nfloat aRough;\nfloat h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
       .replace('#include <map_fragment>', `#include <map_fragment>
   {
+    // v124, the owner: "their should be imperfections in the road". The tarmac is a scan of real worn road, and on it:
+    // squares of newer, darker tarmac where it has been dug up and patched; cracks, some of them sealed with tar;
+    // black tyre marks through the corners; oil spots; dust washed in along the edges; an edge that wanders; and
+    // paint (lines, kerbs, the start) that is worn, chipped and scuffed with rubber.
     float u = vRoad.x, s = vRoad.y, au = abs(u), aa = fwidth(u) * 0.8 + 0.004;
     const float HW = ${TRACK.HW.toFixed(2)};
-    vec3 nzA = texture2D(tNoise, vWP.xz / 33.0).rgb, nzB = texture2D(tNoise, vWP.xz / 6.0 + 0.37).rgb;
-    vec3 asp = texture2D(tAsphalt, vWP.xz / 7.0).rgb * vec3(0.93, 0.96, 1.0) * (0.62 + 0.3 * nzA.r) * (0.9 + 0.2 * nzB.b);
-    asp *= 1.0 - 0.22 * smoothstep(5.6, 1.6, au) * (0.55 + 0.45 * nzA.g);                  // rubber laid on the line
-    float line = 1.0 - smoothstep(0.09 - aa, 0.09 + aa, abs(au - (HW - 0.36)));
-    vec3 road = mix(asp, vec3(0.80) * (0.75 + 0.25 * nzB.g), line);
-    float chk = step(0.0, s) * step(s, 2.4) * step(au, HW - 0.5);                             // start and finish
-    road = mix(road, mod(floor(u / 0.6) + floor(s / 0.6), 2.0) < 0.5 ? vec3(0.88) : vec3(0.03), chk);
+    vec3 nzA = texture2D(tNoise, vWP.xz / 33.0).rgb, nzB = texture2D(tNoise, vWP.xz / 6.0 + 0.37).rgb, nzC = texture2D(tNoise, vWP.xz / 1.3 + 0.11).rgb;
+    vec3 asp = mix(texture2D(tAsph, vWP.xz / vec2(3.08, 1.84)).rgb, texture2D(tAsph, rot2(vWP.xz, 0.9) / vec2(8.3, 4.95) + 0.21).rgb, 0.4) * 0.6 * (0.78 + 0.44 * nzA.r);
+    // patches: one in six of the 31 m x 5.5 m squares the road divides into has a rectangle of newer tarmac in it
+    vec2 cell = vec2(floor(s / 31.0), floor((u + 22.0) / 5.5)), cf = vec2(fract(s / 31.0), fract((u + 22.0) / 5.5));
+    float px0 = 0.1 + 0.3 * h21(cell + 3.1), px1 = 0.5 + 0.42 * h21(cell + 7.7), pin = step(h21(cell), 0.17) * step(px0, cf.x) * step(cf.x, px1) * step(0.08, cf.y) * step(cf.y, 0.93);
+    float pedge = pin * (1.0 - smoothstep(0.0, 0.012, min(min(cf.x - px0, px1 - cf.x) * 31.0 / 5.5, min(cf.y - 0.08, 0.93 - cf.y))));
+    asp *= mix(1.0, 0.66 + 0.22 * h21(cell + 1.3), pin);
+    // cracks along the wandering contours of a noise, only in some stretches; the wider ones filled with tar
+    // (each line's width is held to a few centimetres whatever the noise is doing there: its distance from the contour is the
+    // difference in value over how fast the value changes)
+    float cn = texture2D(tNoise, vWP.xz / 4.7 + 0.5).r, sn = texture2D(tNoise, vWP.xz / 9.3 + 0.2).r, px = max(fwidth(vWP.x), fwidth(vWP.z));
+    float cd = abs(cn - 0.47) / max(fwidth(cn) / px, 0.02), sd = abs(sn - 0.55) / max(fwidth(sn) / px, 0.01);
+    float crack = (1.0 - smoothstep(0.006, 0.014 + px, cd)) * smoothstep(0.5, 0.6, nzA.r) * (1.0 - smoothstep(0.02, 0.08, px));
+    float snake = (1.0 - smoothstep(0.022, 0.034 + px, sd)) * smoothstep(0.55, 0.66, nzA.g) * (1.0 - smoothstep(0.04, 0.16, px));
+    snake = max(snake, pedge);
+    asp = mix(asp, vec3(0.02), crack * 0.75);
+    asp = mix(asp, vec3(0.035), snake * 0.8);
+    // rubber: the line the cars take, and long black streaks through the corners
+    asp *= 1.0 - 0.2 * smoothstep(5.6, 1.6, au) * (0.55 + 0.45 * nzA.g);
+    float marks = smoothstep(0.52, 0.74, texture2D(tNoise, vec2(u / 1.15, s / 57.0)).g) * smoothstep(7.2, 3.5, au) * (0.3 + 0.7 * min(1.0, abs(vKerb)));
+    asp *= 1.0 - 0.42 * marks;
+    asp *= 1.0 - 0.2 * smoothstep(0.55, 0.8, nzB.r) * smoothstep(0.5, 0.7, nzA.g);                             // oil and stains: soft, dark patches
+    asp = mix(asp, vec3(0.19, 0.165, 0.13) * (0.6 + 0.8 * nzC.g), smoothstep(HW - 1.5, HW - 0.1, au) * 0.42 * nzB.g);   // dust and grit by the edges
+    float worn = 0.45 + 0.55 * smoothstep(0.28, 0.6, nzC.b) * step(0.16, nzB.b + nzC.g * 0.3);                  // paint: thin in places, gone in chips
+    float line = (1.0 - smoothstep(0.09 - aa, 0.09 + aa, abs(au - (HW - 0.36)))) * worn;
+    vec3 road = mix(asp, vec3(0.74) * (0.7 + 0.3 * nzB.g), line);
+    float chk = step(0.0, s) * step(s, 2.4) * step(au, HW - 0.5);                                                // start and finish
+    road = mix(road, mix(asp, mod(floor(u / 0.6) + floor(s / 0.6), 2.0) < 0.5 ? vec3(0.8) : vec3(0.03), worn), chk);
     float onKerb = step(HW, au) * (1.0 - smoothstep(HW + 1.4 - aa, HW + 1.4 + aa, au)) * step(0.5, -sign(u) * vKerb);
-    vec3 kerb = fract(s / 3.0) < 0.5 ? vec3(0.46, 0.028, 0.022) : vec3(0.74);
+    vec3 kerb = (fract(s / 3.0) < 0.5 ? vec3(0.40, 0.03, 0.024) : vec3(0.68)) * (0.72 + 0.36 * nzB.r);
+    kerb = mix(kerb, vec3(0.2, 0.2, 0.19), smoothstep(0.7, 0.8, nzC.r) * 0.7);                                   // concrete where the paint has chipped off
+    kerb = mix(kerb, vec3(0.02), smoothstep(0.5, 0.75, texture2D(tNoise, vec2(u / 0.8, s / 31.0)).g) * 0.55);   // tyres over it
     float gr; vec3 grass = alpine(vWP, vec3(0.0, 1.0, 0.0), 0.0, gr);
-    float tar = 1.0 - smoothstep(HW - aa, HW + aa, au);
-    vec3 col = mix(mix(grass, kerb * (0.8 + 0.2 * nzB.r), onKerb), road, tar);
-    aRough = mix(mix(gr, 0.55, onKerb), mix(0.84, 0.5, max(line, chk)), tar);
+    grass = mix(grass, vec3(0.12, 0.1, 0.075) * (0.6 + 0.8 * nzC.g), (1.0 - smoothstep(HW, HW + 0.9, au)) * 0.6 * nzB.r);   // worn to earth right beside the tarmac
+    float tar = 1.0 - smoothstep(HW - aa, HW + aa, au + (nzB.r - 0.5) * 0.16 + (nzC.g - 0.5) * 0.06);            // the edge wanders
+    vec3 col = mix(mix(grass, kerb, onKerb), road, max(tar, chk));
+    aRough = mix(mix(gr, 0.6, onKerb), mix(mix(0.86, 0.36, snake), 0.55, max(line, chk)), tar);
     diffuseColor.rgb = col;
   }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = aRough;');
   };
-  m.customProgramCacheKey = () => 'nr-track6';
+  m.customProgramCacheKey = () => 'nr-track8';
   return m;
 }
 
@@ -1062,6 +1093,7 @@ const TREE_CARDS = [ // u0, v0 (trunk), u1, v1 in the flipped sheet; aspect = wi
   [1729, 1283, 2018, 1775], [0, 1532, 362, 2048], [816, 1533, 1258, 2046], [1312, 1533, 1691, 2037],
 ].map(([x0, y0, x1, y1]) => ({ r: [x0 / 2048, y0 / 2048, x1 / 2048, y1 / 2048], aspect: (x1 - x0) / (y1 - y0) }));
 const CARD_WEIGHT = [3, 3, 1, 1.4, 1.5, 1, 1.2, 1.6, 1.4];
+const RAIL_CUT = { value: new THREE.Vector4(0, 0, 0, 0) };   // (v124) x, z of the car and the radius inside which the plain far rail is not drawn (the modelled one is)
 const TREE_FILL = { value: 0 };   // (v123) by day a tree's shaded side is lit by the leaves round it, not black: this much of its own colour is added back
 function treeMaterial(tex) {
   const m = new THREE.MeshLambertMaterial({ map: tex.trees, alphaTest: 0.42, side: THREE.DoubleSide, alphaToCoverage: true });
@@ -1604,6 +1636,8 @@ export class World {
       concrete: L('concrete.jpg'), stone: L('stone.jpg'), rock: L('rock.jpg'), grass: L('grass.jpg'), dirt: L('dirt.jpg'),
       greenSteel: L('green_steel.jpg'), underside: L('underside.jpg'), beams: L('beams.jpg'), trees: L('trees.webp', { repeat: false }),
       waterN: L('water_n.jpg', { srgb: false }),
+      // (v124) baked from two free scans of real ground (build/prep/trk-bake.mjs): worn tarmac 3.08 x 1.84 m, meadow about 3.3 x 1.1 m
+      trackAsphalt: L('track_asphalt.jpg', { aniso: a }), trackMeadow: L('track_meadow.jpg', { aniso: a }),
     };
     SHARED.uNoise.value = noiseTexture();
   }
@@ -1792,10 +1826,11 @@ export class World {
       }
       const steel = new THREE.MeshStandardMaterial({ color: 0xc6cacd, metalness: 0, roughness: 0.55, envMapIntensity: 0.5, emissive: 0x2a2d30, side: THREE.DoubleSide });
       steel.onBeforeCompile = (shader) => {
-        shader.uniforms.tNoise = SHARED.uNoise;
+        shader.uniforms.tNoise = SHARED.uNoise; shader.uniforms.uRailCut = RAIL_CUT;
         shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vRail; varying vec3 vWP;').replace('#include <project_vertex>', '#include <project_vertex>\n  vRail = uv; vWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vRail; varying vec3 vWP; uniform sampler2D tNoise;')
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vRail; varying vec3 vWP; uniform sampler2D tNoise; uniform vec4 uRailCut;')
           .replace('#include <map_fragment>', `#include <map_fragment>
+  if (distance(vWP.xz, uRailCut.xy) < uRailCut.z) discard;   // (v124) near the car the modelled rail stands here instead
   { float f = fract(vRail.x), jn = min(f, 1.0 - f);                                   // 0 at a joint
     float lap = 1.0 - smoothstep(0.004, 0.012, abs(jn - 0.02));                         // the edge of the panel lapped over the next
     float bolt = (1.0 - smoothstep(0.008, 0.013, length(vec2((jn - 0.045) * 4.0, abs(vRail.y - 0.5) - 0.24)))) + (1.0 - smoothstep(0.008, 0.013, length(vec2((jn - 0.045) * 4.0, vRail.y - 0.5))));
@@ -1803,14 +1838,93 @@ export class World {
     diffuseColor.rgb *= (0.84 + 0.3 * nz.r) * (1.0 - 0.45 * lap) * (1.0 - 0.55 * clamp(bolt, 0.0, 1.0));
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.33, 0.24, 0.17), smoothstep(0.7, 0.9, nz.g) * 0.25 * (1.0 - vRail.y)); }`);   // a little rust low down
       };
-      steel.customProgramCacheKey = () => 'nr-rail1';
-      mesh(pos, idx, steel, { uv }).castShadow = false;
+      steel.customProgramCacheKey = () => 'nr-rail2';
+      this.railFar = mesh(pos, idx, steel, { uv }); this.railFar.castShadow = false; this.railKs = ks;
       const postGeo = mergeGeos([new THREE.BoxGeometry(0.075, 1.02, 0.12).translate(0.115, 0.51, 0), new THREE.BoxGeometry(0.03, 1.02, 0.05).translate(0.135, 0.51, 0.085), new THREE.BoxGeometry(0.03, 1.02, 0.05).translate(0.135, 0.51, -0.085), new THREE.BoxGeometry(0.075, 0.62, 0.14).translate(0.04, 0.63, 0)]);
-      const cnt = 2 * (ns - 1), posts = new THREE.InstancedMesh(postGeo, new THREE.MeshStandardMaterial({ color: 0xa4a9ad, metalness: 0, roughness: 0.65, envMapIntensity: 0.4, emissive: 0x1e2022 }), cnt), M = new THREE.Matrix4(), Qn = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
+      const postMat = new THREE.MeshStandardMaterial({ color: 0xa4a9ad, metalness: 0, roughness: 0.65, envMapIntensity: 0.4, emissive: 0x1e2022 });
+      postMat.onBeforeCompile = (shader) => { shader.uniforms.uRailCut = RAIL_CUT; shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPp;').replace('#include <project_vertex>', '#include <project_vertex>\n  vWPp = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;'); shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPp; uniform vec4 uRailCut;').replace('#include <map_fragment>', '#include <map_fragment>\n  if (distance(vWPp.xz, uRailCut.xy) < uRailCut.z) discard;'); };
+      postMat.customProgramCacheKey = () => 'nr-post1';
+      const cnt = 2 * (ns - 1), posts = new THREE.InstancedMesh(postGeo, postMat, cnt), M = new THREE.Matrix4(), Qn = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
       let c = 0;
       for (let side = 0; side < 2; side++) for (let i = 0; i < ns - 1; i++) { const k = ks[i], sg = side ? 1 : -1, [rx, rz] = right(k), u = sg * WALL; P.set(tr.X[k] + rx * u, tr.Y[k] - 0.02, tr.Z[k] + rz * u); Qn.setFromAxisAngle(up, Math.atan2(-sg * rz, sg * rx)); M.compose(P, Qn, one); posts.setMatrixAt(c++, M); }
       posts.frustumCulled = false; this.layer(posts, false, false); G.add(posts);
     }
+  }
+  // ---- the circuit's downloaded props (v124, the owner: "look on sketchfab for models for these things and use free
+  // ones"). Two free models, both CC BY 4.0, handed over by the game once it has loaded them:
+  //  - "GuardRail and Terminal" by xplanepilot: its 4 m two-rail panel (weathered, with its own posts) stands in for
+  //    the plain rail wherever the car is: RAILN panels each side, moved along with the car (a whole lap of it would be
+  //    3.4 million triangles; this is 200 thousand). Each panel leans, sits and is stained a little differently.
+  //  - "Dry grass" by Pixel-bit: seven clumps on crossed cards, stood along the foot of the rails (where no mower
+  //    reaches), on the verges and in the meadow beside the track: 100 m batches, drawn only near the car.
+  dressTrack(railScene, grassScene) {
+    const tr = this.track, gr = this.ground, { WALL, HW, SKIRT } = TRACK, N = tr.N, G = this.trackGroup, E = WALL + 0.6;
+    const right = (k) => [-Math.cos(tr.T[k]), Math.sin(tr.T[k])];
+    const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+    // rails
+    let seg = null; railScene.updateMatrixWorld(true);
+    railScene.traverse((o) => { if (o.isMesh && /GuardRail/i.test(o.name) && !/terminal/i.test(o.name) && !/terminal/i.test(o.parent?.name || '')) seg = o; });
+    if (seg) {
+      const geo = seg.geometry.clone().applyMatrix4(seg.matrixWorld); geo.computeBoundingBox();
+      const bb = geo.boundingBox, len = bb.max.x - bb.min.x; geo.translate(-bb.min.x, -bb.min.y, 0);
+      // (its metal map made the beams a black mirror under this game's lighting: galvanised steel is drawn here as a dull, pale surface with the model's own colour, dents and roughness)
+      const mat = seg.material; mat.metalnessMap = null; mat.metalness = 0.12; mat.envMapIntensity = 0.5; mat.side = THREE.DoubleSide; mat.emissive = new THREE.Color(0x15171a); mat.needsUpdate = true;
+      const RAILN = 58, im = new THREE.InstancedMesh(geo, mat, 2 * RAILN); im.frustumCulled = false; im.castShadow = false; this.layer(im, false, false); G.add(im);
+      this.railNear = { im, RAILN, len, at: -1, ks: this.railKs, face: -1 };   // (face: the model's posts are on its -z side; they go on the side away from the track)
+      this.updateDress(this.lastLoc || this.locate(0, 0), true);
+    }
+    // grass
+    const clumps = []; grassScene.updateMatrixWorld(true);
+    grassScene.traverse((o) => { if (!o.isMesh) return; const g = o.geometry.clone().applyMatrix4(o.matrixWorld); g.computeBoundingBox(); const b = g.boundingBox; g.translate(-(b.min.x + b.max.x) / 2, -b.min.y - 0.04, -(b.min.z + b.max.z) / 2); clumps.push({ g, map: o.material.map }); });
+    if (clumps.length) {
+      const gm = new THREE.MeshLambertMaterial({ map: clumps[0].map, alphaTest: 0.38, side: THREE.DoubleSide });
+      gm.onBeforeCompile = (shader) => { shader.uniforms.uTreeFill = TREE_FILL; shader.vertexShader = shader.vertexShader.replace('#include <beginnormal_vertex>', 'vec3 objectNormal = normalize(vec3(position.x * 0.5, 1.0, position.z * 0.5));\n  #ifdef USE_TANGENT\n  vec3 objectTangent = vec3( tangent.xyz );\n  #endif'); shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uTreeFill;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * uTreeFill * 0.5;'); };
+      gm.customProgramCacheKey = () => 'nr-tuft1';
+      const rnd = mulberry32(4711), CH = 50, kinds = Math.min(3, clumps.length), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), P = new THREE.Vector3(), Sc = new THREE.Vector3(), C = new THREE.Color();
+      this.tufts = []; let total = 0;
+      for (let c0 = 0; c0 < N; c0 += CH) {
+        const lists = Array.from({ length: kinds }, () => []);
+        const put = (k, u, big) => { const [rx, rz] = right(k), f = rnd() * tr.DS, x = tr.X[k] + rx * u + Math.sin(tr.T[k]) * f, z = tr.Z[k] + rz * u + Math.cos(tr.T[k]) * f, au = Math.abs(u); if (au > E && gr.forest(x, z, 0, 0, au) > 0.7 && rnd() < 0.7) return; lists[(rnd() * kinds) | 0].push([x, au < E ? tr.Y[k] : gr.surface(x, z), z, (big ? 0.85 : 0.55) + rnd() * 0.75, rnd() * 6.283, rnd(), rnd()]); };
+        for (let k = c0; k < Math.min(N, c0 + CH); k++) for (const sg of [-1, 1]) {
+          put(k, sg * (WALL + 0.15 + rnd() * 0.45), true); if (rnd() < 0.7) put(k, sg * (WALL - 0.25 + rnd() * 0.3), true);   // along the foot of the rail
+          if (rnd() < 0.3) put(k, sg * (HW + 1.7 + rnd() * (WALL - HW - 2.2)), false);                                          // the odd one on the mown verge
+          for (let j = 0; j < 6; j++) put(k, sg * (WALL + 0.8 + rnd() * rnd() * (SKIRT + 10 - WALL)), rnd() < 0.5);            // thicker just behind the rail, thinning out
+        }
+        const mid = Math.min(N - 1, c0 + (CH >> 1)), group = { x: tr.X[mid], z: tr.Z[mid], meshes: [] };
+        lists.forEach((L, t) => { if (!L.length) return; const im = new THREE.InstancedMesh(clumps[t].g, gm, L.length);
+          L.forEach(([x, y, z, sc, rot, r1, r2], i) => { P.set(x, y, z); Q.setFromAxisAngle(up, rot); Sc.set(sc, sc * (0.85 + 0.4 * r2), sc); M.compose(P, Q, Sc); im.setMatrixAt(i, M); if (r1 < 0.72) C.setRGB(0.42 + 0.2 * r2, 0.62 + 0.25 * r2, 0.26 + 0.12 * r2); else C.setRGB(0.95, 0.9 - 0.12 * r2, 0.66); im.setColorAt(i, C); });
+          im.computeBoundingSphere(); im.castShadow = false; im.visible = false; this.layer(im, false, false); G.add(im); group.meshes.push(im); total += L.length; });
+        this.tufts.push(group);
+      }
+      this.tuftCount = total;
+    }
+    this.updateDress(this.lastLoc || this.locate(0, 0), true);
+  }
+  // where the modelled rail panels stand and which batches of grass are drawn: both follow the car
+  updateDress(L, force = false) {
+    const tr = this.track, rn = this.railNear; if (!tr) return;
+    const fi = L ? L.fi : 0, k0 = Math.floor(fi), cxp = tr.X[k0 % tr.N], czp = tr.Z[k0 % tr.N];
+    if (rn) {
+      const ks = rn.ks, NP = ks.length - 1, p0 = Math.round(fi / 2) % NP;
+      if (force || p0 !== rn.at) {
+        rn.at = p0; RAIL_CUT.value.set(cxp, czp, 92, 0);
+        const { WALL } = TRACK, M = new THREE.Matrix4(), X = new THREE.Vector3(), Y = new THREE.Vector3(), Z = new THREE.Vector3(), A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Color(), hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+        let c = 0;
+        for (let side = 0; side < 2; side++) for (let j = -(rn.RAILN >> 1); j < rn.RAILN - (rn.RAILN >> 1); j++) {
+          const pi = ((p0 + j) % NP + NP) % NP, ka = ks[pi], kb = ks[pi + 1], sg = side ? 1 : -1, u = sg * (WALL + 0.02), h1 = hash(pi * 2 + side), h2 = hash(pi * 2 + side + 0.5);
+          A.set(tr.X[ka] - Math.cos(tr.T[ka]) * u, tr.Y[ka], tr.Z[ka] + Math.sin(tr.T[ka]) * u); B.set(tr.X[kb] - Math.cos(tr.T[kb]) * u, tr.Y[kb], tr.Z[kb] + Math.sin(tr.T[kb]) * u);
+          // the panel runs from A to B; its posts go on the side away from the track
+          Z.set(-Math.cos(tr.T[ka]) * sg, 0, Math.sin(tr.T[ka]) * sg).multiplyScalar(rn.face); X.subVectors(B, A); const d = X.length(); X.multiplyScalar(1 / d);
+          Y.set((h1 - 0.5) * 0.05 * Z.x, 1, (h1 - 0.5) * 0.05 * Z.z).normalize();   // each leans a degree or so in or out
+          Z.crossVectors(X, Y).normalize(); if (Z.x * -Math.cos(tr.T[ka]) * sg * rn.face + Z.z * Math.sin(tr.T[ka]) * sg * rn.face < 0) { X.multiplyScalar(-1); A.copy(B); Z.crossVectors(X, Y).normalize(); }
+          X.multiplyScalar(d / rn.len * 1.004); A.y += (h2 - 0.5) * 0.03 - 0.01;
+          M.makeBasis(X, Y, Z); M.setPosition(A); rn.im.setMatrixAt(c, M);
+          const st = hash(pi * 2 + side + 0.25); C.setRGB(0.86 + 0.2 * h1, (0.86 + 0.2 * h1) * (st > 0.85 ? 0.9 : 1), (0.86 + 0.2 * h1) * (st > 0.85 ? 0.78 : 1)); rn.im.setColorAt(c, C); c++;
+        }
+        rn.im.instanceMatrix.needsUpdate = true; if (rn.im.instanceColor) rn.im.instanceColor.needsUpdate = true;
+      }
+    }
+    if (this.tufts) for (const g of this.tufts) { const on = (g.x - cxp) ** 2 + (g.z - czp) ** 2 < 240 * 240; if (on !== g.on) { g.on = on; for (const m of g.meshes) m.visible = on; } }
   }
   // ---- daytime (v119, the owner: "make it daytime remove the rain"). The moon's light becomes the sun: higher, warm
   // white, strong, and the one light out here that throws a shadow (a tight box round the car, so its shadow is
@@ -2117,7 +2231,7 @@ export class World {
     const R = this.road, L = this.locate(st.x, st.z), sCar = L.s;
     this.hint = L.fi;
     this.car = { s: sCar, y: L.y, g: L.g, th: L.th, u: L.u };
-    if (this.open && this.track) { /* (v122) the circuit is all there already: nothing to build as the car moves */ }
+    if (this.open && this.track) { if (this.railNear || this.tufts) this.updateDress(L); }   // (v122) the circuit is all there already; (v124) its modelled rail and grass follow the car
     else if (this.open) {
       // the sheet rides under the car; uPadOff keeps its marks where they are (240 m: a whole number of every pattern's period)
       this.pad.position.set(st.x, 0, st.z);

@@ -1,6 +1,6 @@
 // Night Runner pursuit pieces: spike strips laid across some lanes ahead of the player, and the rear-view mirror.
 import * as THREE from 'three';
-import { ROAD_DS, GLOW } from './world.js?b=c20ede232b';
+import { ROAD_DS, GLOW } from './world.js?b=e7a408c0f7';
 
 const LANE = 3.65, U_IN = 1.5, U_MED = 0.38, U_PAVE = 19.55;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));

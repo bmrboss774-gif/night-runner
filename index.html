@@ -1116,6 +1116,12 @@ body.is-touch .cc{font-size:22px}
       <p class="note">Changes made for this game: only the suit and gloves are used, scaled to metres, textures resized; his arms are bent onto each car’s steering wheel and his fingers curled in code; the helmet is the game’s own.</p>
     </section>
     <section>
+      <h3>The circuit</h3>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/guardrail-and-terminal-693dee3dc6a1495f90ab0ba1f8237cb4" target="_blank" rel="noopener">GuardRail and Terminal</a>” by <a href="https://sketchfab.com/xplanepilot" target="_blank" rel="noopener">xplanepilot</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/dry-grass-d1484537470441b999d37077aeb9b47a" target="_blank" rel="noopener">Dry grass</a>” by <a href="https://sketchfab.com/Pixel-bit" target="_blank" rel="noopener">Pixel-bit</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/damaged-rough-dirty-asphalt-road-ab422881d7dd48b7b60fce036cdd179c" target="_blank" rel="noopener">Damaged Rough dirty asphalt road</a>” by <a href="https://sketchfab.com/matousekfoto" target="_blank" rel="noopener">matousekfoto</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p>This work is based on “<a href="https://sketchfab.com/3d-models/furrow-in-the-meadow-44d00438d7204f189323223f942525e5" target="_blank" rel="noopener">Furrow in the meadow</a>” by <a href="https://sketchfab.com/Tomhaj" target="_blank" rel="noopener">Tomhaj</a>, licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+      <p class="note">Changes made for this game: the guardrail's panel is repeated along the track, each leaning and stained a little differently; the grass clumps are scattered and some tinted green; the two ground scans were drawn flat from above and their edges blended so they repeat, as the textures of the track's tarmac and grass.</p>
       <h3>Traffic</h3>
       <p>The traffic is based on these models, all licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>:</p>
       <ul class="credit-list">
@@ -1208,14 +1214,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=c20ede232b';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=c20ede232b';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=c20ede232b';
-import { createShowroom, TOWER } from './showroom.js?b=c20ede232b';
-import { setChameleon } from './paintfx.js?b=c20ede232b';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=c20ede232b';
-import { SpikeStrips, Mirror } from './pursuit.js?b=c20ede232b';
-import { Rain } from './rain.js?b=c20ede232b';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=e7a408c0f7';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=e7a408c0f7';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=e7a408c0f7';
+import { createShowroom, TOWER } from './showroom.js?b=e7a408c0f7';
+import { setChameleon } from './paintfx.js?b=e7a408c0f7';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=e7a408c0f7';
+import { SpikeStrips, Mirror } from './pursuit.js?b=e7a408c0f7';
+import { Rain } from './rain.js?b=e7a408c0f7';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -8428,6 +8434,7 @@ function updateDamage(dt) {
   }
 }
 function carDamage(r, hit, impact) {
+  if (OPEN) return;   // (v124, the owner: "there should no longer be damage on the car": no dents, scrapes or hanging bumpers on the circuit)
   if (!r || !(impact > DMG.dent) || state.garage) return;
   const d = damageOf(r), b = r.bounds;
   r.body.updateWorldMatrix(true, false);
@@ -12077,6 +12084,9 @@ function boot(data = {}) {
   const id = data.carId && CAR_DEFS[data.carId] ? data.carId : titleCar;
   traffic.setDensity(state.traffic);
   trafficLoad();
+  // (v124) the circuit's two downloaded props: once they are in, the world stands them along the track
+  if (world.track) Promise.all([loadModel({ id: 'trkrail', files: { meshopt: { url: 'trk-rail.txt', size: 623056 }, plain: { url: 'trk-rail.txt', size: 623056 } } }, () => {}), loadModel({ id: 'trkgrass', files: { meshopt: { url: 'trk-grass.txt', size: 490928 }, plain: { url: 'trk-grass.txt', size: 490928 } } }, () => {})])
+    .then(([a, b]) => world.dressTrack(a.scene, b.scene)).catch((e) => console.warn('the circuit\'s props did not load', e));
   pickTitleCar(id, data);
 }
 window.claude?.hot?.snapshot?.(() => ({ driving: state.driving, carId: activeId }));
