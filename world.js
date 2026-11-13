@@ -6,7 +6,7 @@
 // bridges, retroreflective paint, markers and signs that light up in the headlights, a wet road and open
 // water with planar reflections, and a live reflection probe that rides with the car for its paint.
 import * as THREE from 'three';
-import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=dca8f9c776';   // (v122) the mountain circuit
+import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=c20ede232b';   // (v122) the mountain circuit
 
 // ---------------------------------------------------------------- layout (metres; u = lateral offset, + = right of the median)
 const DS = 2, CHUNK = 50, CH_LEN = DS * CHUNK;
@@ -871,24 +871,26 @@ float gLine(float x, float period, float w, float aa) {
 // or high, and thin grey scree where rock gives way to grass.
 const ALPINE_GLSL = /* glsl */`
 uniform sampler2D tGrass; uniform sampler2D tRock; uniform sampler2D tNoise;
-vec3 alpine(vec3 wp, vec3 nW, out float rough) {
+vec3 alpine(vec3 wp, vec3 nW, float forest, out float rough) {
   vec3 nA = texture2D(tNoise, wp.xz / 510.0).rgb, nB = texture2D(tNoise, wp.xz / 67.0 + 0.31).rgb, nC = texture2D(tNoise, wp.xz / 11.0 + 0.7).rgb, nD = texture2D(tNoise, wp.xz / 1.9 + 0.2).rgb;
   // grass: the photograph's blades close to, its tufts and worn patches further off, and slow changes of colour across a hillside
   vec3 gt = texture2D(tGrass, wp.xz / 3.2).rgb, gf = texture2D(tGrass, wp.xz / 23.0 + 0.4).rgb;
   float gl = dot(gt, vec3(0.3, 0.6, 0.1)) / 0.085, gfl = dot(gf, vec3(0.3, 0.6, 0.1)) / 0.085;
   float hue = clamp(nA.r * 1.5 - 0.25 + (nB.g - 0.5) * 0.7 + (nC.r - 0.5) * 0.3, 0.0, 1.0);
-  vec3 grass = mix(vec3(0.024, 0.074, 0.017), vec3(0.092, 0.155, 0.028), hue);
-  grass *= (0.25 + 0.75 * gl) * (0.6 + 0.4 * gfl) * (0.72 + 0.56 * nC.b) * (0.8 + 0.4 * nD.b);
+  vec3 grass = mix(vec3(0.020, 0.060, 0.016), vec3(0.078, 0.125, 0.028), hue);
+  grass *= (0.25 + 0.75 * gl) * (0.6 + 0.4 * gfl) * (0.62 + 0.76 * nC.b) * (0.8 + 0.4 * nD.b) * (0.7 + 0.6 * nB.b);
   grass = mix(grass, vec3(0.16, 0.17, 0.07) * (0.5 + 0.5 * gl), smoothstep(0.62, 0.8, nB.r) * 0.55);        // drier, yellower patches
   vec3 an = abs(nW); an /= (an.x + an.y + an.z);
   float rl = dot(texture2D(tRock, wp.zy / 14.0).rgb * an.x + texture2D(tRock, wp.xy / 14.0).rgb * an.z + texture2D(tRock, wp.xz / 14.0).rgb * an.y, vec3(0.3, 0.6, 0.1));
   // limestone: pale grey, weathered darker in streaks
-  vec3 rock = vec3(0.20, 0.20, 0.19) * (0.4 + rl / 0.05 * 0.6) * (0.7 + 0.6 * nB.r) * (0.8 + 0.4 * nC.g);
+  vec3 rock = vec3(0.19, 0.19, 0.18) * (0.4 + rl / 0.05 * 0.6) * (0.6 + 0.8 * nB.r) * (0.8 + 0.4 * nC.g) * (0.8 + 0.4 * texture2D(tNoise, vec2(wp.x + wp.z, wp.y * 0.35) / 90.0).g);   // (the last: long streaks down the faces)
   float slope = 1.0 - nW.y;                                         // 0 level, 0.3 is 45 degrees
   float rk = smoothstep(0.40, 0.55, slope + (nB.g - 0.5) * 0.24 + (nC.r - 0.5) * 0.08);
   rk = max(rk, smoothstep(430.0, 700.0, wp.y + (nA.b - 0.5) * 260.0 + slope * 300.0));   // the high tops are bare
   float scree = smoothstep(0.27, 0.40, slope + (nB.b - 0.5) * 0.2) * (1.0 - rk) * smoothstep(0.42, 0.66, nA.g);
   vec3 col = mix(grass, vec3(0.25, 0.25, 0.23) * (0.6 + 0.8 * nC.g), scree * 0.7);
+  // under the woods (and, far off, the woods themselves): dark, mottled green
+  col = mix(col, vec3(0.016, 0.046, 0.013) * (0.55 + 0.9 * nC.b) * (0.7 + 0.6 * nD.g) * (0.8 + 0.4 * nB.r), clamp(forest, 0.0, 1.0) * 0.92);
   col = mix(col, rock, rk);
   rough = mix(0.97, 0.84, rk);
   return col;
@@ -898,14 +900,14 @@ function alpineMaterial(tex) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise });
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vNW;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = objectNormal;');
+      .replace('#include <common>', '#include <common>\nattribute float aForest; varying vec3 vWP; varying vec3 vNW; varying float vForest;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vNW = objectNormal; vForest = aForest;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vWP; varying vec3 vNW;\n${ALPINE_GLSL}\nfloat aRough;`)
-      .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb = alpine(vWP, normalize(vNW), aRough);')
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWP; varying vec3 vNW; varying float vForest;\n${ALPINE_GLSL}\nfloat aRough;`)
+      .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb = alpine(vWP, normalize(vNW), vForest, aRough);')
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = aRough;');
   };
-  m.customProgramCacheKey = () => 'nr-alpine4';
+  m.customProgramCacheKey = () => 'nr-alpine6';
   return m;
 }
 // The circuit's surface, one strip rail to rail: tarmac with a darker, rubbered line down its middle, a white line
@@ -926,14 +928,14 @@ function trackMaterial(tex) {
     const float HW = ${TRACK.HW.toFixed(2)};
     vec3 nzA = texture2D(tNoise, vWP.xz / 33.0).rgb, nzB = texture2D(tNoise, vWP.xz / 6.0 + 0.37).rgb;
     vec3 asp = texture2D(tAsphalt, vWP.xz / 7.0).rgb * vec3(0.93, 0.96, 1.0) * (0.62 + 0.3 * nzA.r) * (0.9 + 0.2 * nzB.b);
-    asp *= 1.0 - 0.22 * smoothstep(4.2, 1.2, au) * (0.55 + 0.45 * nzA.g);                  // rubber laid on the line
+    asp *= 1.0 - 0.22 * smoothstep(5.6, 1.6, au) * (0.55 + 0.45 * nzA.g);                  // rubber laid on the line
     float line = 1.0 - smoothstep(0.09 - aa, 0.09 + aa, abs(au - (HW - 0.36)));
     vec3 road = mix(asp, vec3(0.80) * (0.75 + 0.25 * nzB.g), line);
     float chk = step(0.0, s) * step(s, 2.4) * step(au, HW - 0.5);                             // start and finish
     road = mix(road, mod(floor(u / 0.6) + floor(s / 0.6), 2.0) < 0.5 ? vec3(0.88) : vec3(0.03), chk);
-    float onKerb = step(HW, au) * (1.0 - smoothstep(HW + 1.1 - aa, HW + 1.1 + aa, au)) * step(0.5, -sign(u) * vKerb);
+    float onKerb = step(HW, au) * (1.0 - smoothstep(HW + 1.4 - aa, HW + 1.4 + aa, au)) * step(0.5, -sign(u) * vKerb);
     vec3 kerb = fract(s / 3.0) < 0.5 ? vec3(0.46, 0.028, 0.022) : vec3(0.74);
-    float gr; vec3 grass = alpine(vWP, vec3(0.0, 1.0, 0.0), gr);
+    float gr; vec3 grass = alpine(vWP, vec3(0.0, 1.0, 0.0), 0.0, gr);
     float tar = 1.0 - smoothstep(HW - aa, HW + aa, au);
     vec3 col = mix(mix(grass, kerb * (0.8 + 0.2 * nzB.r), onKerb), road, tar);
     aRough = mix(mix(gr, 0.55, onKerb), mix(0.84, 0.5, max(line, chk)), tar);
@@ -941,7 +943,7 @@ function trackMaterial(tex) {
   }`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = aRough;');
   };
-  m.customProgramCacheKey = () => 'nr-track4';
+  m.customProgramCacheKey = () => 'nr-track6';
   return m;
 }
 
@@ -1060,9 +1062,11 @@ const TREE_CARDS = [ // u0, v0 (trunk), u1, v1 in the flipped sheet; aspect = wi
   [1729, 1283, 2018, 1775], [0, 1532, 362, 2048], [816, 1533, 1258, 2046], [1312, 1533, 1691, 2037],
 ].map(([x0, y0, x1, y1]) => ({ r: [x0 / 2048, y0 / 2048, x1 / 2048, y1 / 2048], aspect: (x1 - x0) / (y1 - y0) }));
 const CARD_WEIGHT = [3, 3, 1, 1.4, 1.5, 1, 1.2, 1.6, 1.4];
+const TREE_FILL = { value: 0 };   // (v123) by day a tree's shaded side is lit by the leaves round it, not black: this much of its own colour is added back
 function treeMaterial(tex) {
   const m = new THREE.MeshLambertMaterial({ map: tex.trees, alphaTest: 0.42, side: THREE.DoubleSide, alphaToCoverage: true });
   m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTreeFill = TREE_FILL;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec4 aCard; attribute vec3 aTint; varying vec3 vTint;')
       .replace('#include <uv_vertex>', `#include <uv_vertex>
@@ -1072,10 +1076,11 @@ function treeMaterial(tex) {
   vec3 objectTangent = vec3( tangent.xyz );
   #endif`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vTint;')
-      .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb *= vTint;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vTint; uniform float uTreeFill;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb *= vTint;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance += diffuseColor.rgb * uTreeFill;');
   };
-  m.customProgramCacheKey = () => 'nr-tree';
+  m.customProgramCacheKey = () => 'nr-tree2';
   return m;
 }
 function treeGeometry() {
@@ -1703,7 +1708,7 @@ export class World {
     const right = (k) => [-Math.cos(tr.T[k]), Math.sin(tr.T[k])];
     // 1. the strip
     {
-      const US = [-E, -HW - 1.1, -HW, 0, HW, HW + 1.1, E], nu = US.length, pos = new Float32Array((N + 1) * nu * 3), nor = new Float32Array((N + 1) * nu * 3), uv = new Float32Array((N + 1) * nu * 2), kb = new Float32Array((N + 1) * nu), idx = new Uint32Array(N * (nu - 1) * 6);
+      const US = [-E, -HW - 1.4, -HW, 0, HW, HW + 1.4, E], nu = US.length, pos = new Float32Array((N + 1) * nu * 3), nor = new Float32Array((N + 1) * nu * 3), uv = new Float32Array((N + 1) * nu * 2), kb = new Float32Array((N + 1) * nu), idx = new Uint32Array(N * (nu - 1) * 6);
       let q = 0;
       for (let i = 0; i <= N; i++) {
         const k = i % N, [rx, rz] = right(k), g = tr.G[k], nx = -g * Math.sin(tr.T[k]), nz = -g * Math.cos(tr.T[k]), nl = Math.hypot(nx, 1, nz);
@@ -1714,50 +1719,96 @@ export class World {
     }
     // 2. the hand-shaped ground either side: level with the road at the rail, the land's own height (less a little, so the land covers its edge) at SKIRT
     {
-      const DD = [E, E + 2.4, E + 6, E + 11, SKIRT], nd = DD.length, pos = new Float32Array(2 * (N + 1) * nd * 3), idx = new Uint32Array(2 * N * (nd - 1) * 6);
+      const DD = [E, E + 2.2, E + 5.5, E + 9.5, E + 13.5, SKIRT], nd = DD.length, pos = new Float32Array(2 * (N + 1) * nd * 3), fo = new Float32Array(2 * (N + 1) * nd), idx = new Uint32Array(2 * N * (nd - 1) * 6);
       let q = 0;
       for (let side = 0; side < 2; side++) for (let i = 0; i <= N; i++) {
         const k = i % N, sg = side ? 1 : -1, [rx, rz] = right(k), base = side * (N + 1) * nd;
-        for (let j = 0; j < nd; j++) { const o = base + i * nd + j, x = tr.X[k] + rx * sg * DD[j], z = tr.Z[k] + rz * sg * DD[j], t = (DD[j] - E) / (SKIRT - E), f = t * t * (3 - 2 * t); pos[o * 3] = x; pos[o * 3 + 1] = j ? tr.Y[k] + (gr.H(x, z) - 0.8 * t - tr.Y[k]) * f : tr.Y[k]; pos[o * 3 + 2] = z; }
+        for (let j = 0; j < nd; j++) { const o = base + i * nd + j, x = tr.X[k] + rx * sg * DD[j], z = tr.Z[k] + rz * sg * DD[j], t = (DD[j] - E) / (SKIRT - E), f = t * t * (3 - 2 * t), y = j ? tr.Y[k] + (gr.H(x, z) - 0.8 * t - tr.Y[k]) * f : tr.Y[k]; pos[o * 3] = x; pos[o * 3 + 1] = y; pos[o * 3 + 2] = z; fo[o] = gr.forest(x, z, y, 0.3, DD[j]); }
         if (i < N) for (let j = 0; j < nd - 1; j++) { const a = base + i * nd + j, b = a + 1, c = a + nd, d = c + 1; if (side) { idx[q++] = a; idx[q++] = b; idx[q++] = c; idx[q++] = b; idx[q++] = d; idx[q++] = c; } else { idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d; } }
       }
-      mesh(pos, idx, this.mat.alpine).receiveShadow = true;
+      mesh(pos, idx, this.mat.alpine, { aForest: fo }).receiveShadow = true;
     }
     // 3. the land, in two pieces: CELL-metre squares for a kilometre round the circuit, and squares four times the size
     // for the mountains beyond (they are a kilometre off and more: a third of the triangles for the same view). The
-    // coarse piece carries on under the fine one, sunk a little, so no gap can open where they meet.
+    // coarse piece carries on under the fine one, sunk a little, so no gap can open where they meet. Each corner of
+    // each square also knows how wooded it is (aForest): the ground under the trees is dark, and beyond where trees
+    // are stood that same dark green is the forest.
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < N; i++) { x0 = Math.min(x0, tr.X[i]); x1 = Math.max(x1, tr.X[i]); z0 = Math.min(z0, tr.Z[i]); z1 = Math.max(z1, tr.Z[i]); }
+    const BIG = CELL * 4, IN = 1024, cx = Math.round((x0 + x1) / 2 / BIG) * BIG, cz = Math.round((z0 + z1) / 2 / BIG) * BIG;
     {
-      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < N; i++) { x0 = Math.min(x0, tr.X[i]); x1 = Math.max(x1, tr.X[i]); z0 = Math.min(z0, tr.Z[i]); z1 = Math.max(z1, tr.Z[i]); }
-      const BIG = CELL * 4, IN = 1024, cx = Math.round((x0 + x1) / 2 / BIG) * BIG, cz = Math.round((z0 + z1) / 2 / BIG) * BIG;
       const grid = (ox, oz, size, cell, sink) => {
-        const n = size / cell + 1, hs = new Float32Array(n * n), pos = new Float32Array(n * n * 3), nor = new Float32Array(n * n * 3), idx = new Uint32Array((n - 1) * (n - 1) * 6);
+        const n = size / cell + 1, hs = new Float32Array(n * n), pos = new Float32Array(n * n * 3), nor = new Float32Array(n * n * 3), fo = new Float32Array(n * n), idx = new Uint32Array((n - 1) * (n - 1) * 6);
         for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) hs[j * n + i] = gr.H(ox + i * cell, oz + j * cell, true);
         let q = 0;
         for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
           const o = j * n + i, x = ox + i * cell, z = oz + j * cell, hx = hs[j * n + Math.min(n - 1, i + 1)] - hs[j * n + Math.max(0, i - 1)], hz = hs[Math.min(n - 1, j + 1) * n + i] - hs[Math.max(0, j - 1) * n + i], nx = -hx / (2 * cell), nz = -hz / (2 * cell), nl = Math.hypot(nx, 1, nz);
           pos[o * 3] = x; pos[o * 3 + 1] = hs[o] - (sink ? sink(x, z) : 0); pos[o * 3 + 2] = z; nor[o * 3] = nx / nl; nor[o * 3 + 1] = 1 / nl; nor[o * 3 + 2] = nz / nl;
+          fo[o] = gr.forest(x, z, hs[o], Math.hypot(nx, nz), gr.dist(x, z));
           if (i < n - 1 && j < n - 1) { const a = o, b = o + 1, c = o + n, d = c + 1; idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d; }
         }
-        return mesh(pos, idx, this.mat.alpine, {}, nor);
+        return mesh(pos, idx, this.mat.alpine, { aForest: fo }, nor);
       };
       this.land = grid(cx - IN, cz - IN, 2 * IN, CELL, null);
       // (how far inside the fine piece's edge a point is: the coarse piece sinks from there, 6 m within two of its own squares)
       this.landFar = grid(-SIZE / 2, -SIZE / 2, SIZE, BIG, (x, z) => 6 * Math.min(1, Math.max(0, (IN - Math.max(Math.abs(x - cx), Math.abs(z - cz))) / (2 * BIG))));
     }
-    // 4. the rails: a corrugated steel beam each side, on a post every 4 m
+    // 4. the woods (v123): the game's own photographed trees, stood wherever the land says it is wooded, out to 900 m
+    // from the middle of the circuit (past that the dark ground is the forest). Sixteen batches, so only the ones in
+    // view are drawn.
     {
-      const PR = [[0, 0.78], [-0.05, 0.68], [0, 0.59], [-0.05, 0.5], [0, 0.4]], np = PR.length, pos = new Float32Array(2 * (N + 1) * np * 3), idx = new Uint32Array(2 * N * (np - 1) * 6);
-      let q = 0;
-      for (let side = 0; side < 2; side++) for (let i = 0; i <= N; i++) {
-        const k = i % N, sg = side ? 1 : -1, [rx, rz] = right(k), base = side * (N + 1) * np;
-        for (let j = 0; j < np; j++) { const o = base + i * np + j, u = sg * (WALL + PR[j][0]); pos[o * 3] = tr.X[k] + rx * u; pos[o * 3 + 1] = tr.Y[k] + PR[j][1]; pos[o * 3 + 2] = tr.Z[k] + rz * u; }
-        if (i < N) for (let j = 0; j < np - 1; j++) { const a = base + i * np + j, b = a + 1, c = a + np, d = c + 1; idx[q++] = a; idx[q++] = b; idx[q++] = c; idx[q++] = b; idx[q++] = d; idx[q++] = c; }
+      const rnd = mulberry32(90210), cum = []; let tot = 0; for (const w of CARD_WEIGHT) { tot += w; cum.push(tot); }
+      const TILE = 512, REACH = 900, STEP = 6.2, tiles = new Map();
+      for (let z = cz - REACH; z < cz + REACH; z += STEP) for (let x = cx - REACH; x < cx + REACH; x += STEP) {
+        const px = x + (rnd() - 0.5) * STEP * 0.9, pz = z + (rnd() - 0.5) * STEP * 0.9, r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd();
+        if (gr.forest(px, pz, 0, 0, 100) < 0.05) continue;                    // (the cheap part first: is this in a wood at all)
+        const d = gr.dist(px, pz); if (d < WALL + 4) continue;
+        const h = gr.surface(px, pz), slope = Math.hypot(gr.H(px + 3, pz) - gr.H(px - 3, pz), gr.H(px, pz + 3) - gr.H(px, pz - 3)) / 6;
+        if (r1 > gr.forest(px, pz, h, slope, d) * 0.94) continue;
+        const pick = r2 * tot, card = cum.findIndex((v) => pick <= v), key = Math.floor((px - cx + REACH) / TILE) + 8 * Math.floor((pz - cz + REACH) / TILE);
+        if (!tiles.has(key)) tiles.set(key, []);
+        tiles.get(key).push([px, h - 0.35, pz, (d < 60 ? 8 : 11) + r3 * 9, card, r4 * Math.PI, 0.62 + r5 * 0.3]);
       }
-      const steel = new THREE.MeshStandardMaterial({ color: 0xc3c7ca, metalness: 0.1, roughness: 0.55, envMapIntensity: 0.25, side: THREE.DoubleSide });   // galvanised: pale and dull, not a mirror of the sky
-      const rail = mesh(pos, idx, steel); rail.castShadow = false;
-      const every = 2, cnt = 2 * Math.floor(N / every), posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.82, 0.14).translate(0, 0.41, 0), new THREE.MeshStandardMaterial({ color: 0x8d9296, metalness: 0.6, roughness: 0.55 }), cnt), M = new THREE.Matrix4(), Qn = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
+      const mtx = new THREE.Matrix4(), qn = new THREE.Quaternion(), sc = new THREE.Vector3(), pv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+      this.treeCount = 0;
+      for (const inst of tiles.values()) {
+        const im = new THREE.InstancedMesh(this.treeGeo.clone(), this.mat.trees, inst.length), aCard = new Float32Array(inst.length * 4), aTint = new Float32Array(inst.length * 3);
+        inst.forEach(([x, y, z, Ht, card, rot, tint], k) => { const C = TREE_CARDS[card]; qn.setFromAxisAngle(up, rot); sc.set(Ht * C.aspect, Ht, Ht * C.aspect); pv.set(x, y, z); mtx.compose(pv, qn, sc); im.setMatrixAt(k, mtx); aCard.set(C.r, k * 4); aTint.set([tint * 0.95, tint, tint * 0.9], k * 3); });
+        im.geometry.setAttribute('aCard', new THREE.InstancedBufferAttribute(aCard, 4)); im.geometry.setAttribute('aTint', new THREE.InstancedBufferAttribute(aTint, 3));
+        im.computeBoundingSphere(); this.layer(im, false, false); G.add(im); this.treeCount += inst.length;
+      }
+    }
+    // 5. the rails (v123, the owner: "the guardrails more detailed"): two corrugated beams one over the other each side,
+    // as round a circuit, in 4 m panels with a lapped joint at each post; every post a steel channel with a spacer
+    // block that holds the beams off it.
+    {
+      const PR = [[0, 0], [0.014, 0.02], [0.074, 0.07], [0.086, 0.105], [0.03, 0.155], [0.086, 0.205], [0.074, 0.24], [0.014, 0.29], [0, 0.31]], BEAMS = [0.31, 0.65], np = PR.length;
+      const ks = []; for (let k = 0; k < N; k += 2) ks.push(k); ks.push(0);
+      const ns = ks.length, per = BEAMS.length * np, pos = new Float32Array(2 * ns * per * 3), uv = new Float32Array(2 * ns * per * 2), idx = new Uint32Array(2 * (ns - 1) * BEAMS.length * (np - 1) * 6);
+      let q = 0;
+      for (let side = 0; side < 2; side++) for (let i = 0; i < ns; i++) {
+        const k = ks[i], sg = side ? 1 : -1, [rx, rz] = right(k), base = side * ns * per;
+        for (let b = 0; b < BEAMS.length; b++) for (let j = 0; j < np; j++) { const o = base + i * per + b * np + j, u = sg * (WALL - PR[j][0]); pos[o * 3] = tr.X[k] + rx * u; pos[o * 3 + 1] = tr.Y[k] + BEAMS[b] + PR[j][1]; pos[o * 3 + 2] = tr.Z[k] + rz * u; uv[o * 2] = i; uv[o * 2 + 1] = j / (np - 1); }
+        if (i < ns - 1) for (let b = 0; b < BEAMS.length; b++) for (let j = 0; j < np - 1; j++) { const a = base + i * per + b * np + j, bb = a + 1, c = a + per, d = c + 1; idx[q++] = a; idx[q++] = bb; idx[q++] = c; idx[q++] = bb; idx[q++] = d; idx[q++] = c; }
+      }
+      const steel = new THREE.MeshStandardMaterial({ color: 0xc6cacd, metalness: 0, roughness: 0.55, envMapIntensity: 0.5, emissive: 0x2a2d30, side: THREE.DoubleSide });
+      steel.onBeforeCompile = (shader) => {
+        shader.uniforms.tNoise = SHARED.uNoise;
+        shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vRail; varying vec3 vWP;').replace('#include <project_vertex>', '#include <project_vertex>\n  vRail = uv; vWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vRail; varying vec3 vWP; uniform sampler2D tNoise;')
+          .replace('#include <map_fragment>', `#include <map_fragment>
+  { float f = fract(vRail.x), jn = min(f, 1.0 - f);                                   // 0 at a joint
+    float lap = 1.0 - smoothstep(0.004, 0.012, abs(jn - 0.02));                         // the edge of the panel lapped over the next
+    float bolt = (1.0 - smoothstep(0.008, 0.013, length(vec2((jn - 0.045) * 4.0, abs(vRail.y - 0.5) - 0.24)))) + (1.0 - smoothstep(0.008, 0.013, length(vec2((jn - 0.045) * 4.0, vRail.y - 0.5))));
+    vec3 nz = texture2D(tNoise, vec2(vWP.x + vWP.z, vWP.y * 6.0) / 9.0).rgb;
+    diffuseColor.rgb *= (0.84 + 0.3 * nz.r) * (1.0 - 0.45 * lap) * (1.0 - 0.55 * clamp(bolt, 0.0, 1.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.33, 0.24, 0.17), smoothstep(0.7, 0.9, nz.g) * 0.25 * (1.0 - vRail.y)); }`);   // a little rust low down
+      };
+      steel.customProgramCacheKey = () => 'nr-rail1';
+      mesh(pos, idx, steel, { uv }).castShadow = false;
+      const postGeo = mergeGeos([new THREE.BoxGeometry(0.075, 1.02, 0.12).translate(0.115, 0.51, 0), new THREE.BoxGeometry(0.03, 1.02, 0.05).translate(0.135, 0.51, 0.085), new THREE.BoxGeometry(0.03, 1.02, 0.05).translate(0.135, 0.51, -0.085), new THREE.BoxGeometry(0.075, 0.62, 0.14).translate(0.04, 0.63, 0)]);
+      const cnt = 2 * (ns - 1), posts = new THREE.InstancedMesh(postGeo, new THREE.MeshStandardMaterial({ color: 0xa4a9ad, metalness: 0, roughness: 0.65, envMapIntensity: 0.4, emissive: 0x1e2022 }), cnt), M = new THREE.Matrix4(), Qn = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
       let c = 0;
-      for (let side = 0; side < 2; side++) for (let i = 0; i < Math.floor(N / every); i++) { const k = i * every, sg = side ? 1 : -1, [rx, rz] = right(k), u = sg * (WALL + 0.1); P.set(tr.X[k] + rx * u, tr.Y[k], tr.Z[k] + rz * u); Qn.setFromAxisAngle(up, tr.T[k]); M.compose(P, Qn, one); posts.setMatrixAt(c++, M); }
+      for (let side = 0; side < 2; side++) for (let i = 0; i < ns - 1; i++) { const k = ks[i], sg = side ? 1 : -1, [rx, rz] = right(k), u = sg * WALL; P.set(tr.X[k] + rx * u, tr.Y[k] - 0.02, tr.Z[k] + rz * u); Qn.setFromAxisAngle(up, Math.atan2(-sg * rz, sg * rx)); M.compose(P, Qn, one); posts.setMatrixAt(c++, M); }
       posts.frustumCulled = false; this.layer(posts, false, false); G.add(posts);
     }
   }
@@ -1781,6 +1832,7 @@ export class World {
     const [far, near, lights] = this.horizon.children;
     far.material.color.set(0x91abcd); near.material.color.set(0x7b96b8); lights.visible = false;
     SHARED.uRetroK.value = 0;   // paint does not throw headlights back in daylight
+    TREE_FILL.value = 0.55;
   }
   newRoad(seed = (Math.random() * 2 ** 31) | 0, highway = this.road.theme, opts = {}) {
     if (this.open) { this.offset.x = this.offset.z = 0; this.hint = 0; this.lastLoc = null; this.probeRebase = null; return this.road; }

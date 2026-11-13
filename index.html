@@ -1208,14 +1208,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=dca8f9c776';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=dca8f9c776';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=dca8f9c776';
-import { createShowroom, TOWER } from './showroom.js?b=dca8f9c776';
-import { setChameleon } from './paintfx.js?b=dca8f9c776';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=dca8f9c776';
-import { SpikeStrips, Mirror } from './pursuit.js?b=dca8f9c776';
-import { Rain } from './rain.js?b=dca8f9c776';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=c20ede232b';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=c20ede232b';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=c20ede232b';
+import { createShowroom, TOWER } from './showroom.js?b=c20ede232b';
+import { setChameleon } from './paintfx.js?b=c20ede232b';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=c20ede232b';
+import { SpikeStrips, Mirror } from './pursuit.js?b=c20ede232b';
+import { Rain } from './rain.js?b=c20ede232b';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1774,7 +1774,7 @@ class Vehicle {
     // full grip instead of a plough, and a slide gets countersteer help.
     const vAbs = Math.abs(this.vx);
     const lock = CAR.steerLock / (1 + vAbs * 0.02);
-    let target = clamp(inp.steer, -1, 1) * lock;
+    let target = clamp(inp.steer + (inp.edge || 0), -1, 1) * lock;   // (inp.edge, v123: the circuit easing the car back from its edge)
     // steering assist (see ASSIST): the angle for the bend under the car, plus settling in line with the road
     let apAssist = 0;
     this.assist = 0;
@@ -11647,12 +11647,20 @@ function showOverCard(o) {
 }
 
 const ASSIST_LEVEL = { full: 1, light: 0.55, off: 0 };
+const TRACK_HW = 8.5, TRACK_WALL = 12, STICK = 1.32;   // (v123) the circuit's half width and rail (track-core.js TRACK), and how much harder the tyres grip on it
 function physicsStep(input) {
   // v91 steering assist: the bend under the car (curvature in the direction it is travelling) and how far the car
   // points away from the road. Not for a stick, and not on the entrance ramp (its lane runs across the road's line).
   { const W = world.lastLoc, psi = W ? wrapAngle(car.yaw - W.th) : 0;
-    input.assist = W && !input.stick && !world.onRamp ? (ASSIST_LEVEL[state.assist] ?? 1) : 0;
-    input.roadK = W ? (W.k || 0) * Math.cos(psi) : 0; input.roadPsi = psi; }
+    input.assist = W && !input.stick && (world.track || !world.onRamp) ? (ASSIST_LEVEL[state.assist] ?? 1) * (world.track ? 0.72 : 1) : 0;   // (0.72 on the circuit: at 1 the car took whole laps by itself with no hands on the keys)
+    input.roadK = W ? (W.k || 0) * Math.cos(psi) : 0; input.roadPsi = psi;
+    // v123, the owner: "make the car kind of stick to the track better so its harder to crash into the side rails".
+    // On the circuit the steering assist that followed the highway's bends follows the track's (it works out the lock
+    // the corner under the car needs, so the keys steer against the track rather than against a straight line), the
+    // tyres grip a third harder (STICK, in the frame's grip), and near the edge of the tarmac the wheels are eased
+    // back towards the middle: nothing at 2.5 m inside the white line, up to a third of full lock at the rail.
+    input.edge = 0;
+    if (world.track && W && car.vx > 4) { const out = Math.abs(W.u) - (TRACK_HW - 2.5); if (out > 0) input.edge = Math.sign(W.u) * Math.min(1, out / (TRACK_WALL - TRACK_HW + 2.5)) * 0.34 * Math.max(0, Math.cos(psi)); } }
   car.step(STEP, input);
   if (car.nitro > 0 && car.gear > 0 && car.vx > 1) car.vx += NOS.push * car.nitro * STEP;   // the nitrous shove (see NOS)
   // gravity along the grade, then the barriers
@@ -11795,7 +11803,7 @@ function frameInner(now) {
     const r = world.updateWeather(dt);
     if (roomUp()) { scene.fog.color.set(GARAGE_SPEC.fog.color); scene.fog.density = GARAGE_SPEC.fog.density; }
     BEAM.gain.value = 0.05 + 0.08 * r;
-    WEATHER.grip = (1 - 0.13 * r) * (state.over && state.over.reason === 'spikes' ? 0.42 : 1);   // shredded tyres
+    WEATHER.grip = (1 - 0.13 * r) * (state.over && state.over.reason === 'spikes' ? 0.42 : 1) * (world.track ? STICK : 1);   // shredded tyres; (v123) the circuit's extra grip
     camVel.subVectors(camera.position, camPrev).divideScalar(Math.max(dt, 1e-3)); camPrev.copy(camera.position);
     if (camVel.length() > 200) camVel.set(0, 0, 0);   // a cut or a rebase
     // (no rain under a tunnel's roof: world.tunnelCover, by where the car is along the road)
