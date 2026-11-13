@@ -796,7 +796,7 @@ float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0
 // speed by), wet and mirrored in the rain the way the road was. Concrete, not tarmac: at night with nothing lit but
 // the car's own lamps, black tarmac to the horizon simply could not be seen. uPadOff: the world's floating-origin offset, so the marks stay put when it moves.
 function padMaterial(tex) {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0, envMapIntensity: 1 });
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0, envMapIntensity: 0.35 });   // (v121: 0.35, was 1: by day the sky in the car's reflection cube lit the ground too, and turned every shadow bright blue)
   m.userData.off = { value: new THREE.Vector2() };
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, {
@@ -825,6 +825,7 @@ float gLine(float x, float period, float w, float aa) {
   vec3 con = texture2D(tConcrete, gp / 7.5).rgb;
   vec3 nzA = texture2D(tNoise, gp / 30.0).rgb, nzB = texture2D(tNoise, gp / 7.5 + 0.37).rgb, nzC = texture2D(tNoise, gp / 120.0 + 0.11).rgb;
   vec3 baseC = con * 0.86 * (0.82 + 0.34 * nzC.r);   // broad lighter and darker patches: old slabs and newer ones
+  baseC *= 0.9 + 0.2 * texture2D(tNoise, gp / 1.5).b;   // (v121) fine grain, so the concrete stays crisp right under the camera
   float aaX = fwidth(gp.x) * 0.8 + 0.003, aaY = fwidth(gp.y) * 0.8 + 0.003;
   float seam = max(gLine(gp.x, 7.5, 0.05, aaX), gLine(gp.y, 7.5, 0.05, aaY));
   baseC *= 1.0 - 0.55 * seam;
@@ -859,7 +860,7 @@ float gLine(float x, float period, float w, float aa) {
   } else radiance *= 0.3;
   #endif`);
   };
-  m.customProgramCacheKey = () => 'nr-pad2';
+  m.customProgramCacheKey = () => 'nr-pad3';
   return m;
 }
 
@@ -1608,13 +1609,13 @@ export class World {
     if (!on) return;
     this.moonDir.set(-0.42, 0.74, 0.52).normalize();
     const U = this.sky.material.uniforms;
-    U.uDay.value = 1; U.uMoon.value.copy(this.moonDir); U.uHorizon.value.set(0xb4cbe6); U.uZenith.value.set(0x1c5acb);
+    U.uDay.value = 1; U.uMoon.value.copy(this.moonDir); U.uHorizon.value.set(0xb4cbe6); U.uZenith.value.set(0x1552c8);
     this.fogClear = new THREE.Color(0xb4cbe6); this.fogRain = new THREE.Color(0xa9b4c2); this.fogK = 0.5;
-    this.moon.color.set(0xfff3e2); this.nightMoon = 4.6; this.nightHemi = 1.5; this.hemiSky = 0xbdd4ff; this.hemiGround = 0x8f897e;
+    this.moon.color.set(0xfff1dc); this.nightMoon = 5.4; this.nightHemi = 1.05; this.hemiSky = 0xcfdbee; this.hemiGround = 0x8f897e;   // (v121: a paler sky light, so shadows are grey-blue, not blue paint)
     this.moon.intensity = this.nightMoon; this.hemi.intensity = this.nightHemi; this.hemi.color.set(this.hemiSky); this.hemi.groundColor.set(this.hemiGround);
     this.moon.castShadow = true;
     const sh = this.moon.shadow, c = sh.camera;
-    sh.mapSize.set(2048, 2048); c.left = -7; c.right = 7; c.top = 7; c.bottom = -7; c.near = 20; c.far = 110; c.updateProjectionMatrix(); sh.bias = -0.0004; sh.normalBias = 0.02;
+    sh.mapSize.set(4096, 4096); c.left = -7; c.right = 7; c.top = 7; c.bottom = -7; c.near = 20; c.far = 110; c.updateProjectionMatrix(); sh.bias = -0.0004; sh.normalBias = 0.02;
     if (this.pad) this.pad.receiveShadow = true;
     const [far, near, lights] = this.horizon.children;
     far.material.color.set(0x91abcd); near.material.color.set(0x7b96b8); lights.visible = false;
@@ -1719,7 +1720,8 @@ export class World {
     // two cubes: one is being captured (a few faces a frame, all from the same spot) while the car reflects the
     // other; when the capture is complete they swap. Faces from different moments never mix, so reflections
     // don't break up at the cube seams or step as each face catches up.
-    const mk = () => new THREE.WebGLCubeRenderTarget(192, { type: THREE.HalfFloatType, generateMipmaps: false });
+    const mk = () => new THREE.WebGLCubeRenderTarget(320, {   // (v121: 320, was 192: sharper sky and ground in the paint)
+     type: THREE.HalfFloatType, generateMipmaps: false });
     this.probeRTs = [mk(), mk()];
     this.probeRT = this.probeRTs[0];
     this.probe = new THREE.CubeCamera(0.4, 280, this.probeRTs[1]);
@@ -1745,7 +1747,7 @@ export class World {
   setQuality(q) {
     this.quality = q;
     this.refl.scale = q >= 2 ? 0.4 : 0.3;
-    this.setPool(q >= 2 ? 16 : q === 1 ? 12 : 8);
+    this.setPool(this.open ? 0 : q >= 2 ? 16 : q === 1 ? 12 : 8);   // (v121: no street lamps in the open area, so none of their lights: every pixel of every surface was working out 8 lights that were switched off)
     SHARED.uReflOn.value = q >= 1 ? 1 : 0;
     this.mat.cone.visible = true;   // the cones are the lamp's light now, on every quality level
   }
@@ -1983,7 +1985,8 @@ export class World {
     camera.updateMatrixWorld();   // the camera moved this frame; its matrices only refresh at render time otherwise
     const size = r.getDrawingBufferSize(this.tmp2 ||= new THREE.Vector2());
     // forceRefl: the garage floor wants the mirror whatever the quality level (the room is cheap to draw twice)
-    if ((q >= 1 || this.forceRefl) && this.car) {
+    // (v121: dry daylight in the open area mirrors nothing, so the mirror picture is not drawn at all)
+    if ((q >= 1 || this.forceRefl) && this.car && !(this.open && this.day && !this.reflPlane && SHARED.uRain.value < 0.01)) {
       this.refl.setSize(size.x, size.y);
       // mirror plane: the road surface a little ahead of the camera, tilted to its grade; or one the game sets
       // (reflPlane: the garage's level floor)

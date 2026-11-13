@@ -1208,20 +1208,20 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=56a2ff5b4d';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=56a2ff5b4d';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=56a2ff5b4d';
-import { createShowroom, TOWER } from './showroom.js?b=56a2ff5b4d';
-import { setChameleon } from './paintfx.js?b=56a2ff5b4d';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=56a2ff5b4d';
-import { SpikeStrips, Mirror } from './pursuit.js?b=56a2ff5b4d';
-import { Rain } from './rain.js?b=56a2ff5b4d';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=9873a30970';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=9873a30970';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=9873a30970';
+import { createShowroom, TOWER } from './showroom.js?b=9873a30970';
+import { setChameleon } from './paintfx.js?b=9873a30970';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=9873a30970';
+import { SpikeStrips, Mirror } from './pursuit.js?b=9873a30970';
+import { Rain } from './rain.js?b=9873a30970';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
 // Graphics are locked to Low for now (the user's choice); set to null to bring the Q key, the toolbar button and
 // the Settings row back.
-const GFX_LOCK = 0;
+const GFX_LOCK = 2;   // (v121, the owner: "raise the quality by a ton I dont want lag but I want quality that looks clean ... sharp": High, was Low. The open area is a fraction of the highway's work to draw.)
 const store = {
   get(k, d) { try { const v = localStorage.getItem('sfd_' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('sfd_' + k, JSON.stringify(v)); } catch {} },
@@ -2123,6 +2123,26 @@ composer.addPass(new OutputPass());
 const fxaa = new ShaderPass(FXAAShader);
 fxaa.enabled = false;
 composer.addPass(fxaa);
+// v121: the last thing done to the picture. Sharpen: each pixel is pushed away from the average of its four neighbours
+// (kept inside their range, so edges get crisp without halos); it gives back what FXAA's smoothing takes and more.
+// Grade (out of doors only; the workshop keeps its own look): richer colour and a touch more contrast, for a clean,
+// vivid daylight picture rather than a flat one.
+const finish = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, sharp: { value: 0.55 }, sat: { value: 1 }, con: { value: 1 } },
+  vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 px; uniform float sharp; uniform float sat; uniform float con; varying vec2 vUv;
+    void main() {
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      vec3 n = texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb, s = texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb, e = texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb, w = texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb;
+      vec3 lo = min(c, min(min(n, s), min(e, w))), hi = max(c, max(max(n, s), max(e, w)));
+      c = clamp(c + (c - (n + s + e + w) * 0.25) * sharp, lo, hi);
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = mix(vec3(l), c, sat);
+      c = (c - 0.5) * con + 0.5;
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+});
+composer.addPass(finish);
 // How the workshop is drawn: multisamples (0 = FXAA), pixels at most, pixel ratio at most. (v104, the owner: "the game needs to run
 // at a higher frame rate". The workshop was the slowest screen in the game, about 50 frames a second on an M4 with real frames: it
 // was drawn at up to 3.2 million pixels with 4x multisampling. The same pixels with FXAA: 89 a second, and side by side the two
@@ -7038,7 +7058,8 @@ function renderScale() {
   // v59, the user (asked whether the driving view should be sharpened too, at some cost to frame rate): "Sharpen the
   // road". The road is drawn above that old figure, up to 2x under a 3.2 MP budget (1.7 MP on touch), for as long as
   // the frame rate holds: roadQ.f slides between the old resolution (0) and the sharp one (1), see adaptRoadScale.
-  const sharp = Math.min(dpr, 2, Math.sqrt((isTouch ? 1.7e6 : 3.2e6) / css));
+  // (v121, the open area: up to the screen's own resolution, 6.5 MP on a computer and 2.6 on a phone; were 3.2 and 1.7)
+  const sharp = Math.min(dpr, 2, Math.sqrt((OPEN ? (isTouch ? 2.6e6 : 6.5e6) : isTouch ? 1.7e6 : 3.2e6) / css));
   return sharp > base ? base + (sharp - base) * roadQ.f : base;
 }
 // The frame-rate guard for the sharper road. Every 1.5 s of driving the average frame time is looked at: slower than
@@ -7050,11 +7071,13 @@ function renderScale() {
 // step down through four sizes at the start of every run; (2) drops further in one go the slower the frames are
 // (one step under 25 ms a frame, two under 33, straight to the bottom past that); (3) tries a size that failed again
 // only after four minutes of smooth driving, not one.
+if (store.get('roadV', 0) !== 121) { store.set('roadV', 121); store.set('roadF', 1); store.set('roadCeil', 1); }   // (v121: what the highway game settled on says nothing about the open area: start sharp again; the guard below still steps down if frames run slow)
 const roadQ = { f: clamp(+store.get('roadF', 1) || 0, 0, 1), ceil: clamp(+store.get('roadCeil', 1) || 0, 0, 1), sum: 0, n: 0, good: 0, cool: 0, sinceUp: 99, streak: 0 };
 roadQ.ceil = Math.max(roadQ.ceil, roadQ.f);
 const roadQSave = () => { store.set('roadF', roadQ.f); store.set('roadCeil', roadQ.ceil); };
 function adaptRoadScale(dt) {
-  if (state.garage || !state.driving || state.paused || document.hidden || !(dt > 0)) { roadQ.sum = roadQ.n = 0; return; }
+  // (v121: not while the window is out of focus either: browsers slow an unfocused page's frames, and the guard took that for a slow machine and dropped the picture to its lowest size)
+  if (state.garage || !state.driving || state.paused || document.hidden || !document.hasFocus() || !(dt > 0)) { roadQ.sum = roadQ.n = 0; return; }
   roadQ.sum += dt; roadQ.n++; roadQ.cool = Math.max(0, roadQ.cool - dt); roadQ.sinceUp += dt;
   if (roadQ.sum < 1.5) return;
   const avg = roadQ.sum / roadQ.n; roadQ.sum = roadQ.n = 0;
@@ -8114,6 +8137,7 @@ function updateWorld(dt, x, z, yaw) {
   // the floor for depth and flickered; the room has its own soft shadow (carShadow)
   contactShadow.visible = skids.mesh.visible = !room;
   bloom.enabled = state.gfx >= 1 || room;
+  finish.uniforms.sat.value = room || !DAY ? 1 : 1.22; finish.uniforms.con.value = room || !DAY ? 1 : 1.1; speedPass.uniforms.vignette.value = room || !DAY ? 0.3 : 0.14;
   carShadow.visible = room && !!rig && carRoot.visible;
   if (carShadow.visible) { const b = rig.bounds; carShadow.scale.set((b.max.x - b.min.x) * 1.3, (b.max.z - b.min.z) * 1.1, 1); carShadow.position.set(x, roadY + 0.03, z); carShadow.rotation.y = yaw; }
   world.lightsDim = room ? 0 : 1;
@@ -11802,7 +11826,7 @@ function onResize() {
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(innerWidth, innerHeight);
   bloom.setSize(innerWidth / 2, innerHeight / 2);
-  { const db = renderer.getDrawingBufferSize(new THREE.Vector2()); fxaa.material.uniforms.resolution.value.set(1 / db.x, 1 / db.y); }
+  { const db = renderer.getDrawingBufferSize(new THREE.Vector2()); fxaa.material.uniforms.resolution.value.set(1 / db.x, 1 / db.y); finish.uniforms.px.value.set(1 / db.x, 1 / db.y); }
   { const db = renderer.getDrawingBufferSize(new THREE.Vector2()); const hu = bloom.materialHighPassFilter.uniforms, bt = bloom.renderTargetBright; hu.uTexel.value.set(1 / db.x, 1 / db.y); hu.uSpan.value.set(Math.max(2, db.x / bt.width), Math.max(2, db.y / bt.height)); }
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   garageViewOffset();
