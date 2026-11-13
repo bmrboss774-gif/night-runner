@@ -1603,15 +1603,18 @@ const R8LMS_SPEC = {
 // Mercedes-AMG GT3 (v115): the 6.3-litre (M159) V8 of the GT3 car, about 550 hp under its balance of performance, 620 Nm,
 // a six-speed sequential, rear drive, 1,290 kg, slicks and a big wing. The owner: "add the AMG GT3 ... only 2 versions and
 // they cannot be altered": the Red Bull Racing car and the NASA car, each as it runs.
+// v117, the owner: "can u make the AMG much faster and have a higher top speed and put it with exotic vehicles". It runs
+// unrestricted now, with no balance-of-performance restrictor: about 800 hp at 7,500 (790 Nm), revving to 8,300, and taller
+// gearing (6th at the limiter is about 235 mph, where it was 179). Still 1,290 kg, still the slicks and the wing.
 const AMG_SPEC = {
   mass: 1290, Iz: 2150, a: 1.39, b: 1.24, cgH: 0.42, wheelR: 0.355, weightFront: 0.47,
   muF: 1.42, muR: 1.52, csF: 26, csR: 30,
-  gears: [3.0, 2.1, 1.65, 1.35, 1.14, 0.98], reverse: 3.0, final: 3.7, eff: 0.92,
-  idle: 1500, redline: 7500, limiter: 7800, shiftUp: 7300, shiftDown: 4200, kickdown: 5600, burnRpm: 5500,
+  gears: [2.9, 2.05, 1.6, 1.3, 1.08, 0.89], reverse: 3.0, final: 3.3, eff: 0.92,
+  idle: 1500, redline: 8000, limiter: 8300, shiftUp: 7900, shiftDown: 4500, kickdown: 6000, burnRpm: 5500,
   shiftTime: 0.05, spoolRate: 1,
-  torque: [[600, 330], [1500, 440], [2500, 520], [3500, 580], [4500, 615], [5500, 620], [6500, 590], [7200, 555], [7800, 480]],
+  torque: [[600, 380], [1500, 500], [2500, 600], [3500, 680], [4500, 740], [5500, 780], [6500, 790], [7500, 760], [8000, 720], [8300, 640]],
   boostTorque: [[600, 0], [9000, 0]], spool: [0, 1],
-  drag: 0.45, downforce: 1.15, rollRes: 160, brakeG: 1.6, brakeBias: 0.58,
+  drag: 0.42, downforce: 1.15, rollRes: 160, brakeG: 1.6, brakeBias: 0.58,
   steerLock: 0.55, front: 2.35,
   launchGrip: 0.35, spinSlip: [9, 32], slideMu: 0.9, driftAssist: [0.8, 16, 2.5],
 };
@@ -3539,7 +3542,7 @@ CAR_DEFS.r8lms = {
 // 0.19 m up, 0.2 m behind the middle of the car).
 const amgExhaust = () => [-1, 1].map((side) => Object.assign(new THREE.Vector3(side * 0.99, 0.19, -0.2), { yaw: side * 1.35 }));
 const AMG_SHARED = {
-  brand: 'Mercedes', spec: AMG_SPEC, tach: 8, exhaust: amgExhaust, plates: () => [],
+  brand: 'Mercedes', spec: AMG_SPEC, tach: 9, exhaust: amgExhaust, plates: () => [],
   plate: { style: 'none', text: 'AMG', caption: '' },
   lampLevels: { head: 1.8, tail: [0.5, 5] },
   sound: 'amg', audio: { rpmScale: 1, turbo: 0, flutter: 0, crackle: 1.6, popVol: 1.2, whine: 0.4 },
@@ -3548,9 +3551,9 @@ const AMG_SHARED = {
 };
 CAR_DEFS.amg = {
   ...AMG_SHARED, id: 'amg', name: 'Mercedes-AMG GT3', short: 'AMG GT3', title: 'AMG GT3', hue: '#2a3f9e', fixed: true,
-  eyebrow: 'Mercedes-AMG GT3 · Red Bull Racing · 6.3 V8 · 550 hp · sequential',
-  lede: 'A GT3 race car in Red Bull colours: a big naturally aspirated V8, slicks, a six-speed sequential and a wing that pins it down.',
-  pick: '550 hp · GT3',
+  eyebrow: 'Mercedes-AMG GT3 · Red Bull Racing · 6.3 V8 · 800 hp unrestricted · sequential',
+  lede: 'A GT3 race car in Red Bull colours, run without its restrictor: an 800 hp naturally aspirated V8, slicks, a six-speed sequential and a wing that pins it down.',
+  pick: '800 hp · GT3',
   files: { meshopt: { url: 'amg-meshopt.txt', size: 9647980 }, plain: { url: 'amg-plain.txt', size: 13395548 } },
   classify: classifyTagged('AMG', { liveryOnly: true }),
   stock: { paint: '#1c2a5e', finish: 'gloss' },
@@ -3560,9 +3563,9 @@ CAR_DEFS.amg = {
 };
 CAR_DEFS.amgnasa = {
   ...AMG_SHARED, id: 'amgnasa', name: 'Mercedes-AMG GT3', short: 'AMG GT3', title: 'AMG GT3 NASA', hue: '#c9ced6', liveryOf: 'amg',
-  eyebrow: 'Mercedes-AMG GT3 · NASA livery · 6.3 V8 · 550 hp · sequential',
+  eyebrow: 'Mercedes-AMG GT3 · NASA livery · 6.3 V8 · 800 hp unrestricted · sequential',
   lede: 'The same GT3 race car in a chrome NASA livery: the big V8, slicks, the sequential and the wing.',
-  pick: '550 hp · GT3',
+  pick: '800 hp · GT3',
   files: { meshopt: { url: 'amgn-meshopt.txt', size: 5721404 }, plain: { url: 'amgn-plain.txt', size: 7821864 } },
   // v116, the owner: "idk wtf is going on with this nasa car": the driver sat with his head through the roof. The
   // model's radio aerial stands 1.68 m up, and the seat is found from the top of the car, so the eye is set from there
@@ -10213,9 +10216,9 @@ function switchCar(id) {
 const SR_ROWS = [
   { name: 'Japan', sub: 'Toyota · Nissan · Mitsubishi', cars: ['supra', 'a90', 'gtr', 'r34', 'eclipse'] },
   { name: 'Japan', sub: 'Honda · Mazda', cars: ['fl5', 'nsx', 's2k', 'miata'] },
-  { name: 'Germany', sub: 'BMW · Audi · Mercedes', cars: ['csl', 'e92', 'i8', 'x5', 'r8', 'amg'] },
+  { name: 'Germany', sub: 'BMW · Audi', cars: ['csl', 'e92', 'i8', 'x5', 'r8'] },
   { name: 'America', sub: 'Chevrolet · Dodge', cars: ['c7', 'zl1', 'hc', 'viper'] },
-  { name: 'Exotics', sub: 'Porsche · Ferrari · Lamborghini · McLaren', cars: ['cgt', 'gt3', 'f812', 'svj', 'mcl'] },
+  { name: 'Exotics', sub: 'Porsche · Ferrari · Lamborghini · McLaren · Mercedes-AMG', cars: ['cgt', 'gt3', 'f812', 'svj', 'mcl', 'amg'] },   // (v117: the AMG moved here from Germany)
 ];
 const showroom = createShowroom({ parent: garage.group, rows: SR_ROWS, defs: Object.fromEntries(CAR_IDS.map((id) => [id, CAR_DEFS[id]])), displayFont: '"Saira Condensed","Arial Narrow",Arial,sans-serif', glowTex: underglow.material.map });
 const SR = { on: false, mode: 'off', bay: null, home: null, pos: new THREE.Vector3(), tgt: new THREE.Vector3(), fov: 46, pan: 0, tilt: 0, hover: null, ride: null, pose: null, locks: '', t: 0, wantSel: false, loadP: 0, loadFail: false, key: null, keySwing: 0, snap: false, envAt: 0, hinted: false, warm: 0, hoverT: 0, hoverId: null };
@@ -10830,9 +10833,11 @@ const nearestLane = (u) => LANE_CENTERS.reduce((b, c, k) => (Math.abs(c - u) < M
 let frameDtReal = 0;
 // how fast the car being driven can go flat out, m/s: the fastest speed at which some gear still pulls harder than
 // the air holds it back (worked out once per car, for the police's top speed)
-const carTop = { spec: null, v: 70 };
+const carTop = { key: '', v: 70 };
 function carTopSpeed() {
-  if (carTop.spec === CAR) return carTop.v;
+  // (v117: keyed on the numbers, not the object: CAR is one object refilled for each car, so it used to keep the first car's answer)
+  const key = `${CAR.mass}|${CAR.final}|${CAR.gears}|${CAR.limiter}|${CAR.drag}|${CAR.rollRes}|${CAR.wheelR}|${CAR.torque}|${CAR.boostTorque}`;
+  if (carTop.key === key) return carTop.v;
   let top = 30;
   for (let v = 30; v < 140; v += 0.5) {
     for (const g of CAR.gears) {
@@ -10840,7 +10845,7 @@ function carTopSpeed() {
       if ((curve(CAR.torque, rpm) + curve(CAR.boostTorque, rpm)) * g * CAR.final * CAR.eff / CAR.wheelR >= CAR.drag * v * v + CAR.rollRes) { top = v; break; }
     }
   }
-  carTop.spec = CAR; carTop.v = top; return top;
+  carTop.key = key; carTop.v = top; return top;
 }
 function policeQuiet() {
   if (!(state.lightbar && rig?.kinds.lbL && state.driving)) police.light.intensity = 0;
