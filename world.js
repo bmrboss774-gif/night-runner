@@ -53,6 +53,7 @@ const MTN_TREES = 620;                              // trees out to here on a mo
 export const LANE_CENTERS = [0, 1, 2, 3].map((k) => U_IN + LANE * (k + 0.5));
 export const LIMITS = { inner: MED_HALF + 0.06, outer: U_PAVE - 0.05 };
 export const ROAD_DS = DS;
+const OPEN_S = 1600;   // (v118) where along the unused road the open area says the car is: clear of the entrance ramp
 const SODIUM = new THREE.Color(1.0, 0.62, 0.32), LED = new THREE.Color(0.86, 0.9, 1.0), LANTERN = new THREE.Color(1.0, 0.82, 0.58);
 DARK_LAMPS = { c: SODIUM, every: POLE_EVERY, I: 620 };
 
@@ -790,6 +791,78 @@ float rLine(float x, float c, float w, float aa) { return 1.0 - smoothstep(w * 0
   return m;
 }
 
+// The open area (v118): one level sheet of pale concrete out to the fog, like an airfield's apron, laid out by where it
+// is in the world, not by a road: slab joints every 7.5 m and a worn white survey grid every 60 m (something to judge
+// speed by), wet and mirrored in the rain the way the road was. Concrete, not tarmac: at night with nothing lit but
+// the car's own lamps, black tarmac to the horizon simply could not be seen. uPadOff: the world's floating-origin offset, so the marks stay put when it moves.
+function padMaterial(tex) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0, envMapIntensity: 1 });
+  m.userData.off = { value: new THREE.Vector2() };
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, {
+      tConcrete: { value: tex.concreteRoad }, tNoise: SHARED.uNoise, uPadOff: m.userData.off,
+      uRefl: SHARED.uRefl, uReflMatrix: SHARED.uReflMatrix, uReflOn: SHARED.uReflOn,
+      uHeadPos: SHARED.uHeadPos, uHeadDir: SHARED.uHeadDir, uHeadOn: SHARED.uHeadOn, uRain: SHARED.uRain, uTime: SHARED.uTime, uRetroK: SHARED.uRetroK,
+    });
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWP; varying vec4 vReflC; uniform mat4 uReflMatrix;`)
+      .replace('#include <project_vertex>', `#include <project_vertex>
+  { vec4 wp4 = modelMatrix * vec4(transformed, 1.0); vWP = wp4.xyz; vReflC = uReflMatrix * wp4; }`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWP; varying vec4 vReflC;
+uniform sampler2D tConcrete; uniform sampler2D tNoise; uniform sampler2D uRefl; uniform float uReflOn;
+uniform float uRain; uniform float uTime; uniform float uRetroK; uniform vec2 uPadOff;
+${RETRO_GLSL}
+// a line of width w every period metres; thinner than a pixel, it fades instead of sparkling
+float gLine(float x, float period, float w, float aa) {
+  float d = abs(fract(x / period + 0.5) - 0.5) * period;
+  return (1.0 - smoothstep(w * 0.5 - aa, w * 0.5 + aa, d)) * min(1.0, w / (1.6 * aa)) * (1.0 - smoothstep(0.5, 2.5, aa));
+}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+  vec2 gp = vWP.xz + uPadOff;
+  vec3 con = texture2D(tConcrete, gp / 7.5).rgb;
+  vec3 nzA = texture2D(tNoise, gp / 30.0).rgb, nzB = texture2D(tNoise, gp / 7.5 + 0.37).rgb, nzC = texture2D(tNoise, gp / 120.0 + 0.11).rgb;
+  vec3 baseC = con * 0.86 * (0.82 + 0.34 * nzC.r);   // broad lighter and darker patches: old slabs and newer ones
+  float aaX = fwidth(gp.x) * 0.8 + 0.003, aaY = fwidth(gp.y) * 0.8 + 0.003;
+  float seam = max(gLine(gp.x, 7.5, 0.05, aaX), gLine(gp.y, 7.5, 0.05, aaY));
+  baseC *= 1.0 - 0.55 * seam;
+  float wet = smoothstep(0.6, 0.8, nzA.r * 0.65 + nzB.g * 0.35);
+  wet = mix(wet, max(wet, 0.62 + 0.38 * smoothstep(0.35, 0.7, nzA.r * 0.65 + nzB.g * 0.35)), uRain);
+  baseC *= mix(1.0, 0.62, wet * uRain) * mix(1.0, 0.85, uRain);   // dry concrete stays pale; rain darkens it and fills the low spots
+  wet *= uRain;
+  float paint = max(gLine(gp.x, 60.0, 0.15, aaX), gLine(gp.y, 60.0, 0.15, aaY)) * (0.5 + 0.5 * smoothstep(0.25, 0.6, nzB.b));
+  vec3 paintC = vec3(0.9);
+  diffuseColor.rgb = mix(baseC, paintC, paint);
+  float roadWet = wet;`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+  roughnessFactor = mix(0.86, 0.07, roadWet);
+  roughnessFactor = mix(roughnessFactor, 0.5, paint * (1.0 - roadWet));`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+  totalEmissiveRadiance += paintC * paint * retro(vWP) * 0.05 * uRetroK;`)
+      .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+  #if defined( RE_IndirectSpecular )
+  if (uReflOn > 0.5) {
+    vec2 ruv = vReflC.xy / vReflC.w;
+    vec2 dis = (vec2(nzB.g, nzA.r) - 0.5) * mix(0.03, 0.006, roadWet);
+    vec3 rad0 = radiance * 0.3;   // (dry concrete mirrors nothing)
+    if (uRain > 0.0) { vec2 rp = texture2D(tNoise, gp / 0.9 + vec2(uTime * 1.7, uTime * 1.1)).rg + texture2D(tNoise, gp.yx / 0.6 - vec2(uTime * 1.3, uTime * 2.1)).gr; dis += (rp - 1.0) * 0.006 * uRain; }
+    float lod = mix(5.0, 0.6, roadWet);
+    vec3 refl = vec3(0.0); float wsum = 0.0;
+    for (int k = 0; k < 6; k++) {
+      float o = (float(k) - 1.5) * mix(0.016, 0.004, roadWet);
+      float w = 1.0 - abs(float(k) - 1.5) * 0.15;
+      refl += textureLod(uRefl, ruv + dis + vec2(0.0, o), lod).rgb * w; wsum += w;
+    }
+    radiance = mix(rad0, mix(radiance, refl / wsum, 0.92), roadWet);
+  } else radiance *= 0.3;
+  #endif`);
+  };
+  m.customProgramCacheKey = () => 'nr-pad2';
+  return m;
+}
+
 // Terrain: grass and dirt by world position, rock where it is steep, all dark and damp.
 function terrainMaterial(tex) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
@@ -1484,7 +1557,30 @@ export class World {
   // ---- a new road (v98): a new run, or the highway an exit leads to. Everything built for the old one is dropped.
   // seed: any whole number (a random one if left out); highway: one of HIGHWAYS, or its id (the same one again if left
   // out); opts.entry: the car is coming off another highway's exit, so the entrance ramp is open road behind it.
+  // ---- the open area (v118, the owner: "remove all the roads and features and police and literally just make it so
+  // that when u start u go to a completely open area"). With it on there is no road: nothing of one is built, the
+  // ground is one level sheet of tarmac that rides along under the car (its marks stay where they are in the world),
+  // nothing walls the car in, and "where on the road is this" always answers level ground. The sky, the far hills,
+  // the weather, the mirror in the wet and the car's reflections carry on as before. The road code is all still here.
+  setOpen(on = true) {
+    this.open = !!on;
+    if (on && !this.pad) {
+      this.mat.pad = padMaterial(this.tex);
+      this.pad = new THREE.Mesh(new THREE.PlaneGeometry(7200, 7200).rotateX(-Math.PI / 2), this.mat.pad);
+      this.pad.frustumCulled = false; this.layer(this.pad, false, true); this.group.add(this.pad);
+    }
+    if (this.pad) this.pad.visible = this.open;
+    if (on) {
+      for (const [c, ch] of [...this.chunks]) this.disposeChunk(c, ch);
+      for (const ft of this.features.values()) { this.group.remove(ft.group); ft.disposables.forEach((d) => d.dispose()); }
+      this.features.clear(); this.emitters = []; this.pending = null; this.flying = [];
+      this.onRamp = true; this.onExit = null; this.lastLoc = null;
+      // no lamps out here: the brighter moon of the unlit highways, and paint that throws the headlights back
+      this.nightHemi = 2.1; this.nightMoon = 1.0; this.hemi.intensity = this.nightHemi; this.moon.intensity = this.nightMoon; SHARED.uRetroK.value = 5; this.fogK = 1;
+    }
+  }
   newRoad(seed = (Math.random() * 2 ** 31) | 0, highway = this.road.theme, opts = {}) {
+    if (this.open) { this.offset.x = this.offset.z = 0; this.hint = 0; this.lastLoc = null; this.probeRebase = null; return this.road; }
     for (const [c, ch] of [...this.chunks]) this.disposeChunk(c, ch);
     for (const ft of this.features.values()) { this.group.remove(ft.group); ft.disposables.forEach((d) => d.dispose()); }
     this.features.clear(); this.emitters = []; this.pending = null; this.flying = [];
@@ -1617,6 +1713,7 @@ export class World {
   abs(x, z) { return [x + this.offset.x, z + this.offset.z]; }
   // nearest point on the centreline: sample index (fractional), lateral offset u (+ right), road height and heading
   locate(x, z, hint = this.hint) {
+    if (this.open) return { fi: OPEN_S / DS, s: OPEN_S, u: LANE_CENTERS[1], y: 0, th: 0, g: 0, k: 0 };   // level ground everywhere
     const R = this.road, [ax, az] = this.abs(x, z);
     let best = clamp(Math.round(hint), 0, R.length - 2), bd = Infinity;
     const lo = Math.max(0, best - 60), hi = Math.min(R.length - 2, best + 60);
@@ -1650,6 +1747,7 @@ export class World {
     return { x: p.x - this.offset.x, z: p.z - this.offset.z, yaw: this.road.T[i], y: p.y };
   }
   laneReset(x, z) {
+    if (this.open) return { x, z, yaw: 0 };
     const L = this.locate(x, z), i = Math.round(L.fi);
     // back onto the ramp (the entrance, or an exit) if that is where the car is
     const rp = this.road.rampAt(L.s, 2);
@@ -1666,6 +1764,9 @@ export class World {
   constrain(car, dims, dt) {
     const L = this.locate(car.x, car.z);
     this.hint = L.fi; this.lastLoc = L;
+    // the open area: no walls. (onRamp stays true: to the game that means "the run has not begun", which keeps the
+    // workshop a key away and the road's steering assist off.)
+    if (this.open) { this.onRamp = true; this.onExit = null; return null; }
     const th = L.th, rx = -Math.cos(th), rz = Math.sin(th);
     const sy = Math.sin(car.yaw), cy = Math.cos(car.yaw), fs = Math.sin(th), fc = Math.cos(th);
     let worst = 0, side = 0, cx = 0, cz = 0;
@@ -1741,6 +1842,11 @@ export class World {
     const R = this.road, L = this.locate(st.x, st.z), sCar = L.s;
     this.hint = L.fi;
     this.car = { s: sCar, y: L.y, g: L.g, th: L.th, u: L.u };
+    if (this.open) {
+      // the sheet rides under the car; uPadOff keeps its marks where they are (240 m: a whole number of every pattern's period)
+      this.pad.position.set(st.x, 0, st.z);
+      this.mat.pad.userData.off.value.set(((this.offset.x % 240) + 240) % 240, ((this.offset.z % 240) + 240) % 240);
+    } else {
     R.ensure(Math.ceil((sCar + 3200) / DS));
     if (R.events.length > 400) R.events = R.events.filter((e) => e.s > sCar - 1500);
     // chunks: nearest first; drop the ones far behind. All at once on a new run (burst); while driving, one at a
@@ -1766,6 +1872,7 @@ export class World {
     // (v98) road works: drums knocked flying, and the arrow boards flashing (on for 0.6 s of every 1.1)
     if (this.flying.length) this.updateDrums(dt);
     if (this.mat.arrowLamp) { const on = SHARED.uTime.value % 1.1 < 0.6; if (on !== this.arrowOn) { this.arrowOn = on; this.mat.arrowLamp.color.setRGB(on ? 2.6 : 0.05, on ? 1.5 : 0.028, on ? 0.2 : 0.004); } }
+    }
     // floating origin is handled by the game calling maybeRebase()
     this.horizon.position.set(st.camX, 0, st.camZ);
     this.sky.position.set(st.camX, st.camY, st.camZ);
@@ -1841,6 +1948,7 @@ export class World {
       // (reflPlane: the garage's level floor)
       let p, n;
       if (this.reflPlane) { p = this.reflPlane.p; n = this.reflPlane.n; }
+      else if (this.open) { p = new THREE.Vector3(camera.position.x, 0.01, camera.position.z); n = new THREE.Vector3(0, 1, 0); }
       else {
         const L = this.locate(camera.position.x, camera.position.z);
         const fa = this.road.frameAt(L.fi + 8);
@@ -2297,6 +2405,7 @@ export class World {
   }
   // how far under a tunnel's roof a place along the road is: 0 in the open, 1 well inside (the rain stops with it)
   tunnelCover(s) {
+    if (this.open) return 0;
     const t = this.road.tunnelAt(s);
     return t ? sstep(0, 14, Math.min(s - t.s0, t.s1 - s)) : 0;
   }
@@ -2639,6 +2748,7 @@ export class World {
   }
   // spawn pose on the ramp, s metres along the highway
   rampPose(s = RAMP.sA + 16, rp = this.road.onRamp) {
+    if (this.open) return { x: 0, z: 0, yaw: 0, y: 0, c: 0 };   // the start: the middle of the open area
     this.road.ensure(s / DS + 10);
     const fi = s / DS, f = this.road.frameAt(fi), c = rampC(s, rp), rx = -Math.cos(f.th), rz = Math.sin(f.th);
     this.hint = fi;

@@ -243,6 +243,8 @@ body.is-touch .t-spec .t-actions kbd{display:none}
 .timing h2 i{font-style:italic;color:#ffd84a;letter-spacing:.16em;text-shadow:0 0 10px rgba(255,216,74,.5)}
 .tscore{font-family:var(--f-display);font-weight:800;font-style:italic;font-size:54px;line-height:.95;margin-top:2px;padding-right:.1em;font-variant-numeric:tabular-nums;letter-spacing:.005em;background:linear-gradient(180deg,#ffffff 30%,#9be8ff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px rgba(90,215,255,.35));transform-origin:left center;transition:transform .12s}
 .tscore.bump{transform:scale(1.07)}
+/* v118, the open area: no score, level, fuel, damage, police, exits or road warnings on screen; the run's three numbers stay */
+body.open-area .timing h2,body.open-area .tscore,body.open-area .tlevel,body.open-area #vitals,body.open-area #wanted,body.open-area #exitInd,body.open-area #hwCard,body.open-area #spikeWarn,body.open-area #combo,body.open-area #drift,body.open-area #cc,body.open-area .road-only{display:none!important}
 .tgrid{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:0;margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.12)}
 .tcell{display:flex;flex-direction:column;gap:1px;min-width:0;padding-left:9px;border-left:1px solid rgba(255,255,255,.1)}
 .tcell:first-child{padding-left:0;border-left:0}
@@ -832,8 +834,8 @@ body.is-touch .cc{font-size:22px}
   <section class="t-start" id="tStart">
     <h1 class="t-logo"><span>Night</span><span>Runner</span></h1>
     <nav class="tiles" id="tMenu" aria-label="Main menu">
-      <button type="button" class="tile tile-main" id="startBtn" data-i="0"><i>Play</i><span>Start</span><small>Pick a car and hit the ramp</small></button>
-      <button type="button" class="tile" id="titleSettings" data-i="1"><i>Setup</i><span>Settings</span><small>Traffic · police · sound</small></button>
+      <button type="button" class="tile tile-main" id="startBtn" data-i="0"><i>Play</i><span>Start</span><small>Pick a car and drive</small></button>
+      <button type="button" class="tile" id="titleSettings" data-i="1"><i>Setup</i><span>Settings</span><small>Graphics · gearbox · sound</small></button>
       <button type="button" class="tile" id="titleCredits" data-i="2"><i>Info</i><span>Credits</span><small>Models and sounds</small></button>
     </nav>
     <p class="touch-hint">Hold the arrows to steer and the pedals to drive. Shift with − and +. Hold Brake at a stop to reverse, Gas and Brake together at a stop for a burnout, drag across the view to look around.</p>
@@ -892,7 +894,7 @@ body.is-touch .cc{font-size:22px}
   <div class="page-inner">
     <header class="page-head"><h2 id="settingsTitle">Settings</h2><button type="button" class="t-back" id="closeSettings">← Back</button></header>
     <div class="set-grid">
-      <section class="set-row"><div class="set-k"><b>Traffic</b><small>More cars, more close calls to score, more to hit.</small></div><div class="seg"><button type="button" role="radio" data-set="traffic:light">Light</button><button type="button" role="radio" data-set="traffic:medium">Medium</button><button type="button" role="radio" data-set="traffic:heavy">Heavy</button><button type="button" role="radio" data-set="traffic:extreme">Extreme</button></div></section>
+      <section class="set-row road-only"><div class="set-k"><b>Traffic</b><small>More cars, more close calls to score, more to hit.</small></div><div class="seg"><button type="button" role="radio" data-set="traffic:light">Light</button><button type="button" role="radio" data-set="traffic:medium">Medium</button><button type="button" role="radio" data-set="traffic:heavy">Heavy</button><button type="button" role="radio" data-set="traffic:extreme">Extreme</button></div></section>
       <section class="set-row"><div class="set-k"><b>Mirror</b><small>The rear-view mirror at the top of the screen: your car's nose and everything behind it (V).</small></div><div class="seg"><button type="button" role="radio" data-set="mirror:on">On</button><button type="button" role="radio" data-set="mirror:off">Off</button></div></section>
       <section class="set-row" id="gfxRow"><div class="set-k"><b>Graphics</b><small>Drop a level if the frame rate stutters.</small></div><div class="seg"><button type="button" role="radio" data-set="gfx:2">High</button><button type="button" role="radio" data-set="gfx:1">Medium</button><button type="button" role="radio" data-set="gfx:0">Low</button></div></section>
       <section class="set-row"><div class="set-k"><b>Gearbox</b><small>Manual shifts with + and −, near the redline for a perfect shift.</small></div><div class="seg"><button type="button" role="radio" data-set="gearbox:manual">Manual</button><button type="button" role="radio" data-set="gearbox:auto">Automatic</button></div></section>
@@ -929,13 +931,13 @@ body.is-touch .cc{font-size:22px}
     <button class="tool panel" id="btnGarage" title="Workshop (B)"><span>Workshop</span><kbd>B</kbd></button>
     <button class="tool panel" id="btnCam" title="Change camera (C)"><span>Cam<span class="lbl-long">era</span></span><kbd>C</kbd></button>
     <button class="tool panel" id="btnSound" title="Sound on or off (M)"><span id="soundLbl">Sound</span><kbd>M</kbd></button>
-    <button class="tool panel" id="btnReset" title="New run from the ramp (R)"><span>New run</span><kbd>R</kbd></button>
+    <button class="tool panel" id="btnReset" title="Back to the start (R)"><span>Restart</span><kbd>R</kbd></button>
     <button class="tool panel" id="btnGfx" title="Graphics quality (Q)"><span id="gfxLbl">High</span><kbd>Q</kbd></button>
     <button class="tool panel" id="btnSettings" title="Settings"><span>Settings</span></button>
     <button class="tool panel" id="btnCredits" title="Credits"><span>Credits</span></button>
   </div>
   <button type="button" class="pausebtn" id="pauseBtn" aria-label="Pause"><i></i><i></i></button>
-  <button type="button" class="ramp-garage" id="rampGarage" title="Workshop (B), while you're on the ramp" aria-label="Workshop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M7 20v-7h10v7M7 15.5h10M7 18h10"/></svg><b><i>Tune</i><span>Workshop</span></b><kbd>B</kbd></button>
+  <button type="button" class="ramp-garage" id="rampGarage" title="Workshop (B)" aria-label="Workshop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M7 20v-7h10v7M7 15.5h10M7 18h10"/></svg><b><i>Tune</i><span>Workshop</span></b><kbd>B</kbd></button>
   <div class="cluster" id="cluster">
     <div class="shiftnote" id="shiftNote"></div>
     <div class="vitals" id="vitals" title="Fuel: fill up at a gas station. Damage: at 100% the car is wrecked."><span>Fuel</span><i class="vbar fuel" id="vFuel"><b></b></i><span>Damage</span><i class="vbar dmg" id="vDmg"><b></b></i></div>
@@ -953,7 +955,7 @@ body.is-touch .cc{font-size:22px}
     <dt><kbd>T</kbd></dt><dd>Traction control (off to drift)</dd>
     <dt><kbd>G</kbd></dt><dd>Manual / automatic</dd>
     <dt><kbd>C</kbd></dt><dd>Camera</dd>
-    <dt><kbd>R</kbd></dt><dd>New run</dd>
+    <dt><kbd>R</kbd></dt><dd>Back to the start</dd>
     <dt><kbd>B</kbd></dt><dd id="keyB">Workshop (on the ramp)</dd>
     <dt><kbd>M</kbd></dt><dd>Sound on / off</dd>
     <dt><kbd>N</kbd></dt><dd>Music on / off</dd>
@@ -987,7 +989,7 @@ body.is-touch .cc{font-size:22px}
     <h2 class="pause-title" id="pauseTitle">Paused</h2>
     <nav class="pause-menu" id="pauseMenu">
       <button type="button" data-p="resume"><span>Resume</span><kbd>Esc</kbd></button>
-      <button type="button" data-p="reset"><span>New run</span><kbd>R</kbd></button>
+      <button type="button" data-p="reset"><span>Back to the start</span><kbd>R</kbd></button>
       <button type="button" data-p="settings"><span>Settings</span></button>
       <button type="button" data-p="credits"><span>Credits</span></button>
     </nav>
@@ -1208,7 +1210,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?v=116';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?v=118';
 import { createGarage, GARAGE_SPEC } from './garage.js';
 import { createShowroom, TOWER } from './showroom.js?v=115';
 import { setChameleon } from './paintfx.js?v=111';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
@@ -2110,6 +2112,14 @@ function syncAA() {
 // the wet-road and water reflections and the car's reflection probe.
 const world = new World({ renderer, scene, camera, base: './' });
 const traffic = new Traffic({ renderer, scene, world, base: './' });
+// v118, the owner: "I dont actually love the game itself like the highway driving and the police ... can u remove all
+// the roads and features and police and literally just make it so that when u start u go to a completely open area".
+// OPEN: the run is one level sheet of tarmac to the horizon (world.setOpen). No road is built, no traffic, no police,
+// no exits, speed traps, road works, fuel or damage, and no score. The cars, the workshop and the collection are as
+// they were. Everything the highway game was is still in this file behind this one switch (and in dev/ backups), for
+// whatever of it the racing game that comes next wants back.
+const OPEN = true;
+if (OPEN) { world.setOpen(true); traffic.empty = true; document.body.classList.add('open-area'); }
 // the pursuit's spike strips and the rear-view mirror (pursuit.js)
 const spikes = new SpikeStrips({ scene, world });
 const mirror = new Mirror(renderer, scene, { samples: isTouch ? 0 : 4 });
@@ -3987,7 +3997,7 @@ CAR_DEFS.hc = {
   calipers: true,
 };
 const LIVE = new Set(['amg', 'i8', 'zl1', 'hc', 'supra', 'csl', 'c7', 'gtr', 'cgt', 'viper', 'fl5', 'eclipse', 'nsx', 'r8', 'x5', 'miata', 'svj', 'gt3', 'mcl', 's2k', 'f812', 'e92', 'r34', 'a90']);   // the Charger is the police car, not one you drive
-const COPS_LIVE = true;
+const COPS_LIVE = !OPEN;
 // the Heat / Police badge sits centred just under the toolbar, so it never covers the buttons at any window width
 // (the toolbar only shows while driving, so it is measured then, and again after a resize)
 let wantedTop = 0;
@@ -6831,7 +6841,8 @@ function resetCar(quiet) {
   // v98, the owner: "the roads need to always be random". Every new run is a road nobody has driven, on one of the
   // five highways. (Not when the garage is opened from the ramp: that only puts the car back at the foot of the
   // road it is on.)
-  if (quiet !== true) { world.newRoad(undefined, pickHighway(null)); traffic.applyDensity?.(); highwayCard(world.road.theme, 'Starting on', 3.2); }
+  if (quiet !== true && OPEN) world.newRoad();
+  else if (quiet !== true) { world.newRoad(undefined, pickHighway(null)); traffic.applyDensity?.(); highwayCard(world.road.theme, 'Starting on', 3.2); }
   hwy.count = 0; hwy.phase = ''; hwy.exit = null; $('roadFade').style.opacity = 0; $('exitInd').hidden = true;
   const p = world.rampPose();
   car.reset(p.x, p.z, p.yaw);
@@ -6849,7 +6860,7 @@ function resetCar(quiet) {
   nitro.charge = 1; nitro.burn = 0; nitro.purge = 0;
   world.updateProbe(p.x, roadY, p.z, true);
   renderTiming();
-  if (quiet !== true) toast('New run');
+  if (quiet !== true) toast(OPEN ? 'Back at the start' : 'New run');
 }
 // ---------------------------------------------------------------- nitrous (v39)
 // The user: "the option to add a nitrous purge to the Z06 and the Miata ... hit the button B to get a blow off of the
@@ -6933,7 +6944,7 @@ function updateNitroHud() {
   const el = $('tnos'); el.hidden = !fitted; el.classList.toggle('ready', mode === 'ready'); el.classList.toggle('burn', mode === 'burn');
   $('tnosFill').style.width = pct + '%';
   const b = $('nosBtn'); b.hidden = !fitted; b.classList.toggle('ready', mode === 'ready');
-  $('keyB').textContent = nitroFitted() ? 'NO2 · workshop on the ramp' : 'Workshop (on the ramp)';   // (v110, the owner: "make sure everywhere you click to go to the workshop it says workshop not garage")
+  $('keyB').textContent = OPEN ? (nitroFitted() ? 'NO2 · workshop when stopped' : 'Workshop') : nitroFitted() ? 'NO2 · workshop on the ramp' : 'Workshop (on the ramp)';   // (v110, the owner: "make sure everywhere you click to go to the workshop it says workshop not garage")
 }
 function setWeather(w) { state.weather = w; store.set('weather', w); world.setWeather(w); syncSettings(); }
 function setTrafficLevel(k) { state.traffic = k; store.set('traffic', k); traffic.setDensity(k); syncSettings(); }
@@ -11065,7 +11076,7 @@ function levelUp(lv) {
   $('hwCard').classList.add('show'); hwy.cardT = 4.2; audio.chime(7); syncLocks();
 }
 function gain(n) {
-  if (!(n > 0)) return;
+  if (OPEN || !(n > 0)) return;   // (v118: nothing scores in the open area)
   state.score += n; prog.xp += n; prog.dirty = true;
   if (state.score > state.bestScore) state.bestScore = state.score;
   const lv = levelOf(prog.xp); if (lv > prog.level) { prog.level = lv; levelUp(lv); }
@@ -11352,6 +11363,7 @@ function buildCopModel(r) {
   return { body, wheels };
 }
 function prepCops() {
+  if (!COPS_LIVE) return Promise.resolve(null);   // (v118: no police, so their car is not fetched)
   copFleet.loading ||= ensureRig('chg').then((r) => setupCopRig(r)).catch((e) => { console.warn('police car did not load', e); copFleet.loading = null; });
   return copFleet.loading;
 }
@@ -11675,8 +11687,7 @@ function frameInner(now) {
     state.wasBurnout = car.burnout;
     updateEffects(dt);
     if (!state.over) { updateDrift(dt); updateScore(dt); }
-    highwayUpdate(dt, dtReal);
-    vitalsUpdate(dt);
+    if (!OPEN) { highwayUpdate(dt, dtReal); vitalsUpdate(dt); }
   } else if (state.garage) updateGarageRev(dt);
   const live = state.driving && !state.garage;
   const alpha = live ? acc / STEP : 1;
@@ -11713,7 +11724,7 @@ function frameInner(now) {
   {
     const W = world.car, fx = playerLampFx();
     policeUpdate(dt);
-    hazardWarning(dt, world.lastLoc);
+    if (!OPEN) hazardWarning(dt, world.lastLoc);
     traffic.update(state.ready ? dt : 0, { loc: W, camera, garage: state.garage, room: roomUp(), speedAlong: Math.max(0, car.vx * Math.cos(car.yaw - roadTh)), playerLamps: fx.lamps, playerPool: fx.pool, playerBeams: playerBeams() });
     updateCopVisuals(dt);
     spikes.show(!roomUp());
@@ -11780,7 +11791,7 @@ function startDriving() {
   audio.start();
   syncButtons(); renderTiming();
   canvas.focus({ preventScroll: true });
-  highwayCard(world.road.theme, 'Starting on', 3.4);
+  if (!OPEN) highwayCard(world.road.theme, 'Starting on', 3.4);
 }
 function openCredits() { $('credits').hidden = false; $('closeCredits').focus(); }
 function closeCredits() { $('credits').hidden = true; if (state.paused) $('pauseMenu').querySelector('[data-p="credits"]').focus({ preventScroll: true }); else canvas.focus({ preventScroll: true }); }

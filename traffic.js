@@ -817,9 +817,13 @@ export class Traffic {
     p.active = !ctx.garage; p.s = L.s; p.u = W.road.unsqueeze(L.s, L.u);   // (v100: in lane terms, where the lanes are squeezed)
     p.v = ctx.speedAlong; p.front = 2.3; p.rear = 2.3;
     p.lanes = []; for (let k = 0; k < 4; k++) if (Math.abs(p.u - LANE_CENTERS[k]) < 2.9) p.lanes.push(k);
-    if (!this.populated) { this.populate(L.s, true); this.populated = true; }
-    this.spawnTimer -= dt; if (this.spawnTimer <= 0) { this.spawnTimer = 0.25; this.populate(L.s); }
-    this.syncClosures(L.s);
+    // (v118) empty: the open area. Nobody else is about; this still draws the player's own beams and lamp glow.
+    if (this.empty) { if (this.vehicles.length) this.vehicles = []; }
+    else {
+      if (!this.populated) { this.populate(L.s, true); this.populated = true; }
+      this.spawnTimer -= dt; if (this.spawnTimer <= 0) { this.spawnTimer = 0.25; this.populate(L.s); }
+      this.syncClosures(L.s);
+    }
     const sub = Math.min(dt, 0.05);
     for (const veh of this.vehicles) this.updateVehicle(veh, sub);
     this.blink = (this.blink + dt) % 0.8;
