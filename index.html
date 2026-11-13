@@ -2120,6 +2120,10 @@ const traffic = new Traffic({ renderer, scene, world, base: './' });
 // whatever of it the racing game that comes next wants back.
 const OPEN = true;
 if (OPEN) { world.setOpen(true); traffic.empty = true; document.body.classList.add('open-area'); }
+// v119, the owner: "make it daytime remove the rain". DAY: a clear blue afternoon (world.setDay): the sun and the car's
+// shadow under it, no rain, and the car's headlight beams off (its lamps still show lit, as running lights do).
+const DAY = OPEN;
+if (DAY) world.setDay(true);
 // the pursuit's spike strips and the rear-view mirror (pursuit.js)
 const spikes = new SpikeStrips({ scene, world });
 const mirror = new Mirror(renderer, scene, { samples: isTouch ? 0 : 4 });
@@ -2683,13 +2687,13 @@ function playerLampFx() {
   if (!rig || !carRoot.visible) return { lamps: null, pool: null };
   const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw), smoked = rig.tailScale ?? 1;
   const b = rig.bounds, dist = -b.min.z + 2.3;
-  const pool = { x: car.x - fx * dist, y: roadY, z: car.z - fz * dist, yaw: car.yaw, pitch: -Math.atan(roadG) * Math.cos(car.yaw - roadTh), g: (0.025 + 0.2 * brakeGlow) * smoked };
+  const pool = { x: car.x - fx * dist, y: roadY, z: car.z - fz * dist, yaw: car.yaw, pitch: -Math.atan(roadG) * Math.cos(car.yaw - roadTh), g: DAY ? 0 : (0.025 + 0.2 * brakeGlow) * smoked };   // (no red glow on the ground in sunlight)
   return { lamps: null, pool };
 }
 // the player's headlight beams in the air (drawn with the traffic's beams)
 const beamTmp = new THREE.Vector3();
 function playerBeams() {
-  if (!rig || !carRoot.visible || !state.headOn || state.gfx < 1 || (state.cam >= 2 && state.driving && !state.garage)) return null;
+  if (DAY || !rig || !carRoot.visible || !state.headOn || state.gfx < 1 || (state.cam >= 2 && state.driving && !state.garage)) return null;
   const col = headSpots[0].color, k = 1.15;
   return headSpots.map((l) => { l.getWorldPosition(beamTmp); return { x: beamTmp.x, y: beamTmp.y, z: beamTmp.z, yaw: car.yaw, pitch: -Math.atan(roadG) * Math.cos(car.yaw - roadTh) + 0.03, r: 3.0, len: 30, c: [col.r * k, col.g * k, col.b * k] }; });
 }
@@ -5749,7 +5753,7 @@ function applyMods() {
     for (const mesh of r.kinds.drl || []) mesh.visible = !on;                       // the round rings make way for the squared ones
     if (on) for (const mat of r.lamps.head) mat.emissiveIntensity = 0;              // the housing stays dark: the rings, the strip and the projectors are the light
   }
-  for (const l of headSpots) l.intensity = state.headOn && !state.garage ? 820 : 0;
+  for (const l of headSpots) l.intensity = state.headOn && !state.garage && !DAY ? 820 : 0;   // (v119: no beams by day)
   // the GT-R's centre rear fog lamp
   for (const mesh of r.kinds.fog || []) mesh.visible = m.fog !== 'off';
   placeHeadlights();
@@ -6786,7 +6790,7 @@ const state = {
   vmax: 0, bestDrift: store.get('bestDrift', 0),
   damage: 0, fuel: 1, fuelWarned: false,   // (v101) how wrecked the car is (0..1) and how full its tank (1..0)
   score: 0, distPts: 0, bestScore: store.get('bestScore', 0), combo: 0, comboT: 0,
-  weather: 'rain' /* always raining since v27.2 (the user's call): no toggle */, traffic: TRAFFIC_LEVELS[store.get('traffic', 'light')] ? store.get('traffic', 'light') : 'light',
+  weather: DAY ? 'clear' : 'rain' /* always raining since v27.2 (the user's call): no toggle; v119: dry by day */, traffic: TRAFFIC_LEVELS[store.get('traffic', 'light')] ? store.get('traffic', 'light') : 'light',
 };
 const camPrev = new THREE.Vector3(), camVel = new THREE.Vector3();
 const drift = { active: false, points: 0, time: 0, idle: 0, mult: 1, angle: 0 };
@@ -8086,8 +8090,8 @@ function updateWorld(dt, x, z, yaw) {
   if (carShadow.visible) { const b = rig.bounds; carShadow.scale.set((b.max.x - b.min.x) * 1.3, (b.max.z - b.min.z) * 1.1, 1); carShadow.position.set(x, roadY + 0.03, z); carShadow.rotation.y = yaw; }
   world.lightsDim = room ? 0 : 1;
   world.hemi.intensity = room ? (SR.on ? 0.7 : 1.2) : world.nightHemi ?? 0.6;   // (v103: the workshop a little brighter, its kit along the walls stands far from the work lights)   // (v98: nightHemi and nightMoon, the highway's own night)
-  world.hemi.color.set(room ? 0xb8c4d6 : 0x25245a); world.hemi.groundColor.set(room ? 0x1a1c22 : 0x0a0710);
-  world.moon.intensity = room ? 0.08 : world.nightMoon ?? 0.32;
+  world.hemi.color.set(room ? 0xb8c4d6 : world.hemiSky ?? 0x25245a); world.hemi.groundColor.set(room ? 0x1a1c22 : world.hemiGround ?? 0x0a0710);
+  world.moon.intensity = room ? (world.day ? 0 : 0.08) : world.nightMoon ?? 0.32;   // (v119: by day it is the sun, and the sun does not shine into the workshop)
   scene.background.set(room ? 0x000000 : 0x02030a);
 }
 // The car against the barriers: a wall hit kicks the camera, throws sparks and makes a noise.

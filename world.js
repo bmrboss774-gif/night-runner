@@ -1086,14 +1086,34 @@ function waterMaterial(tex) {
 // ---------------------------------------------------------------- night sky
 function skyMaterial() {
   return new THREE.ShaderMaterial({
-    uniforms: { uMoon: { value: new THREE.Vector3(-0.45, 0.42, 0.79).normalize() }, uTime: SHARED.uTime, uRain: SHARED.uRain, uHorizon: { value: new THREE.Color(0x121432) }, uZenith: { value: new THREE.Color(0x02020c) }, uGlow: { value: new THREE.Color(0x4a1e3a) } },
+    uniforms: { uMoon: { value: new THREE.Vector3(-0.45, 0.42, 0.79).normalize() }, uTime: SHARED.uTime, uRain: SHARED.uRain, uDay: { value: 0 }, uHorizon: { value: new THREE.Color(0x121432) }, uZenith: { value: new THREE.Color(0x02020c) }, uGlow: { value: new THREE.Color(0x4a1e3a) } },
     vertexShader: /* glsl */`varying vec3 vDir; void main() { vDir = (modelMatrix * vec4(position, 0.0)).xyz; gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); gl_Position.z = gl_Position.w; }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uMoon; uniform float uTime; uniform float uRain; uniform vec3 uHorizon; uniform vec3 uZenith; uniform vec3 uGlow; varying vec3 vDir;
+      uniform vec3 uMoon; uniform float uTime; uniform float uRain; uniform vec3 uHorizon; uniform vec3 uZenith; uniform vec3 uGlow; uniform float uDay; varying vec3 vDir;
+      float h2s(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h2s(i), h2s(i + vec2(1.0, 0.0)), f.x), mix(h2s(i + vec2(0.0, 1.0)), h2s(i + vec2(1.0, 1.0)), f.x), f.y); }
+      float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int k = 0; k < 5; k++) { s += a * vn(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
       float h3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       void main() {
         vec3 d = normalize(vDir);
         float h = d.y;
+        // (v119) day: blue overhead paling to haze at the horizon (uHorizon is the fog's colour too, so the ground runs
+        // into it without a line), the sun (uMoon is its direction) with its glare, and a few high, thin clouds drifting
+        if (uDay > 0.5) {
+          vec3 col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.55));
+          float sd = max(dot(d, uMoon), 0.0);
+          col += vec3(1.0, 0.86, 0.66) * (pow(sd, 8.0) * 0.1 + pow(sd, 90.0) * 0.35 + pow(sd, 1400.0) * 1.6);
+          col += vec3(1.0, 0.97, 0.9) * smoothstep(0.99990, 0.99996, sd) * 30.0;
+          if (h > 0.0) {
+            vec2 cp = d.xz / (h + 0.12) * 1.5 + vec2(uTime * 0.004, uTime * 0.0015);
+            float c = smoothstep(0.6, 0.92, fbm(cp) * 0.75 + fbm(cp * 3.1 + 7.0) * 0.25 + 0.06) * smoothstep(0.02, 0.22, h);
+            col = mix(col, vec3(1.0, 1.0, 1.02) * (0.86 + 0.5 * pow(sd, 6.0)), c * 0.7);
+          }
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          return;
+        }
         vec3 col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.45));
         // light pollution: a warm haze low on the horizon, strongest toward the city behind
         float az = atan(d.x, d.z);
@@ -1578,6 +1598,27 @@ export class World {
       // no lamps out here: the brighter moon of the unlit highways, and paint that throws the headlights back
       this.nightHemi = 2.1; this.nightMoon = 1.0; this.hemi.intensity = this.nightHemi; this.moon.intensity = this.nightMoon; SHARED.uRetroK.value = 5; this.fogK = 1;
     }
+  }
+  // ---- daytime (v119, the owner: "make it daytime remove the rain"). The moon's light becomes the sun: higher, warm
+  // white, strong, and the one light out here that throws a shadow (a tight box round the car, so its shadow is
+  // sharp); the sky turns blue (skyMaterial's day branch), the haze pales, the far hills fade to blue and the town's
+  // lights go out. The game takes its light levels and the sky light's colours from the values set here.
+  setDay(on = true) {
+    this.day = !!on;
+    if (!on) return;
+    this.moonDir.set(-0.42, 0.74, 0.52).normalize();
+    const U = this.sky.material.uniforms;
+    U.uDay.value = 1; U.uMoon.value.copy(this.moonDir); U.uHorizon.value.set(0xb4cbe6); U.uZenith.value.set(0x1c5acb);
+    this.fogClear = new THREE.Color(0xb4cbe6); this.fogRain = new THREE.Color(0xa9b4c2); this.fogK = 0.5;
+    this.moon.color.set(0xfff3e2); this.nightMoon = 4.6; this.nightHemi = 1.5; this.hemiSky = 0xbdd4ff; this.hemiGround = 0x8f897e;
+    this.moon.intensity = this.nightMoon; this.hemi.intensity = this.nightHemi; this.hemi.color.set(this.hemiSky); this.hemi.groundColor.set(this.hemiGround);
+    this.moon.castShadow = true;
+    const sh = this.moon.shadow, c = sh.camera;
+    sh.mapSize.set(2048, 2048); c.left = -7; c.right = 7; c.top = 7; c.bottom = -7; c.near = 20; c.far = 110; c.updateProjectionMatrix(); sh.bias = -0.0004; sh.normalBias = 0.02;
+    if (this.pad) this.pad.receiveShadow = true;
+    const [far, near, lights] = this.horizon.children;
+    far.material.color.set(0x91abcd); near.material.color.set(0x7b96b8); lights.visible = false;
+    SHARED.uRetroK.value = 0;   // paint does not throw headlights back in daylight
   }
   newRoad(seed = (Math.random() * 2 ** 31) | 0, highway = this.road.theme, opts = {}) {
     if (this.open) { this.offset.x = this.offset.z = 0; this.hint = 0; this.lastLoc = null; this.probeRebase = null; return this.road; }
