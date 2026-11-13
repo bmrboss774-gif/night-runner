@@ -4,7 +4,7 @@
 //    at speed they stretch into the streaks you see through a windscreen. Drops in your headlights glint.
 // (The rings that popped on the road where drops landed were taken out in v27.2 at the user's request.)
 import * as THREE from 'three';
-import { SHARED } from './world.js?b=d06c7df3b2';
+import { SHARED } from './world.js?b=8d0cf4843c';
 
 const BOX = new THREE.Vector3(70, 34, 70);
 // the drops drift along with the camera by this share of its speed (sideways and forwards, not up and down), so at

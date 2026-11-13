@@ -6,7 +6,7 @@
 // bridges, retroreflective paint, markers and signs that light up in the headlights, a wet road and open
 // water with planar reflections, and a live reflection probe that rides with the car for its paint.
 import * as THREE from 'three';
-import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=d06c7df3b2';   // (v122) the mountain circuit
+import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=8d0cf4843c';   // (v122) the mountain circuit
 
 // ---------------------------------------------------------------- layout (metres; u = lateral offset, + = right of the median)
 const DS = 2, CHUNK = 50, CH_LEN = DS * CHUNK;
@@ -621,6 +621,7 @@ class Road {
 }
 
 // ---------------------------------------------------------------- textures
+const HALF = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? '_h' : '';   // (v126) phones and tablets take the road scans at half size
 function loadTex(url, { srgb = true, repeat = true, aniso = 8, mgr } = {}) {
   const t = new THREE.TextureLoader(mgr).load(url);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -916,75 +917,82 @@ function alpineMaterial(tex) {
 // The circuit's surface, one strip rail to rail: tarmac with a darker, rubbered line down its middle, a white line
 // along each edge, red-and-white kerbs on the inside of the corners, a chequered band at the start, and the mountain's
 // grass from the tarmac's edge out to the rails. uv = (metres right of the centre line, metres round the lap).
-// v125, the owner sent sketchfab.com/3d-models/road-texture-68131a487ace4005963ccb0dccabe2af: the tarmac is that
-// picture now. It is laid by the track's own measure, not by the map: across, its two worn edge lines sit 0.55 m inside
-// the tarmac's edges with its dashed line down the middle; along, it repeats a whole number of times a lap (`len`
-// metres each, about 37.7), so the dashes meet at the line. Its relief and roughness go with it. Seen close, the grain
-// of the scanned road (v124) is worked into it; the wear of v124 (patches, cracks, tyre marks, dust) is laid over it.
+// v126, the owner: "I have a project in blender with a couple models as to what i want the roads to look like in terms
+// of texture and detail. I really want the roads to be extrmely high resolution and quality". The road is those scans:
+//  - the tarmac is "Scan Broken road white": cracked and patched, tar and white filler in the cracks, stone showing
+//    through. Laid by the track's own measure (metres across, metres round the lap) so its joints run with the road,
+//    at its real size. One tile is 6 x 2.5 m, so a second copy of it, turned a quarter turn and a third larger, is
+//    mixed in by a slow noise: no patch of road is the same as the next and no row of joints runs on for ever.
+//  - the shoulders are "Scan Small rock road old": 1.6 m of loose stone beside the tarmac (beyond the kerb where there
+//    is one), its grassy side outwards, running out raggedly into the meadow.
+//  - both carry their own relief (normal maps baked from the scans' shapes), so the sun picks out every stone.
+// Over the tarmac: worn white edge lines and a worn double yellow centre line (as on the road in the owner's project),
+// thinnest where the scan is cracked; rubber on the racing line and through the corners; dust at the edges.
+// Vertex attribute aFwd = the road's direction on the ground (sin, cos of its heading), for laying the relief.
 function trackMaterial(tex, L = 3962) {
-  const reps = Math.round(L / 37.82), ROADW = 2 * 7.95 / 0.8408;   // (the picture's lines are 0.8408 of its width apart: that much is 15.9 m here)
-  for (const t of [tex.trackRoad, tex.trackRoadN, tex.trackRoadR]) { t.flipY = false; t.repeat.set(1 / ROADW, reps / L); t.offset.set(0.5005, 0); t.needsUpdate = true; }
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0, envMapIntensity: 0.3, map: tex.trackRoad, normalMap: tex.trackRoadN, roughnessMap: tex.trackRoadR, normalScale: new THREE.Vector2(0.65, 0.65) });
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, metalness: 0, envMapIntensity: 0.3 });
+  const TW = 6.055, TH = 2.451, GW = 8.337, GH = 1.621, repA = Math.round(L / TW), repB = Math.round(L / (TH * 1.31)), repG = Math.round(L / GW);
   m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.trackMeadow }, tAsph: { value: tex.trackAsphalt } });
+    Object.assign(shader.uniforms, { tGrass: { value: tex.grass }, tRock: { value: tex.rock }, tNoise: SHARED.uNoise, tMeadow: { value: tex.trackMeadow }, tTar: { value: tex.trackTarmac }, tTarN: { value: tex.trackTarmacN }, tGrv: { value: tex.trackGravel }, tGrvN: { value: tex.trackGravelN } });
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aKerb; varying vec3 vWP; varying vec2 vRoad; varying float vKerb;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoad = uv; vKerb = aKerb;');
+      .replace('#include <common>', '#include <common>\nattribute float aKerb; attribute vec2 aFwd; varying vec3 vWP; varying vec2 vRoad; varying float vKerb; varying vec2 vFwd; varying vec3 vGN;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRoad = uv; vKerb = aKerb; vFwd = aFwd; vGN = objectNormal;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vWP; varying vec2 vRoad; varying float vKerb; uniform sampler2D tAsph;\n${ALPINE_GLSL}\nfloat aRough; float aTar;\nfloat h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWP; varying vec2 vRoad; varying float vKerb; varying vec2 vFwd; varying vec3 vGN; uniform sampler2D tTar; uniform sampler2D tTarN; uniform sampler2D tGrv; uniform sampler2D tGrvN;\n${ALPINE_GLSL}\nfloat aRough; vec3 aWN; float aRelief;`)
       .replace('#include <map_fragment>', `#include <map_fragment>
   {
-    // v124, the owner: "their should be imperfections in the road". The tarmac is a scan of real worn road, and on it:
-    // squares of newer, darker tarmac where it has been dug up and patched; cracks, some of them sealed with tar;
-    // black tyre marks through the corners; oil spots; dust washed in along the edges; an edge that wanders; and
-    // paint (lines, kerbs, the start) that is worn, chipped and scuffed with rubber.
-    float u = vRoad.x, s = vRoad.y, au = abs(u), aa = fwidth(u) * 0.8 + 0.004;
+    float u = vRoad.x, s = vRoad.y, au = abs(u), aa = fwidth(u) * 0.8 + 0.004, sg = sign(u);
     const float HW = ${TRACK.HW.toFixed(2)};
+    vec3 F = normalize(vec3(vFwd.x, 0.0, vFwd.y)), R = vec3(-F.z, 0.0, F.x);
     vec3 nzA = texture2D(tNoise, vWP.xz / 33.0).rgb, nzB = texture2D(tNoise, vWP.xz / 6.0 + 0.37).rgb, nzC = texture2D(tNoise, vWP.xz / 1.3 + 0.11).rgb;
-    // (diffuseColor is the road picture here: map_fragment has just read it)
-    float grain = dot(mix(texture2D(tAsph, vWP.xz / vec2(3.08, 1.84)).rgb, texture2D(tAsph, rot2(vWP.xz, 0.9) / vec2(8.3, 4.95) + 0.21).rgb, 0.4), vec3(0.333)) / 0.25;
-    vec3 asp = diffuseColor.rgb * 1.7 * (0.55 + 0.45 * grain) * (0.82 + 0.36 * nzA.r);
-    // patches: one in six of the 31 m x 5.5 m squares the road divides into has a rectangle of newer tarmac in it
-    vec2 cell = vec2(floor(s / 31.0), floor((u + 22.0) / 5.5)), cf = vec2(fract(s / 31.0), fract((u + 22.0) / 5.5));
-    float px0 = 0.1 + 0.3 * h21(cell + 3.1), px1 = 0.5 + 0.42 * h21(cell + 7.7), pin = step(h21(cell), 0.17) * step(px0, cf.x) * step(cf.x, px1) * step(0.08, cf.y) * step(cf.y, 0.93);
-    float pedge = pin * (1.0 - smoothstep(0.0, 0.012, min(min(cf.x - px0, px1 - cf.x) * 31.0 / 5.5, min(cf.y - 0.08, 0.93 - cf.y))));
-    asp *= mix(1.0, 0.66 + 0.22 * h21(cell + 1.3), pin);
-    // cracks along the wandering contours of a noise, only in some stretches; the wider ones filled with tar
-    // (each line's width is held to a few centimetres whatever the noise is doing there: its distance from the contour is the
-    // difference in value over how fast the value changes)
-    float cn = texture2D(tNoise, vWP.xz / 4.7 + 0.5).r, sn = texture2D(tNoise, vWP.xz / 9.3 + 0.2).r, px = max(fwidth(vWP.x), fwidth(vWP.z));
-    float cd = abs(cn - 0.47) / max(fwidth(cn) / px, 0.02), sd = abs(sn - 0.55) / max(fwidth(sn) / px, 0.01);
-    float crack = (1.0 - smoothstep(0.006, 0.014 + px, cd)) * smoothstep(0.5, 0.6, nzA.r) * (1.0 - smoothstep(0.02, 0.08, px));
-    float snake = (1.0 - smoothstep(0.022, 0.034 + px, sd)) * smoothstep(0.55, 0.66, nzA.g) * (1.0 - smoothstep(0.04, 0.16, px));
-    snake = max(snake, pedge);
-    asp = mix(asp, vec3(0.02), crack * 0.75);
-    asp = mix(asp, vec3(0.035), snake * 0.8);
-    // rubber: the line the cars take, and long black streaks through the corners
+    // the tarmac: two layers of the scan. A: its length along the road. B: turned a quarter turn, 1.31 times the size.
+    vec2 uvA = vec2(s * ${(repA / L).toFixed(8)}, u / ${TH.toFixed(3)} + 0.5), uvB = vec2(u / ${(TW * 1.31).toFixed(3)} + 0.37, s * ${(repB / L).toFixed(8)} + 0.19);
+    float mixB = smoothstep(0.46, 0.54, texture2D(tNoise, vec2(u, s) / 41.0 + 0.3).r * 0.7 + texture2D(tNoise, vec2(u, s) / 9.0).g * 0.3);
+    vec3 cA = texture2D(tTar, uvA).rgb, cB = texture2D(tTar, uvB).rgb, nA = texture2D(tTarN, uvA).xyz * 2.0 - 1.0, nB = texture2D(tTarN, uvB).xyz * 2.0 - 1.0;
+    vec3 asp = mix(cA, cB, mixB) * 0.86 * (0.84 + 0.32 * nzA.r);
+    vec3 wnTar = mix(vec3(nA.x, nA.y, 0.0).x * F + nA.y * R, nB.x * R + nB.y * F, mixB);          // the relief's lean over the ground: image +U and +V are (F, R) for A and (R, F) for B
+    float lum = dot(asp, vec3(0.333));
+    float tarRough = mix(0.52, 0.9, smoothstep(0.03, 0.16, lum));                                   // tar and the dark of the cracks shine; dry stone does not
+    // rubber, stains, dust
     asp *= 1.0 - 0.2 * smoothstep(5.6, 1.6, au) * (0.55 + 0.45 * nzA.g);
     float marks = smoothstep(0.52, 0.74, texture2D(tNoise, vec2(u / 1.15, s / 57.0)).g) * smoothstep(7.2, 3.5, au) * (0.3 + 0.7 * min(1.0, abs(vKerb)));
-    asp *= 1.0 - 0.42 * marks;
-    asp *= 1.0 - 0.2 * smoothstep(0.55, 0.8, nzB.r) * smoothstep(0.5, 0.7, nzA.g);                             // oil and stains: soft, dark patches
-    asp = mix(asp, vec3(0.19, 0.165, 0.13) * (0.6 + 0.8 * nzC.g), smoothstep(HW - 1.5, HW - 0.1, au) * 0.42 * nzB.g);   // dust and grit by the edges
-    float worn = 0.45 + 0.55 * smoothstep(0.28, 0.6, nzC.b) * step(0.16, nzB.b + nzC.g * 0.3);                  // paint: thin in places, gone in chips
-    float line = 0.0;   // (v125: the lines are in the road's own picture)
-    vec3 road = asp;
-    float chk = step(0.0, s) * step(s, 2.4) * step(au, HW - 0.5);                                                // start and finish
-    road = mix(road, mix(asp, mod(floor(u / 0.6) + floor(s / 0.6), 2.0) < 0.5 ? vec3(0.8) : vec3(0.03), worn), chk);
-    float onKerb = step(HW, au) * (1.0 - smoothstep(HW + 1.4 - aa, HW + 1.4 + aa, au)) * step(0.5, -sign(u) * vKerb);
+    asp *= 1.0 - 0.34 * marks;
+    asp = mix(asp, vec3(0.19, 0.165, 0.13) * (0.6 + 0.8 * nzC.g), smoothstep(HW - 1.3, HW - 0.05, au) * 0.4 * nzB.g);
+    // paint, worn: least where the scan is cracked (dark) or its stones stand proud (bright)
+    float worn = (0.4 + 0.6 * smoothstep(0.3, 0.62, nzC.b)) * step(0.2, nzB.b + nzC.g * 0.3) * smoothstep(0.035, 0.085, lum) * (1.0 - 0.6 * smoothstep(0.2, 0.3, lum));
+    float edgeLine = (1.0 - smoothstep(0.075 - aa, 0.075 + aa, abs(au - (HW - 0.42)))) * worn;
+    float yel = (1.0 - smoothstep(0.05 - aa, 0.05 + aa, abs(au - 0.105))) * worn;
+    vec3 road = mix(asp, vec3(0.70) * (0.72 + 0.28 * nzB.g), edgeLine * 0.92);
+    road = mix(road, vec3(0.62, 0.40, 0.035) * (0.75 + 0.25 * nzB.g), yel * 0.9);
+    float chk = step(0.0, s) * step(s, 2.4) * step(au, HW - 0.5);                                   // start and finish
+    road = mix(road, mix(asp, mod(floor(u / 0.6) + floor(s / 0.6), 2.0) < 0.5 ? vec3(0.78) : vec3(0.03), worn), chk);
+    float paint = max(max(edgeLine, yel), chk * worn);
+    // the kerb (inside of the corners)
+    float kerbSide = step(0.5, -sg * vKerb), onKerb = step(HW, au) * (1.0 - smoothstep(HW + 1.4 - aa, HW + 1.4 + aa, au)) * kerbSide;
     vec3 kerb = (fract(s / 3.0) < 0.5 ? vec3(0.40, 0.03, 0.024) : vec3(0.68)) * (0.72 + 0.36 * nzB.r);
-    kerb = mix(kerb, vec3(0.2, 0.2, 0.19), smoothstep(0.7, 0.8, nzC.r) * 0.7);                                   // concrete where the paint has chipped off
-    kerb = mix(kerb, vec3(0.02), smoothstep(0.5, 0.75, texture2D(tNoise, vec2(u / 0.8, s / 31.0)).g) * 0.55);   // tyres over it
+    kerb = mix(kerb, vec3(0.2, 0.2, 0.19), smoothstep(0.7, 0.8, nzC.r) * 0.7);
+    kerb = mix(kerb, vec3(0.02), smoothstep(0.5, 0.75, texture2D(tNoise, vec2(u / 0.8, s / 31.0)).g) * 0.55);
+    // the gravel shoulder, from the tarmac's edge (or the kerb's) outwards
+    float g0 = HW + 1.4 * kerbSide, gv = (au - g0) / ${GH.toFixed(3)};
+    vec2 uvG = vec2(s * ${(repG / L).toFixed(8)} * (sg > 0.0 ? 1.0 : -1.0) + (sg > 0.0 ? 0.0 : 0.43), clamp(1.0 - gv, 0.004, 0.996));
+    vec3 cG = texture2D(tGrv, uvG).rgb * 0.8 * (0.86 + 0.28 * nzA.b), nG = texture2D(tGrvN, uvG).xyz * 2.0 - 1.0;
+    float onGrv = step(0.0, gv) * (1.0 - smoothstep(0.62, 1.0, gv + (nzB.r - 0.5) * 0.5 + (nzC.g - 0.5) * 0.25));
+    vec3 wnGrv = nG.x * F * sg - nG.y * R * sg;                                                     // (its +V runs in towards the road)
     float gr; vec3 grass = alpine(vWP, vec3(0.0, 1.0, 0.0), 0.0, gr);
-    grass = mix(grass, vec3(0.12, 0.1, 0.075) * (0.6 + 0.8 * nzC.g), (1.0 - smoothstep(HW, HW + 0.9, au)) * 0.6 * nzB.r);   // worn to earth right beside the tarmac
-    float tar = 1.0 - smoothstep(HW - aa, HW + aa, au + (nzB.r - 0.5) * 0.16 + (nzC.g - 0.5) * 0.06);            // the edge wanders
-    vec3 col = mix(mix(grass, kerb, onKerb), road, max(tar, chk));
-    aRough = mix(mix(gr, 0.6, onKerb), mix(mix(0.86, 0.36, snake), 0.55, max(line, chk)), tar); aTar = max(tar, chk) * (1.0 - snake) * (1.0 - chk);
-    diffuseColor.rgb = col;
+    float tar = 1.0 - smoothstep(HW - aa, HW + aa, au + (nzB.r - 0.5) * 0.12 + (nzC.g - 0.5) * 0.05);   // the edge wanders
+    vec3 off = mix(mix(grass, cG, onGrv), kerb, onKerb);
+    diffuseColor.rgb = mix(off, road, max(tar, chk));
+    float tarW = max(tar, chk);
+    aRough = mix(mix(mix(gr, 0.88, onGrv), 0.6, onKerb), mix(tarRough, 0.58, paint), tarW);
+    // the surface's lean, in the world: the scan's own, eased where paint has filled it in; none on the grass or the kerb
+    vec3 lean = mix(wnGrv * 1.25 * onGrv * (1.0 - onKerb), wnTar * 1.15 * (1.0 - 0.55 * paint), tarW);
+    aRelief = max(tarW, onGrv * (1.0 - onKerb)) * (1.0 - smoothstep(0.02, 0.09, max(fwidth(vWP.x), fwidth(vWP.z))));   // (too far off to resolve: it would only sparkle)
+    aWN = normalize(normalize(vGN) + lean * aRelief);
   }`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(aRough, clamp(roughnessFactor, 0.5, 1.0), aTar);')   // (on the tarmac: the picture's own roughness)
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  normal = normalize(mix(nonPerturbedNormal, normal, aTar));');   // (and its relief only there: not on the grass or the kerbs)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = aRough;')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  normal = normalize((viewMatrix * vec4(aWN, 0.0)).xyz);');
   };
-  m.customProgramCacheKey = () => 'nr-track9';
+  m.customProgramCacheKey = () => 'nr-track10';
   return m;
 }
 
@@ -1647,9 +1655,11 @@ export class World {
       greenSteel: L('green_steel.jpg'), underside: L('underside.jpg'), beams: L('beams.jpg'), trees: L('trees.webp', { repeat: false }),
       waterN: L('water_n.jpg', { srgb: false }),
       // (v124) baked from two free scans of real ground (build/prep/trk-bake.mjs): worn tarmac 3.08 x 1.84 m, meadow about 3.3 x 1.1 m
-      trackAsphalt: L('track_asphalt.jpg', { aniso: a }), trackMeadow: L('track_meadow.jpg', { aniso: a }),
-      // (v125) the owner's pick for the tarmac, "Road texture" by DaveTse: colour, relief and roughness (build/prep/trk-roadtex.mjs)
-      trackRoad: L('track_road.jpg', { aniso: a }), trackRoadN: L('track_road_n.jpg', { aniso: a, srgb: false }), trackRoadR: L('track_road_r.jpg', { aniso: a, srgb: false }),
+      trackMeadow: L('track_meadow.jpg', { aniso: a }),
+      // (v126) the road scans from the owner's Blender project, baked flat (build/prep/bl-bake.py, trk-tile.mjs): the
+      // tarmac is 6.06 x 2.45 m at 1.5 mm a pixel, the gravel 8.34 x 1.62 m at 2 mm; half that on touch screens
+      trackTarmac: L(`track_tarmac${HALF}.jpg`, { aniso: a }), trackTarmacN: L(`track_tarmac_n${HALF}.jpg`, { aniso: a, srgb: false }),
+      trackGravel: L(`track_gravel${HALF}.jpg`, { aniso: a }), trackGravelN: L(`track_gravel_n${HALF}.jpg`, { aniso: a, srgb: false }),
     };
     SHARED.uNoise.value = noiseTexture();
   }
@@ -1746,7 +1756,7 @@ export class World {
     this.mat.track = trackMaterial(this.tex, tr.L); this.mat.alpine = alpineMaterial(this.tex);
     const mesh = (pos, idx, mat, extra = {}, normals = null) => {
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      for (const k in extra) g.setAttribute(k, new THREE.BufferAttribute(extra[k], k === 'uv' ? 2 : 1));
+      for (const k in extra) g.setAttribute(k, new THREE.BufferAttribute(extra[k], k === 'uv' || k === 'aFwd' ? 2 : 1));
       g.setIndex(new THREE.BufferAttribute(idx, 1));
       if (normals) g.setAttribute('normal', new THREE.BufferAttribute(normals, 3)); else g.computeVertexNormals();
       const m = new THREE.Mesh(g, mat); m.frustumCulled = false; this.layer(m, false, true); G.add(m); return m;
@@ -1754,14 +1764,14 @@ export class World {
     const right = (k) => [-Math.cos(tr.T[k]), Math.sin(tr.T[k])];
     // 1. the strip
     {
-      const US = [-E, -HW - 1.4, -HW, 0, HW, HW + 1.4, E], nu = US.length, pos = new Float32Array((N + 1) * nu * 3), nor = new Float32Array((N + 1) * nu * 3), uv = new Float32Array((N + 1) * nu * 2), kb = new Float32Array((N + 1) * nu), idx = new Uint32Array(N * (nu - 1) * 6);
+      const US = [-E, -HW - 1.4, -HW, 0, HW, HW + 1.4, E], nu = US.length, pos = new Float32Array((N + 1) * nu * 3), nor = new Float32Array((N + 1) * nu * 3), uv = new Float32Array((N + 1) * nu * 2), fw = new Float32Array((N + 1) * nu * 2), kb = new Float32Array((N + 1) * nu), idx = new Uint32Array(N * (nu - 1) * 6);
       let q = 0;
       for (let i = 0; i <= N; i++) {
         const k = i % N, [rx, rz] = right(k), g = tr.G[k], nx = -g * Math.sin(tr.T[k]), nz = -g * Math.cos(tr.T[k]), nl = Math.hypot(nx, 1, nz);
-        for (let j = 0; j < nu; j++) { const o = i * nu + j; pos[o * 3] = tr.X[k] + rx * US[j]; pos[o * 3 + 1] = tr.Y[k]; pos[o * 3 + 2] = tr.Z[k] + rz * US[j]; nor[o * 3] = nx / nl; nor[o * 3 + 1] = 1 / nl; nor[o * 3 + 2] = nz / nl; uv[o * 2] = US[j]; uv[o * 2 + 1] = i * tr.DS; kb[o] = tr.kerb[k]; }
+        for (let j = 0; j < nu; j++) { const o = i * nu + j; pos[o * 3] = tr.X[k] + rx * US[j]; pos[o * 3 + 1] = tr.Y[k]; pos[o * 3 + 2] = tr.Z[k] + rz * US[j]; nor[o * 3] = nx / nl; nor[o * 3 + 1] = 1 / nl; nor[o * 3 + 2] = nz / nl; uv[o * 2] = US[j]; uv[o * 2 + 1] = i * tr.DS; kb[o] = tr.kerb[k]; fw[o * 2] = Math.sin(tr.T[k]); fw[o * 2 + 1] = Math.cos(tr.T[k]); }
         if (i < N) for (let j = 0; j < nu - 1; j++) { const a = i * nu + j, b = a + 1, c = a + nu, d = c + 1; idx[q++] = a; idx[q++] = b; idx[q++] = c; idx[q++] = b; idx[q++] = d; idx[q++] = c; }
       }
-      this.trackStrip = mesh(pos, idx, this.mat.track, { uv, aKerb: kb }, nor); this.trackStrip.receiveShadow = true;
+      this.trackStrip = mesh(pos, idx, this.mat.track, { uv, aKerb: kb, aFwd: fw }, nor); this.trackStrip.receiveShadow = true;
     }
     // 2. the hand-shaped ground either side: level with the road at the rail, the land's own height (less a little, so the land covers its edge) at SKIRT
     {
