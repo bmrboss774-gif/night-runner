@@ -917,7 +917,7 @@ body.is-touch .cc{font-size:22px}
   <div class="timing" id="timing">
     <h2><span>Score</span><i id="tbestTag"></i></h2>
     <div class="tscore" id="tscore">0</div>
-    <div class="tlevel" title="Level: points from every run add up; level 15 opens the Ferrari, McLaren, Porsches and Lamborghini"><b id="tlvl">LVL 1</b><span class="lbar"><i id="tlvlBar"></i></span><em id="tlvlNext"></em></div>
+    <div class="tlevel" title="Level: points from every run add up; level 15 opens the Ferrari and the Lamborghini"><b id="tlvl">LVL 1</b><span class="lbar"><i id="tlvlBar"></i></span><em id="tlvlNext"></em></div>
     <div class="tgrid">
       <div class="tcell"><span class="k">Distance</span><span class="v" id="tdist">—</span></div>
       <div class="tcell"><span class="k">Top speed</span><span class="v" id="tvmax">—</span></div>
@@ -11043,12 +11043,12 @@ function policeHud(dt, chasers, W, nearD) {
 //   exit taken 1,500, a speed trap passed inside the limit 1,000. Nothing is announced; the score just goes up.
 //   Levels: every point also counts towards the player's level, kept between runs (store 'xp'). Level n takes
 //   15,000 x n x (n - 1) / 2 points in all (level 2 at 15,000, level 5 at 150,000, level 19 at about 2.6 million),
-//   and level 15 (about 1.6 million) unlocks the Ferrari, the McLaren, the two Porsches and the Lamborghini.
+//   and level 15 (about 1.6 million) unlocks the Ferrari and the Lamborghini (v117: only those two are locked now).
 const POINTS = { mile: 10000, spikes: 2500, unit: 1000, exit: 1500, trap: 1000 };
 const LEVEL_XP = (n) => 15000 * n * (n - 1) / 2;
 // (v101, the owner: "can u remove the fact that all cars are locked lets just lock the ferrari mclaren porsche and
 // lamborghinis until level 15": v100 opened one car a level from 2 to 19. Every other car is open from the start.)
-const CAR_LEVEL = { f812: 15, mcl: 15, cgt: 15, gt3: 15, svj: 15 };
+const CAR_LEVEL = { f812: 15, svj: 15 };   // (v117, the owner: "only lock the 812 and the svj": the McLaren and both Porsches are open from the start now)
 const levelOf = (xp) => { let n = 1; while (LEVEL_XP(n + 1) <= xp) n++; return n; };
 const prog = { xp: Math.max(0, +store.get('xp', 0) || 0), level: 1, dirty: false };
 prog.level = levelOf(prog.xp);
@@ -11061,7 +11061,7 @@ function syncLocks() {
 function levelUp(lv) {
   const cars = Object.keys(CAR_LEVEL).filter((id) => CAR_LEVEL[id] === lv && LIVE.has(id)).map((id) => CAR_DEFS[id].name);
   const sh = $('hwShield'); sh.textContent = lv; sh.className = 'level';
-  $('hwKicker').textContent = 'Level up'; $('hwName').textContent = `Level ${lv}`; $('hwTag').textContent = cars.length ? `Unlocked: ${cars.join(', ')}` : lv < 15 ? `Level 15 opens the Ferrari, McLaren, Porsches and Lamborghini` : 'Every car is yours';
+  $('hwKicker').textContent = 'Level up'; $('hwName').textContent = `Level ${lv}`; $('hwTag').textContent = cars.length ? `Unlocked: ${cars.join(', ')}` : lv < 15 ? `Level 15 opens the Ferrari and the Lamborghini` : 'Every car is yours';
   $('hwCard').classList.add('show'); hwy.cardT = 4.2; audio.chime(7); syncLocks();
 }
 function gain(n) {
