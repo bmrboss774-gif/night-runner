@@ -1208,7 +1208,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?v=116';
 import { createGarage, GARAGE_SPEC } from './garage.js';
 import { createShowroom, TOWER } from './showroom.js?v=115';
 import { setChameleon } from './paintfx.js?v=111';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
@@ -3406,6 +3406,10 @@ CAR_DEFS.fl5 = {
   sound: 'bmw', audio: { rpmScale: 1.0, turbo: 0.9, flutter: 0.8, crackle: 0.12, popVol: 0.2 },
   stock: { paint: '#eef0ec', finish: 'gloss' },
   spoilers: [['stock', 'Type R wing'], ['none', 'None'], ['ducktail', 'Ducktail'], ['gt', 'GT wing'], ['swan', 'Swan neck']],
+  // v116, the owner: "when I do no spoiler option on the civic fl5 the wing risers should be removed too and remove the
+  // duckbill option". The two risers are loose pieces of the model's black trim beside the hatch glass (x 0.55-0.64 m
+  // out, 0.96-1.13 m up); these boxes put them in the wing panel, so any choice but the stock wing takes them off.
+  wingBox: [[0.54, 0.955, -2.47, 0.66, 1.14, -2.15], [-0.66, 0.955, -2.47, -0.54, 1.14, -2.15]], noKits: ['spoiler:duckbill'],
   canards: { scale: 1.6, fence: true, gap: 6, lift: 5, wrap: true },   // FL5 kits are big: ~27 cm blades with turned-up tips, up on the bumper corner
   carbonParts: ['hood', 'roof', 'trunk', 'mirrors', 'wing', 'lip', 'skirts', 'diffuser'],
   model: { title: 'Honda Civic Type R FL5 Custom', url: 'https://sketchfab.com/3d-models/honda-civic-type-r-fl5-custom-407a8981be2d45a388d7280d9b931663', author: 'blakebella', authorUrl: 'https://sketchfab.com/blakebella' },
@@ -3559,7 +3563,11 @@ CAR_DEFS.amgnasa = {
   eyebrow: 'Mercedes-AMG GT3 · NASA livery · 6.3 V8 · 550 hp · sequential',
   lede: 'The same GT3 race car in a chrome NASA livery: the big V8, slicks, the sequential and the wing.',
   pick: '550 hp · GT3',
-  files: { meshopt: { url: 'amgn-meshopt.txt', size: 5738092 }, plain: { url: 'amgn-plain.txt', size: 7847264 } },
+  files: { meshopt: { url: 'amgn-meshopt.txt', size: 5721404 }, plain: { url: 'amgn-plain.txt', size: 7821864 } },
+  // v116, the owner: "idk wtf is going on with this nasa car": the driver sat with his head through the roof. The
+  // model's radio aerial stands 1.68 m up, and the seat is found from the top of the car, so the eye is set from there
+  // to match the Red Bull car's (0.93 m up)
+  eye: { y: 0.74 },
   classify: classifyTagged('AMGN', { liveryOnly: true }),
   stock: { paint: '#c9ced6', finish: 'chrome' },
   model: { title: 'Mercedes-AMG GT3 | www.vecarz.com', url: 'https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07', author: 'vecarz', authorUrl: 'https://sketchfab.com/heynic' },
@@ -4040,7 +4048,8 @@ function buildRig(def, gltf) {
   // (after the shift, so the box is in the same metres as everything else): plane, endplates and stays all go to
   // the 'wing' panel and 'None' takes the lot. Box: [x0, y0, z0, x1, y1, z1], tested on each triangle's centre.
   if (def.wingBox) {
-    const [x0, y0, z0, x1, y1, z1] = def.wingBox, inBox = (c) => c.x >= x0 && c.x <= x1 && c.y >= y0 && c.y <= y1 && c.z >= z0 && c.z <= z1;
+    const boxes = Array.isArray(def.wingBox[0]) ? def.wingBox : [def.wingBox];   // (one box, or several: the Civic's two risers)
+    const inBox = (c) => boxes.some(([x0, y0, z0, x1, y1, z1]) => c.x >= x0 && c.x <= x1 && c.y >= y0 && c.y <= y1 && c.z >= z0 && c.z <= z1);
     for (const it of [...items]) {
       if (it.wheel || it.panel || it.kind !== 'other') continue;
       const pieces = splitGeometry(it.geo, (c) => (inBox(c) ? 'wing' : 'x'));
@@ -8574,10 +8583,10 @@ function renderGarage() {
         swatchRow([['Factory', def.stock.paint], ...PAINTS], m.paint, (hex) => setMod('paint', hex, 'overview'), { custom: true })),
         gGroup('Finish', null, segRow(Object.entries(FINISHES).map(([k, f]) => [k, f.label]), m.finish, (k) => setMod('finish', k, 'overview'))),
         el('p', { className: 'g-note', textContent: 'The race car is built as it is: only its colour and finish can change. Switch it off to modify the road car.' }));
-      body.scrollTop = scrollTop; return;
+      body.scrollTop = scrollTop; updateGStats(); return;
     }
     body.append(liveryGroup(), el('p', { className: 'g-note', textContent: (def.fixed || CAR_DEFS[def.liveryOf]?.fixed) ? 'A race car exactly as it runs: nothing about it can be changed.' : 'The livery is the whole build: take it off to change the paint, parts, wheels, lights, plates or stance.' }));
-    body.scrollTop = scrollTop; return;
+    body.scrollTop = scrollTop; updateGStats(); return;
   }
   if (gTab === 'car') {
     // v55, the user: "make it so that you have to go to the key wall in order to change cars and maybe don't do the
@@ -10158,6 +10167,21 @@ function activateCar(id) {
   placeHeadlights();
   store.set('car', id);
   buildTach(); syncCarText();
+  prewarmVersions(id);
+}
+// (v116) The other versions of the car you are in are fetched in the background a moment after it is ready; a car whose
+// versions are whole other models (the AMG's Red Bull and NASA cars) has them built too, so switching is immediate.
+function prewarmVersions(id) {
+  const base = baseOf(id), d0 = CAR_DEFS[base];
+  if (!d0 || !LIVE.has(base)) return;
+  const sibs = Object.keys(CAR_DEFS).filter((o) => o !== id && (o === base || CAR_DEFS[o].liveryOf === base) && CAR_DEFS[o].files && !rigs[o]);
+  if (!sibs.length) return;
+  setTimeout(() => wasmReady.then(async (ok) => {
+    for (const o of sibs) {
+      if (rigs[o]) continue;
+      try { await fetchModelText(CAR_DEFS[o], ok, () => {}); if (d0.fixed && baseOf(activeId) === base && !switching) await ensureRig(o, () => {}); } catch (e) { /* (it loads when picked instead) */ }
+    }
+  }), 2500);
 }
 let switching = null;
 function switchCar(id) {
@@ -10165,10 +10189,15 @@ function switchCar(id) {
   if (id === activeId || switching) return;
   if (rigs[id]) { activateCar(id); renderGarage(); return; }
   switching = id;
-  const show = (p) => { const s = $('gLoad_' + id); if (s) s.textContent = `Loading ${Math.round(p * 100)}%`; else if (p === 0 || p >= 1) toast(p >= 1 ? CAR_DEFS[id].name : `Loading the ${CAR_DEFS[id].short}…`, 1400); };
+  // (v116, the owner: the NASA car "takes a while to load when I click on the model change": a version picked in the
+  // workshop that is not ready yet gets the loading screen, with the download's progress)
+  const big = state.garage && !loadScr.boot && !$('gLoad_' + id);
+  if (big) loadScr.show(`Loading the ${CAR_DEFS[id].name}`, 0, '0%');
+  const show0 = (p) => { const s = $('gLoad_' + id); if (s) s.textContent = `Loading ${Math.round(p * 100)}%`; else if (p === 0 || p >= 1) toast(p >= 1 ? CAR_DEFS[id].name : `Loading the ${CAR_DEFS[id].short}…`, 1400); };
+  const show = (p) => { if (big) loadScr.set(p < 1 ? `Loading the ${CAR_DEFS[id].name}` : `Building the ${CAR_DEFS[id].name}`, p * 0.9, p < 1 ? `${Math.round(p * 100)}%` : ''); show0(p); };
   show(0);
-  ensureRig(id, show).then(() => { switching = null; activateCar(id); renderGarage(); toast(CAR_DEFS[id].name); })
-    .catch((e) => { console.error(e); switching = null; const s = $('gLoad_' + id); if (s) s.textContent = 'Did not load. Try again.'; });
+  ensureRig(id, show).then(() => { switching = null; activateCar(id); renderGarage(); toast(CAR_DEFS[id].name); if (big) loadScr.hide(); })
+    .catch((e) => { console.error(e); switching = null; if (big) loadScr.hide(); const s = $('gLoad_' + id); if (s) s.textContent = 'Did not load. Try again.'; });
 }
 
 // ---------------------------------------------------------------- the collection (v103)
@@ -10792,7 +10821,7 @@ function rebase() {
 //    of from further away, and less often.
 //  - No banners. What used to flash across the screen ("Police!", "Dodged the spikes", "Outran a unit") is a quiet
 //    line on the panel.
-const HEAT_TOP = [62, 68, 74, 80], EVADE_T = 8, CONTACT = 220;
+const HEAT_TOP = [105, 110, 115, 120], EVADE_T = 8, CONTACT = 220;   // (v116: a ceiling only, was 62-80 m/s = 139-179 mph)
 const police = { enabled: true,   // v34: always on (the user took the Settings switch out)
   on: false, state: 'clear', heat: 1, heat0: 1, chaseT: 0, pursuitT: 0, calm: 10, evade: 0, catch: 0, spawnT: 0, units: 1, outran: 0, dodged: 0, escapes: 0, nextStrip: 0, alertT: 0, warned: null, ptsAcc: 0, hud: '', note: '', noteT: 0, light: new THREE.PointLight(0xff2020, 0, 30, 2), siren: 0 };
 // (police.light is not in the scene: syncFxLights lends its settings to one of the garage's lights)
@@ -10841,9 +10870,11 @@ function policeUpdate(dt) {
   }
   speedTrap(W, over);
   const chasers = cops.filter(isChaser), onRoad = !world.onRamp && W.u < 17.6;
-  // how good the units are: their top speed climbs with the heat but stays under what your car can do
-  traffic.copTune.vTop = Math.max(50, Math.min(HEAT_TOP[police.heat - 1], carTopSpeed() * (0.84 + 0.035 * police.heat)));
-  traffic.copTune.accel = 6 + 0.6 * police.heat;
+  // how good the units are (v116, the owner: "units cant catch up to me like at all theres no threat"): about your
+  // car's own top speed at heat one and a little more with each level (1.01x to 1.13x), so flat out on an empty road
+  // you only just hold them, and any lift, traffic or bend lets them up to you
+  traffic.copTune.vTop = Math.max(50, Math.min(HEAT_TOP[police.heat - 1], carTopSpeed() * (0.97 + 0.04 * police.heat)));
+  traffic.copTune.accel = 8 + 1.0 * police.heat;
   let nearD = 1e9; for (const c of chasers) nearD = Math.min(nearD, Math.abs(W.s - c.s));
   // an exit: the units right behind you follow you down the ramp, the rest miss it
   const ex = world.onExit;
@@ -10914,7 +10945,8 @@ function policeUpdate(dt) {
     if (d < 8) press += d < 5.5 ? 1 : (8 - d) / 2.5;
   }
   if (!over) {
-    const sp = car.speed, slow = sp < 3 ? 2.6 : sp < 15 ? 1.8 : sp < 25 ? 1 : sp < 45 && press >= 1.5 ? 0.5 : 0;
+    // (v116: a unit on your bumper is a threat at any speed now: one alone fills it slowly above 55 mph, two quicker)
+    const sp = car.speed, slow = sp < 3 ? 2.6 : sp < 15 ? 1.8 : sp < 25 ? 1 : sp < 45 ? (press >= 1.5 ? 0.6 : 0.35) : (press >= 1.5 ? 0.4 : 0.22);
     police.catch = press > 0 && slow > 0 && police.state === 'pursuit' ? Math.min(1, police.catch + dt * 0.3 * Math.min(press, 2.5) * slow) : Math.max(0, police.catch - dt * 0.3);
     if (police.catch >= 1) gameOver('busted');
     // points for every second a pursuit goes on, more with more units on you
@@ -10953,6 +10985,9 @@ function speedTrap(W, over) {
     tp.state = 'caught';
     Object.assign(police, { state: 'pursuit', pursuitT: 0, evade: 0, heat0: 3, heat: 3, spawnT: 2.5, nextStrip: W.s + 1800 + Math.random() * 900 });
     if (tp.cop) tp.cop.cop.join = 'now';
+    // (v116: the trap's own unit starts from a standstill and could never catch a fast car, so a second unit that
+    // was already rolling comes up from behind at your speed, and backup follows it)
+    traffic.spawnCop(W.s, W.u, Math.max(0, car.vx), 120 + Math.random() * 40);
     policeNote(`Speed trap: ${Math.round(v)} in a ${lim}`, 4); audio.chime(4); cam.kick = Math.max(cam.kick, 0.3);
   } else { tp.state = 'passed'; addPoints(POINTS.trap); }
 }

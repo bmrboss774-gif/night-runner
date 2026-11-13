@@ -518,7 +518,7 @@ export class Traffic {
     if (c.mode === 'leave') { uT = LANE_CENTERS[3]; sGap = 1e9; aMax = 2; veh.v0 = 30; }
     else {
       // behind the player: close up; once close and matched, swing out to a rear quarter for a few seconds
-      if (c.mode === 'chase') { if (ahead < 9 && ahead > 3 && Math.abs(p.v - veh.v) < 6) { c.gapT += dt; if (c.gapT > 1.6) { c.mode = 'pit'; c.pitT = 0; c.side = p.u > LANE_CENTERS[1] + 1 ? -1 : p.u < LANE_CENTERS[1] - 1 ? 1 : (Math.random() < 0.5 ? -1 : 1); } } else c.gapT = 0; }
+      if (c.mode === 'chase') { if (ahead < 9 && ahead > 3 && Math.abs(p.v - veh.v) < 8) { c.gapT += dt; if (c.gapT > 0.9) { c.mode = 'pit'; c.pitT = 0; c.side = p.u > LANE_CENTERS[1] + 1 ? -1 : p.u < LANE_CENTERS[1] - 1 ? 1 : (Math.random() < 0.5 ? -1 : 1); } } else c.gapT = 0; }
       else if (c.mode === 'pit') { c.pitT += dt; if (c.pitT > 4 || ahead > 16 || ahead < -8) { c.mode = 'chase'; c.gapT = -2.5; } }   // (and a breather before it tries again)
       if (c.mode === 'pit') { uT = p.u + c.side * 2.1; sGap = 1.6; }           // front wheel at the player's rear quarter
       else { uT = p.u + Math.sin(c.t * 0.7 + c.phase * 6) * 0.6; sGap = 7.5; }
