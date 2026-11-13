@@ -1209,14 +1209,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?v=118';
-import { createGarage, GARAGE_SPEC } from './garage.js';
-import { createShowroom, TOWER } from './showroom.js?v=115';
-import { setChameleon } from './paintfx.js?v=111';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?v=109';
-import { SpikeStrips, Mirror } from './pursuit.js';
-import { Rain } from './rain.js';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=db59b25b3c';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=db59b25b3c';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=db59b25b3c';
+import { createShowroom, TOWER } from './showroom.js?b=db59b25b3c';
+import { setChameleon } from './paintfx.js?b=db59b25b3c';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=db59b25b3c';
+import { SpikeStrips, Mirror } from './pursuit.js?b=db59b25b3c';
+import { Rain } from './rain.js?b=db59b25b3c';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);

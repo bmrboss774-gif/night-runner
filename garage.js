@@ -17,7 +17,7 @@
 // and racking stacked with parts boxes. All of it built here from boxes and cylinders in six more draw calls.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SHARED } from './world.js';
+import { SHARED } from './world.js?b=db59b25b3c';
 
 const ROOM = { x0: -10, x1: 10, z0: -8.5, z1: 8.5, h: 5 };
 const TURNTABLE_R = 3.35, SHAFT_R = 3.38;
