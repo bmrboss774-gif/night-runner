@@ -1215,14 +1215,14 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=ab6084dc96';
-import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=ab6084dc96';
-import { createGarage, GARAGE_SPEC } from './garage.js?b=ab6084dc96';
-import { createShowroom, TOWER } from './showroom.js?b=ab6084dc96';
-import { setChameleon } from './paintfx.js?b=ab6084dc96';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
-import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=ab6084dc96';
-import { SpikeStrips, Mirror } from './pursuit.js?b=ab6084dc96';
-import { Rain } from './rain.js?b=ab6084dc96';
+import { World, RAMP, SHARED, LANE_CENTERS, HIGHWAYS, EXIT_GO, rampC } from './world.js?b=1d92d0be98';
+import { Traffic, TRAFFIC_KINDS, TRAFFIC_LEVELS, BEAM, patchMaterial } from './traffic.js?b=1d92d0be98';
+import { createGarage, GARAGE_SPEC } from './garage.js?b=1d92d0be98';
+import { createShowroom, TOWER } from './showroom.js?b=1d92d0be98';
+import { setChameleon } from './paintfx.js?b=1d92d0be98';   // (v108: these files carry the version, so a browser never runs a new one beside an old one it has kept)
+import { gatherRig, simplify as lodSimplify, lodLoadAll, lodSave, lodDelete } from './lod.js?b=1d92d0be98';
+import { SpikeStrips, Mirror } from './pursuit.js?b=1d92d0be98';
+import { Rain } from './rain.js?b=1d92d0be98';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const $ = (id) => document.getElementById(id);
@@ -7079,24 +7079,36 @@ function renderScale() {
 // step down through four sizes at the start of every run; (2) drops further in one go the slower the frames are
 // (one step under 25 ms a frame, two under 33, straight to the bottom past that); (3) tries a size that failed again
 // only after four minutes of smooth driving, not one.
-if (store.get('roadV', 0) !== 121) { store.set('roadV', 121); store.set('roadF', 1); store.set('roadCeil', 1); }   // (v121: what the highway game settled on says nothing about the open area: start sharp again; the guard below still steps down if frames run slow)
+if (store.get('roadV', 0) !== 128) { store.set('roadV', 128); store.set('roadF', 1); store.set('roadCeil', 1); }   // (v121: what the highway game settled on says nothing about the open area: start sharp again; the guard below still steps down if frames run slow)
 const roadQ = { f: clamp(+store.get('roadF', 1) || 0, 0, 1), ceil: clamp(+store.get('roadCeil', 1) || 0, 0, 1), sum: 0, n: 0, good: 0, cool: 0, sinceUp: 99, streak: 0 };
 roadQ.ceil = Math.max(roadQ.ceil, roadQ.f);
 const roadQSave = () => { store.set('roadF', roadQ.f); store.set('roadCeil', roadQ.ceil); };
 function adaptRoadScale(dt) {
   // (v121: not while the window is out of focus either: browsers slow an unfocused page's frames, and the guard took that for a slow machine and dropped the picture to its lowest size)
-  if (state.garage || !state.driving || state.paused || document.hidden || !document.hasFocus() || !(dt > 0)) { roadQ.sum = roadQ.n = 0; return; }
+  if (state.garage || !state.driving || state.paused || document.hidden || !document.hasFocus() || !(dt > 0)) { roadQ.sum = roadQ.n = 0; roadQ.ts = []; return; }
+  // v128, the owner: "why is the quality so low". Measured on the live site: this guard had the picture at its lowest
+  // size (roadF 0: a third of the screen's pixels) and was keeping it there. It judged by the average frame time of
+  // each 1.5 s, so one long frame (a shader being built, the grass being stood, a tab switch) read as a slow machine
+  // and dropped the size, and one dropped frame was enough to stop it coming back up. Now: the middle frame time of
+  // each window (a hitch does not move it), two slow windows running before a drop, nothing judged in the first 12 s of
+  // a drive or while the scenery is still being built, and a wider band for stepping back up.
+  roadQ.drive = (roadQ.drive || 0) + dt;
+  if (roadQ.drive < 12 || world.bladeRun) { roadQ.sum = roadQ.n = 0; return; }
+  (roadQ.ts ||= []).push(dt);
   roadQ.sum += dt; roadQ.n++; roadQ.cool = Math.max(0, roadQ.cool - dt); roadQ.sinceUp += dt;
   if (roadQ.sum < 1.5) return;
-  const avg = roadQ.sum / roadQ.n; roadQ.sum = roadQ.n = 0;
+  const sorted = roadQ.ts.sort((a, b) => a - b), avg = sorted[sorted.length >> 1]; roadQ.ts = []; roadQ.sum = roadQ.n = 0;
   if (avg > 0.021) {
     roadQ.good = roadQ.streak = 0;
+    if (++roadQ.slow < 2) return;
+    roadQ.slow = 0;
     if (roadQ.f > 0) { const drop = avg > 0.033 ? 1 : avg > 0.025 ? 0.5 : 0.25; if (roadQ.sinceUp < 6) roadQ.ceil = Math.max(0, roadQ.f - 0.25); roadQ.f = Math.max(0, roadQ.f - drop); roadQ.cool = 20; roadQ.sinceUp = 99; syncRenderScale(); roadQSave(); }
-  } else if (avg < 0.0175) {
+  } else if (avg < 0.0185) {
+    roadQ.slow = 0;
     roadQ.good += 1.5; roadQ.streak += 1.5;
     if (roadQ.streak >= 240 && roadQ.ceil < 1) { roadQ.ceil = Math.min(1, roadQ.ceil + 0.25); roadQ.streak = 0; }   // four minutes of smooth driving (v93; was one): worth trying higher again
-    if (roadQ.good >= 8 && roadQ.cool === 0 && roadQ.f < roadQ.ceil) { roadQ.f = Math.min(roadQ.ceil, roadQ.f + 0.25); roadQ.good = 0; roadQ.sinceUp = 0; syncRenderScale(); roadQSave(); }
-  } else roadQ.good = 0;
+    if (roadQ.good >= 4.5 && roadQ.cool === 0 && roadQ.f < roadQ.ceil) { roadQ.f = Math.min(roadQ.ceil, roadQ.f + 0.25); roadQ.good = 0; roadQ.sinceUp = 0; syncRenderScale(); roadQSave(); }
+  } else { roadQ.good = 0; roadQ.slow = 0; }
 }
 function syncRenderScale() { const r = renderScale(); if (Math.abs(renderer.getPixelRatio() - r) > 0.01) { renderer.setPixelRatio(r); onResize.area = 0; onResize(); } }
 function applyGfx() {

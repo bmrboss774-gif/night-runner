@@ -6,7 +6,7 @@
 // bridges, retroreflective paint, markers and signs that light up in the headlights, a wet road and open
 // water with planar reflections, and a live reflection probe that rides with the car for its paint.
 import * as THREE from 'three';
-import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=ab6084dc96';   // (v122) the mountain circuit
+import { TRACK, buildTrack, buildGround, locateOn, frameAt as trackFrame } from './track-core.js?b=1d92d0be98';   // (v122) the mountain circuit
 
 // ---------------------------------------------------------------- layout (metres; u = lateral offset, + = right of the median)
 const DS = 2, CHUNK = 50, CH_LEN = DS * CHUNK;
